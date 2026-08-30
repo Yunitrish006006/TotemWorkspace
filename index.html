@@ -1,0 +1,2226 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; img-src data:; style-src 'unsafe-inline'; script-src 'unsafe-inline'">
+<title>TOTEM 統一模組依賴圖｜2026-08-30 本機 repo 快照</title>
+<style>
+  :root {
+    color-scheme: dark;
+    --ink: #e5e7eb;
+    --muted: #94a3b8;
+    --panel: #0d1929;
+    --panel-2: #111c2e;
+    --line: #334155;
+    --hard: #60a5fa;
+    --optional: #fbbf24;
+    --compat: #a78bfa;
+    --service: #22d3ee;
+    --focus: #f8fafc;
+    --history: #f59e0b;
+  }
+  * { box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; margin: 0; }
+  body {
+    overflow: hidden;
+    background: #07111f;
+    color: var(--ink);
+    font-family: "Noto Sans CJK TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+  }
+  button, output { font: inherit; }
+  .app { display: flex; flex-direction: column; width: 100%; height: 100dvh; min-height: 420px; }
+  .topbar {
+    position: relative;
+    z-index: 5;
+    display: flex;
+    gap: 18px;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    padding: 12px 16px;
+    border-bottom: 2px solid #24344b;
+    background: #091524;
+    box-shadow: 0 6px 0 rgba(0, 0, 0, .24);
+  }
+  .brand { display: flex; align-items: center; gap: 12px; min-width: 260px; }
+  .brand-copy { display: grid; gap: 3px; }
+  h1 { margin: 0; color: #f8fafc; font-size: clamp(18px, 2vw, 26px); line-height: 1.1; }
+  .brand p { margin: 0; color: var(--muted); font-size: 12px; }
+  .snapshot {
+    display: inline-flex;
+    align-items: center;
+    min-height: 32px;
+    padding: 5px 10px;
+    border: 2px solid var(--history);
+    border-radius: 4px;
+    background: #3b2b16;
+    color: #fde68a;
+    font-size: 13px;
+    font-weight: 800;
+    letter-spacing: .02em;
+    white-space: nowrap;
+    box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .22);
+  }
+  .controls { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 8px; }
+  .control-group {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px;
+    border: 1px solid #334155;
+    border-radius: 5px;
+    background: #0d1a2b;
+  }
+  .control-group-label {
+    padding: 0 6px;
+    color: #a8b6ca;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: .06em;
+  }
+  button {
+    min-width: 36px;
+    min-height: 34px;
+    border: 2px solid #42546d;
+    border-radius: 3px;
+    padding: 5px 9px;
+    background: #18283d;
+    color: #edf5ff;
+    font-weight: 750;
+    cursor: pointer;
+    box-shadow: inset 0 -3px 0 rgba(0, 0, 0, .3);
+  }
+  button:hover { border-color: #7c93b2; background: #223650; }
+  button:active { transform: translateY(1px); box-shadow: inset 0 -1px 0 rgba(0, 0, 0, .3); }
+  button:focus-visible, #viewport:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 3px;
+  }
+  button[aria-pressed="false"] { opacity: .55; filter: saturate(.45); }
+  .toggle { display: inline-flex; align-items: center; gap: 7px; }
+  .swatch { display: inline-block; width: 19px; height: 4px; background: currentColor; }
+  .toggle-hard { color: #bfdbfe; }
+  .toggle-hard .swatch { background: var(--hard); }
+  .toggle-optional { color: #fde68a; }
+  .toggle-optional .swatch { background: var(--optional); }
+  .toggle-compat { color: #ddd6fe; }
+  .toggle-compat .swatch {
+    background: repeating-linear-gradient(90deg, var(--compat) 0 7px, transparent 7px 11px);
+  }
+  .toggle-service { color: #a5f3fc; }
+  .toggle-service .swatch { background: var(--service); }
+  #zoom-level {
+    min-width: 56px;
+    padding: 0 6px;
+    color: #bfdbfe;
+    text-align: center;
+    font-variant-numeric: tabular-nums;
+  }
+  #selection-status {
+    min-width: 180px;
+    max-width: 310px;
+    color: #cbd5e1;
+    font-size: 12px;
+  }
+  #viewport {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    overflow: hidden;
+    touch-action: none;
+    cursor: grab;
+    background:
+      linear-gradient(rgba(96, 165, 250, .025) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(96, 165, 250, .025) 1px, transparent 1px),
+      #07111f;
+    background-size: 32px 32px;
+  }
+  #viewport.dragging { cursor: grabbing; }
+  #graph { display: block; width: 100%; height: 100%; overflow: hidden; }
+  #scene { will-change: transform; }
+  svg text {
+    font-family: "Noto Sans CJK TC", "Noto Sans TC", "Microsoft JhengHei", system-ui, sans-serif;
+    user-select: text;
+    -webkit-user-select: text;
+  }
+  svg image {
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  .node {
+    cursor: pointer;
+    opacity: 1;
+    transition: opacity 140ms linear, filter 140ms linear;
+  }
+  .node .card { transition: stroke-width 120ms linear, filter 120ms linear; }
+  .node:hover .card { filter: brightness(1.12); }
+  .node:focus { outline: none; }
+  .node:focus-visible .card {
+    stroke: #fff;
+    stroke-width: 9;
+    filter: drop-shadow(0 0 12px rgba(255,255,255,.72));
+  }
+  .node[aria-pressed="true"] .card {
+    stroke: #fff;
+    stroke-width: 10;
+    filter: drop-shadow(0 0 18px rgba(255,255,255,.72));
+  }
+  .relation { transition: opacity 140ms linear; }
+  .relation.is-dimmed { opacity: .08; }
+  .node.is-dimmed { opacity: .16; filter: saturate(.35); }
+  .relation.is-active:not(.edge-label) { opacity: 1; stroke-width: 10; filter: drop-shadow(0 0 8px currentColor); }
+  .edge-label.is-active rect { stroke: #fff; stroke-width: 3; }
+  .is-filtered { display: none !important; }
+  .is-secondary-hidden { display: none !important; }
+  #feature-branches-toggle[aria-pressed="true"] {
+    opacity: 1;
+    border-color: #67e8f9;
+    background: #164e63;
+    color: #ecfeff;
+    filter: none;
+  }
+  .feature-owner-link,
+  .feature-dependency-link {
+    transition: opacity 140ms linear, stroke-width 120ms linear;
+  }
+  .feature-owner-link { stroke: #475569; stroke-width: 3; }
+  .feature-owner-link.is-dimmed { opacity: .1; }
+  .feature-dependency-link {
+    stroke-width: 8;
+    filter: drop-shadow(0 0 7px currentColor);
+  }
+  .feature-node {
+    cursor: pointer;
+    transition: opacity 140ms linear, filter 140ms linear;
+  }
+  .feature-node .feature-card {
+    fill: #111f32;
+    stroke: #64748b;
+    stroke-width: 3;
+    transition: stroke-width 120ms linear, filter 120ms linear;
+  }
+  .feature-node:hover .feature-card { filter: brightness(1.14); }
+  .feature-node:focus { outline: none; }
+  .feature-node:focus-visible .feature-card,
+  .feature-node[aria-pressed="true"] .feature-card {
+    stroke: #fff;
+    stroke-width: 7;
+    filter: drop-shadow(0 0 12px rgba(255,255,255,.68));
+  }
+  .feature-node.has-soft-dependency .feature-card { stroke: #fbbf24; }
+  .feature-node.has-runtime-compat .feature-card { stroke: #a78bfa; }
+  .feature-node.has-external-service .feature-card { stroke: #22d3ee; }
+  .feature-node.is-dimmed { opacity: .14; filter: saturate(.3); }
+  .node.feature-related .card {
+    stroke: #fef3c7;
+    stroke-width: 9;
+    filter: drop-shadow(0 0 14px rgba(251,191,36,.7));
+  }
+  .branch-only { display: none; }
+  #scene.branch-mode .branch-only { display: inline; }
+  #scene.branch-mode #relations,
+  #scene.branch-mode #edge-labels,
+  #scene.branch-mode .external-node,
+  #scene.branch-mode #runtime-footer {
+    display: none;
+  }
+  #scene.branch-mode .external-node.feature-related { display: inline; }
+  .viewport-hint {
+    position: absolute;
+    right: 12px;
+    bottom: 12px;
+    z-index: 2;
+    max-width: min(430px, calc(100% - 24px));
+    padding: 7px 10px;
+    border: 1px solid #334155;
+    border-radius: 4px;
+    background: rgba(9, 21, 36, .92);
+    color: #a8b6ca;
+    font-size: 12px;
+    pointer-events: none;
+  }
+  .detail-panel {
+    position: fixed;
+    inset: 0 0 0 auto;
+    z-index: 20;
+    display: flex;
+    width: min(520px, 100vw);
+    max-width: 100%;
+    min-width: 0;
+    flex-direction: column;
+    border-left: 3px solid #42546d;
+    background: #0b1727;
+    box-shadow: -18px 0 38px rgba(0, 0, 0, .55);
+  }
+  .detail-panel[hidden] { display: none; }
+  .detail-header {
+    display: grid;
+    grid-template-columns: 72px minmax(0, 1fr) auto;
+    gap: 12px;
+    align-items: center;
+    padding: 16px;
+    border-bottom: 2px solid #24344b;
+    background: #0d1a2b;
+  }
+  .detail-header.no-icon { grid-template-columns: minmax(0, 1fr) auto; }
+  .detail-icon-shell {
+    display: grid;
+    width: 72px;
+    height: 72px;
+    place-items: center;
+    border: 2px solid #42546d;
+    border-radius: 7px;
+    background: #18283d;
+  }
+  .detail-icon-shell[hidden] { display: none; }
+  #detail-icon {
+    width: 64px;
+    height: 64px;
+    object-fit: contain;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+  .detail-heading { min-width: 0; }
+  .detail-eyebrow {
+    margin: 0 0 4px;
+    color: #93c5fd;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: .08em;
+    text-transform: uppercase;
+  }
+  #detail-title {
+    margin: 0;
+    overflow-wrap: anywhere;
+    color: #f8fafc;
+    font-size: 24px;
+    line-height: 1.15;
+  }
+  #detail-version {
+    display: block;
+    margin-top: 5px;
+    color: #94a3b8;
+    font-size: 14px;
+    font-weight: 700;
+  }
+  #detail-close { align-self: start; min-width: 42px; padding-inline: 8px; font-size: 20px; }
+  .detail-content {
+    min-width: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    padding: 18px 20px 28px;
+  }
+  #detail-summary {
+    margin: 0;
+    color: #dbeafe;
+    font-size: 16px;
+    line-height: 1.65;
+  }
+  .detail-section { margin-top: 24px; }
+  .detail-section h3 {
+    margin: 0 0 10px;
+    color: #f8fafc;
+    font-size: 16px;
+  }
+  .detail-section ul {
+    display: grid;
+    gap: 9px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .detail-section li {
+    position: relative;
+    padding: 10px 11px 10px 29px;
+    border: 1px solid #334155;
+    border-radius: 5px;
+    background: #111f32;
+    color: #cbd5e1;
+    font-size: 14px;
+    line-height: 1.5;
+    overflow-wrap: anywhere;
+  }
+  .detail-section li::before {
+    position: absolute;
+    top: 14px;
+    left: 12px;
+    width: 7px;
+    height: 7px;
+    background: #60a5fa;
+    content: "";
+  }
+  .detail-section.integrations li::before { background: #fbbf24; }
+  .detail-section.soft-dependencies li::before { background: #a78bfa; }
+  .detail-section.external-services li::before { background: #22d3ee; }
+  .detail-source {
+    margin: 24px 0 0;
+    padding-top: 14px;
+    border-top: 1px solid #334155;
+    color: #8292a8;
+    font-size: 12px;
+    line-height: 1.55;
+  }
+  .sr-only {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    padding: 0 !important;
+    margin: -1px !important;
+    overflow: hidden !important;
+    clip: rect(0, 0, 0, 0) !important;
+    white-space: nowrap !important;
+    border: 0 !important;
+  }
+  @media (max-width: 900px) {
+    .topbar { width: 100%; min-width: 0; align-items: flex-start; gap: 9px; padding: 8px; }
+    .brand { width: 100%; min-width: 0; gap: 8px; justify-content: space-between; }
+    .brand-copy { min-width: 0; flex: 1 1 auto; }
+    .snapshot { flex: 0 0 auto; }
+    .brand p { display: none; }
+    .controls { width: 100%; min-width: 0; max-width: 100%; justify-content: flex-start; overflow-x: auto; padding-bottom: 2px; flex-wrap: nowrap; }
+    #feature-branches-toggle { order: -2; flex: 0 0 auto; }
+    #soft-overview { order: -1; flex: 0 0 auto; }
+    .control-group { flex: 0 0 auto; }
+    .control-group-label, #selection-status { display: none; }
+    button { min-height: 38px; }
+    .viewport-hint { font-size: 11px; }
+  }
+  @media (max-width: 520px) {
+    .snapshot { padding-inline: 6px; font-size: 11px; }
+    h1 { font-size: 17px; }
+    .toggle-label { display: none; }
+    .toggle { min-width: 40px; justify-content: center; }
+    .detail-panel { width: 100vw; border-left: 0; }
+    .detail-header { grid-template-columns: 58px minmax(0, 1fr) auto; gap: 9px; padding: 12px; }
+    .detail-icon-shell { width: 58px; height: 58px; }
+    #detail-icon { width: 48px; height: 48px; }
+    #detail-title { font-size: 20px; }
+    .detail-content { padding: 15px 14px 24px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      scroll-behavior: auto !important;
+      transition-duration: 0.001ms !important;
+      animation-duration: 0.001ms !important;
+      animation-iteration-count: 1 !important;
+    }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-copy">
+        <h1>TOTEM 統一模組依賴圖</h1>
+        <p>版本、功能與圖示取自目前本機 repository；不代表已發布狀態。</p>
+      </div>
+      <span class="snapshot" aria-label="這是 2026 年 8 月 30 日的本機 repository 快照">2026-08-30 repo 快照</span>
+    </div>
+    <nav class="controls" aria-label="依賴圖控制項">
+      <div class="control-group" aria-label="縮放控制">
+        <span class="control-group-label" aria-hidden="true">視圖</span>
+        <button id="zoom-out" type="button" aria-label="縮小" title="縮小（-）">−</button>
+        <output id="zoom-level" aria-live="polite">100%</output>
+        <button id="zoom-in" type="button" aria-label="放大" title="放大（+）">＋</button>
+        <button id="fit-view" type="button" aria-label="使整張依賴圖適合畫面" title="適合畫面（0）">適合畫面</button>
+        <button id="reset-view" type="button" aria-label="重設視圖、篩選與節點選取">重設</button>
+      </div>
+      <div class="control-group" aria-label="關係顯示切換">
+        <span class="control-group-label" aria-hidden="true">關係</span>
+        <button class="toggle toggle-hard" type="button" data-kind="hard" aria-pressed="true" title="顯示或隱藏硬依賴">
+          <span class="swatch" aria-hidden="true"></span><span class="toggle-label">硬依賴</span>
+        </button>
+        <button class="toggle toggle-optional" type="button" data-kind="optional" aria-pressed="true" title="顯示或隱藏可選依賴">
+          <span class="swatch" aria-hidden="true"></span><span class="toggle-label">可選依賴</span>
+        </button>
+        <button class="toggle toggle-compat" type="button" data-kind="compat" aria-pressed="true" title="顯示或隱藏相容、事件與已選取的 Observer provider 關係">
+          <span class="swatch" aria-hidden="true"></span><span class="toggle-label">相容／事件</span>
+        </button>
+        <button class="toggle toggle-service" type="button" data-kind="service" aria-pressed="true" title="顯示或隱藏外部服務關係">
+          <span class="swatch" aria-hidden="true"></span><span class="toggle-label">外部服務</span>
+        </button>
+      </div>
+      <button id="soft-overview" type="button" aria-haspopup="dialog" aria-controls="detail-panel" title="開啟完整軟依賴與外部選配服務清單">軟依賴總覽</button>
+      <button id="feature-branches-toggle" type="button" aria-pressed="false" aria-controls="feature-branch-nodes" title="在圖上展開全部 11 個現役 Totem 模組的功能分支">展開功能分支</button>
+      <div id="selection-status" role="status" aria-live="polite">未選取模組</div>
+    </nav>
+  </header>
+
+  <main id="viewport" tabindex="0" role="region" aria-label="TOTEM 模組依賴圖。可拖曳平移、滾輪縮放；方向鍵平移，正負號縮放，Esc 清除選取。">
+    <svg id="graph" width="100%" height="100%" role="img" aria-labelledby="graph-title graph-description">
+      <title id="graph-title">TOTEM 統一模組依賴圖，2026-08-30 本機 repository 快照</title>
+      <desc id="graph-description">TotemCore 0.7.12 位於中央；十個 Totem 功能模組、Cloudflare Worker 與 Trinkets Updated 位於周圍，以硬依賴、可選依賴、跨模組服務及相容事件連線。</desc>
+      <defs>
+        <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="#07111f"/><stop offset="1" stop-color="#111827"/>
+        </linearGradient>
+        <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+          <feDropShadow dx="0" dy="10" stdDeviation="12" flood-color="#000" flood-opacity=".32"/>
+        </filter>
+        <marker id="blue" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+          <path d="M0 0L12 6 0 12Z" fill="#60a5fa"/>
+        </marker>
+        <marker id="cyan" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+          <path d="M0 0L12 6 0 12Z" fill="#22d3ee"/>
+        </marker>
+        <marker id="amber" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+          <path d="M0 0L12 6 0 12Z" fill="#fbbf24"/>
+        </marker>
+        <marker id="purple" markerWidth="12" markerHeight="12" refX="10" refY="6" orient="auto">
+          <path d="M0 0L12 6 0 12Z" fill="#a78bfa"/>
+        </marker>
+        <style>
+          .title{font-size:58px;font-weight:700;fill:#f8fafc}
+          .subtitle{font-size:24px;fill:#94a3b8}
+          .name{font-size:29px;font-weight:700;fill:#f8fafc}
+          .ver{font-size:20px;fill:#94a3b8}
+          .body{font-size:21px;fill:#dbeafe}
+          .small{font-size:18px;fill:#cbd5e1}
+          .tiny{font-size:16px;fill:#94a3b8}
+          .edge{font-size:18px;font-weight:700}
+          .coretitle{font-size:42px;font-weight:700;fill:#ecfeff}
+        </style>
+      </defs>
+
+      <g id="scene">
+        <rect id="scene-background" width="3840" height="2450" fill="url(#bg)"/>
+        <circle cx="1920" cy="1120" r="820" fill="#083344" opacity=".14"/>
+        <circle cx="1920" cy="1120" r="560" fill="#164e63" opacity=".10"/>
+
+        <text x="130" y="92" class="title">TOTEM 統一模組依賴圖</text>
+        <text x="130" y="135" class="subtitle">所有功能模組都指向 TotemCore；跨模組功能直接連在同一張網路上｜2026-08-30</text>
+        <g aria-label="本機 repository 快照標記">
+          <rect x="130" y="158" width="390" height="44" rx="4" fill="#3b2b16" stroke="#f59e0b" stroke-width="3"/>
+          <text x="325" y="188" text-anchor="middle" class="small" fill="#fde68a" font-weight="800">2026-08-30 repo 快照</text>
+        </g>
+        <g transform="translate(2650 45)" aria-label="圖例">
+          <rect width="1060" height="150" rx="22" fill="#111c2e" stroke="#334155" stroke-width="2"/>
+          <line x1="30" y1="32" x2="100" y2="32" stroke="#60a5fa" stroke-width="6" marker-end="url(#blue)"/>
+          <text x="125" y="39" class="small">硬依賴 Core 0.7.x</text>
+          <line x1="405" y1="32" x2="475" y2="32" stroke="#fbbf24" stroke-width="6" marker-end="url(#amber)"/>
+          <text x="500" y="39" class="small">可選功能依賴</text>
+          <line x1="755" y1="32" x2="825" y2="32" stroke="#a78bfa" stroke-width="6" stroke-dasharray="13 9" marker-end="url(#purple)"/>
+          <text x="850" y="39" class="small">相容／語意介面</text>
+          <line x1="30" y1="79" x2="100" y2="79" stroke="#22d3ee" stroke-width="6" marker-end="url(#cyan)"/>
+          <text x="125" y="86" class="small">外部服務</text>
+          <text x="350" y="86" class="tiny" fill="#c4b5fd">第二層軟依賴／Observer：選取任一端才顯示，且不代表硬依賴</text>
+          <text x="30" y="124" class="tiny">箭頭方向：功能來源或依賴者 → 被使用的模組／基座</text>
+        </g>
+
+        <g id="relations" fill="none">
+          <path class="relation" data-kind="hard" data-from="alchemy" data-to="core" d="M820 370 C1110 500 1250 830 1450 1050" stroke="#60a5fa" stroke-width="6" opacity=".9" marker-end="url(#blue)" role="img" aria-label="TotemAlchemy 硬依賴 TotemCore"><title>TotemAlchemy → TotemCore：手冊＋遷移 API</title></path>
+          <path class="relation" data-kind="hard" data-from="enchanting" data-to="core" d="M1920 405 L1920 1010" stroke="#60a5fa" stroke-width="6" opacity=".9" marker-end="url(#blue)" role="img" aria-label="TotemEnchanting 硬依賴 TotemCore"><title>TotemEnchanting → TotemCore：版本／共用 API</title></path>
+          <path class="relation" data-kind="hard" data-from="discord" data-to="core" d="M3020 370 C2720 500 2580 830 2390 1050" stroke="#60a5fa" stroke-width="6" opacity=".9" marker-end="url(#blue)" role="img" aria-label="TotemDiscordBridge 硬依賴 TotemCore"><title>TotemDiscordBridge → TotemCore：EventBus 訂閱</title></path>
+          <path class="relation" data-kind="hard" data-from="automata" data-to="core" d="M820 930 C1040 930 1200 970 1390 1020" stroke="#60a5fa" stroke-width="6" opacity=".9" marker-end="url(#blue)" role="img" aria-label="TotemAutomata 硬依賴 TotemCore"><title>TotemAutomata → TotemCore：遷移／共用 API</title></path>
+          <path class="relation" data-kind="hard" data-from="vanilla" data-to="core" d="M3020 930 C2780 930 2640 970 2450 1020" stroke="#60a5fa" stroke-width="6" opacity=".9" marker-end="url(#blue)" role="img" aria-label="TotemVanillaTweaks 硬依賴 TotemCore"><title>TotemVanillaTweaks → TotemCore：版本／共用 API</title></path>
+          <path class="relation" data-kind="hard" data-from="excavation" data-to="core" d="M820 1500 C1060 1430 1210 1260 1390 1190" stroke="#60a5fa" stroke-width="6" opacity=".9" marker-end="url(#blue)" role="img" aria-label="TotemExcavation 硬依賴 TotemCore"><title>TotemExcavation → TotemCore：版本／共用 API</title></path>
+          <path class="relation" data-kind="hard" data-from="villagers" data-to="core" d="M3020 1500 C2780 1430 2630 1260 2450 1190" stroke="#60a5fa" stroke-width="6" opacity=".9" marker-end="url(#blue)" role="img" aria-label="TotemVillagers 硬依賴 TotemCore"><title>TotemVillagers → TotemCore：版本／共用 API</title></path>
+          <path class="relation" data-kind="hard" data-from="nexus" data-to="core" d="M1510 2000 C1620 1770 1710 1430 1770 1230" stroke="#60a5fa" stroke-width="6" opacity=".9" marker-end="url(#blue)" role="img" aria-label="TotemNexus 硬依賴 TotemCore"><title>TotemNexus → TotemCore：死亡／手冊／事件 API</title></path>
+          <path class="relation" data-kind="hard" data-from="remnant" data-to="core" d="M2330 2000 C2220 1770 2130 1430 2070 1230" stroke="#60a5fa" stroke-width="6" opacity=".9" marker-end="url(#blue)" role="img" aria-label="TotemRemnant 硬依賴 TotemCore"><title>TotemRemnant → TotemCore：死亡／手冊／事件 API</title></path>
+          <path class="relation" data-kind="hard" data-from="locksmith" data-to="core" d="M650 2000 C760 1740 1050 1430 1500 1230" stroke="#60a5fa" stroke-width="6" opacity=".9" marker-end="url(#blue)" role="img" aria-label="TotemLocksmith 硬依賴 TotemCore"><title>TotemLocksmith → TotemCore：好友／Observer／共用 API</title></path>
+
+          <path class="relation" data-kind="optional" data-layer="soft-dependency" data-soft-id="automata-excavation" data-from="automata" data-to="excavation" d="M450 1080 L450 1370" stroke="#fbbf24" stroke-width="6" marker-end="url(#amber)" role="img" aria-label="TotemAutomata 建議安裝 TotemExcavation 並選配辨識其槌類工具"><title>TotemAutomata → TotemExcavation：Fabric suggests ≥0.1.5；槌類採集工具辨識</title></path>
+          <path class="relation" data-kind="compat" data-layer="soft-dependency" data-soft-id="automata-locksmith" data-from="automata" data-to="locksmith" d="M160 1030 C40 1230 45 1770 220 2000" stroke="#a78bfa" stroke-width="6" stroke-dasharray="14 10" marker-end="url(#purple)" role="img" aria-label="TotemAutomata 選配遵守 TotemLocksmith 的玩家與自動化權限"><title>TotemAutomata → TotemLocksmith：runtime optional；玩家綁定與鎖網路自動化權限</title></path>
+          <path class="relation" data-kind="compat" data-layer="semantic-provider" data-soft-id="vanilla-automata-observer" data-from="vanilla" data-to="automata" d="M3020 900 C2720 650 1120 650 820 900" stroke="#a78bfa" stroke-width="6" stroke-dasharray="14 10" marker-end="url(#purple)" role="img" aria-label="TotemVanillaTweaks 轉播 TotemAutomata 模組自有 Observer 語意畫面，automata_copper_golem 協定版本 1"><title>TotemVanillaTweaks → TotemAutomata：使用 automata_copper_golem v1 provider；framebuffer-free</title></path>
+          <path class="relation" data-kind="compat" data-layer="semantic-provider" data-soft-id="vanilla-villagers-observer" data-from="vanilla" data-to="villagers" d="M3500 1015 C3540 1150 3540 1330 3500 1465" stroke="#a78bfa" stroke-width="6" stroke-dasharray="14 10" marker-end="url(#purple)" role="img" aria-label="TotemVanillaTweaks 轉播 TotemVillagers 模組自有 Observer 語意畫面，villagers_woodcutter 協定版本 1"><title>TotemVanillaTweaks → TotemVillagers：使用 villagers_woodcutter v1 provider；framebuffer-free</title></path>
+          <path class="relation" data-kind="compat" data-layer="semantic-provider" data-soft-id="vanilla-locksmith-observer" data-from="vanilla" data-to="locksmith" d="M3680 965 C3820 1500 3750 2260 2960 2280 C2140 2310 1100 2290 740 2110" stroke="#a78bfa" stroke-width="6" stroke-dasharray="14 10" marker-end="url(#purple)" role="img" aria-label="TotemVanillaTweaks 轉播 TotemLocksmith 模組自有 Observer 語意畫面，locksmith_management 協定版本 1"><title>TotemVanillaTweaks → TotemLocksmith：使用 locksmith_management v1 provider；framebuffer-free</title></path>
+          <path class="relation" data-kind="compat" data-layer="semantic-provider" data-soft-id="vanilla-nexus-observer" data-from="vanilla" data-to="nexus" d="M3020 995 C2780 1200 2840 1700 2550 1840 C2300 1960 1900 2010 1510 2050" stroke="#a78bfa" stroke-width="6" stroke-dasharray="14 10" marker-end="url(#purple)" role="img" aria-label="TotemVanillaTweaks 轉播 TotemNexus 模組自有 Observer 語意畫面，nexus 協定版本 2 與 nexus_death_node_admin 協定版本 1"><title>TotemVanillaTweaks → TotemNexus：nexus v2（map、map_legacy、friends、friends_legacy、registration、registration_legacy）＋nexus_death_node_admin v1；framebuffer-free</title></path>
+          <path class="relation" data-kind="compat" data-layer="semantic-provider" data-soft-id="vanilla-remnant-observer" data-from="vanilla" data-to="remnant" d="M3370 1015 C3450 1370 3340 1800 2790 2050" stroke="#a78bfa" stroke-width="6" stroke-dasharray="14 10" marker-end="url(#purple)" role="img" aria-label="TotemVanillaTweaks 轉播 TotemRemnant 模組自有 Observer 語意畫面，remnant_backpack 協定版本 1"><title>TotemVanillaTweaks → TotemRemnant：使用 remnant_backpack v1 provider；framebuffer-free</title></path>
+          <path class="relation" data-kind="optional" data-layer="soft-dependency" data-soft-id="villagers-remnant" data-from="villagers" data-to="remnant" d="M3370 1690 C3300 1870 3100 2000 2790 2070" stroke="#fbbf24" stroke-width="6" marker-end="url(#amber)" role="img" aria-label="TotemVillagers 建議安裝 TotemRemnant 並選配製造及販售四階背包"><title>TotemVillagers → TotemRemnant：Fabric suggests ≥0.2.13；工具匠依即時配方製造與販售四階背包</title></path>
+          <path class="relation" data-kind="compat" data-from="nexus" data-to="remnant" d="M1510 2110 L2210 2110" stroke="#22d3ee" stroke-width="6" marker-end="url(#cyan)" role="img" aria-label="TotemNexus 向 TotemRemnant 提供死亡節點與保留資格"><title>TotemNexus → TotemRemnant：節點＋死亡保留資格</title></path>
+          <path class="relation" data-kind="optional" data-layer="soft-dependency" data-soft-id="remnant-nexus" data-from="remnant" data-to="nexus" d="M2210 2190 L1510 2190" stroke="#fbbf24" stroke-width="6" marker-end="url(#amber)" role="img" aria-label="TotemRemnant 選配使用 TotemNexus 的死亡節點生命週期與傳送物品保留資格"><title>TotemRemnant → TotemNexus：runtime optional；死亡節點建立／綁定／回收與一件傳送介面保留</title></path>
+          <path class="relation" data-kind="optional" data-layer="soft-dependency" data-soft-id="automata-remnant" data-from="automata" data-to="remnant" d="M820 1010 C900 1700 1450 1830 2210 2040" stroke="#fbbf24" stroke-width="6" marker-end="url(#amber)" role="img" aria-label="TotemAutomata 選配使用 TotemRemnant 背包辨識與可攜容器安全規則"><title>TotemAutomata → TotemRemnant：runtime optional；背包整理與可攜容器防巢狀 policy</title></path>
+          <path class="relation" data-kind="compat" data-from="core" data-to="discord" d="M2390 1050 C2680 760 2820 540 3020 370" stroke="#a78bfa" stroke-width="6" stroke-dasharray="14 10" marker-end="url(#purple)" role="img" aria-label="TotemCore 向 TotemDiscordBridge 發送相容事件"><title>TotemCore → TotemDiscordBridge：死亡／空間／管理事件通知</title></path>
+          <path class="relation" data-kind="service" data-from="discord" data-to="cloudflare" d="M3350 435 L3400 500" stroke="#22d3ee" stroke-width="5" marker-end="url(#cyan)" role="img" aria-label="TotemDiscordBridge 使用外部 Cloudflare Worker 轉送 Discord"><title>TotemDiscordBridge → Cloudflare Worker：外部服務，不是 Fabric 軟依賴</title></path>
+          <path class="relation" data-kind="optional" data-layer="soft-dependency" data-soft-id="remnant-trinkets" data-from="remnant" data-to="trinkets" d="M2960 2160 L3040 2170" stroke="#fbbf24" stroke-width="5" marker-end="url(#amber)" role="img" aria-label="TotemRemnant 建議安裝 Trinkets Updated 並選配擷取其可掉落飾品欄"><title>TotemRemnant → Trinkets Updated：Fabric suggests ≥4.1.0-beta.2；死亡背包擷取已驗證的飾品 inventory</title></path>
+        </g>
+
+        <g id="edge-labels">
+          <g class="edge-label relation" data-kind="hard" data-from="alchemy" data-to="core"><rect x="865" y="520" width="310" height="42" rx="14" fill="#13233a"/><text x="1020" y="548" text-anchor="middle" class="edge" fill="#93c5fd">手冊＋遷移 API</text></g>
+          <g class="edge-label relation" data-kind="hard" data-from="enchanting" data-to="core"><rect x="1755" y="590" width="330" height="42" rx="14" fill="#13233a"/><text x="1920" y="618" text-anchor="middle" class="edge" fill="#93c5fd">版本／共用 API</text></g>
+          <g class="edge-label relation" data-kind="hard" data-from="discord" data-to="core"><rect x="2600" y="515" width="325" height="42" rx="14" fill="#13233a"/><text x="2762" y="543" text-anchor="middle" class="edge" fill="#93c5fd">EventBus 訂閱</text></g>
+          <g class="edge-label relation" data-kind="hard" data-from="automata" data-to="core"><rect x="920" y="885" width="310" height="42" rx="14" fill="#13233a"/><text x="1075" y="913" text-anchor="middle" class="edge" fill="#93c5fd">遷移／共用 API</text></g>
+          <g class="edge-label relation" data-kind="hard" data-from="vanilla" data-to="core"><rect x="2580" y="885" width="320" height="42" rx="14" fill="#13233a"/><text x="2740" y="913" text-anchor="middle" class="edge" fill="#93c5fd">版本／共用 API</text></g>
+          <g class="edge-label relation" data-kind="hard" data-from="excavation" data-to="core"><rect x="920" y="1455" width="320" height="42" rx="14" fill="#13233a"/><text x="1080" y="1483" text-anchor="middle" class="edge" fill="#93c5fd">版本／共用 API</text></g>
+          <g class="edge-label relation" data-kind="hard" data-from="villagers" data-to="core"><rect x="2570" y="1455" width="320" height="42" rx="14" fill="#13233a"/><text x="2730" y="1483" text-anchor="middle" class="edge" fill="#93c5fd">版本／共用 API</text></g>
+          <g class="edge-label relation" data-kind="hard" data-from="nexus" data-to="core"><rect x="1450" y="1765" width="330" height="42" rx="14" fill="#13233a"/><text x="1615" y="1793" text-anchor="middle" class="edge" fill="#93c5fd">死亡／手冊／事件 API</text></g>
+          <g class="edge-label relation" data-kind="hard" data-from="remnant" data-to="core"><rect x="2070" y="1765" width="330" height="42" rx="14" fill="#13233a"/><text x="2235" y="1793" text-anchor="middle" class="edge" fill="#93c5fd">死亡／手冊／事件 API</text></g>
+          <g class="edge-label relation" data-kind="hard" data-from="locksmith" data-to="core"><rect x="820" y="1705" width="380" height="42" rx="14" fill="#13233a"/><text x="1010" y="1733" text-anchor="middle" class="edge" fill="#93c5fd">好友／Observer／共用 API</text></g>
+
+          <g class="edge-label relation" data-kind="optional" data-layer="soft-dependency" data-soft-id="automata-excavation" data-from="automata" data-to="excavation" role="img" aria-label="Automata 到 Excavation 的 Fabric suggests 槌類採集整合"><title>Fabric suggests ≥0.1.5；未安裝時不辨識 Excavation 槌</title><rect x="485" y="1195" width="380" height="42" rx="14" fill="#33260d"/><text x="675" y="1223" text-anchor="middle" class="edge" fill="#fcd34d">槌類採集與掉落判定</text></g>
+          <g class="edge-label relation" data-kind="compat" data-layer="soft-dependency" data-soft-id="automata-locksmith" data-from="automata" data-to="locksmith" role="img" aria-label="Automata 到 Locksmith 的 runtime optional 權限整合"><title>未安裝 Locksmith 時維持普通搬運；已安裝但 API 失效時 fail closed</title><rect x="15" y="1280" width="470" height="42" rx="14" fill="#28213c"/><text x="250" y="1308" text-anchor="middle" class="edge" fill="#c4b5fd">鎖網路玩家／自動化權限</text></g>
+          <g class="edge-label relation" data-kind="optional" data-layer="soft-dependency" data-soft-id="villagers-remnant" data-from="villagers" data-to="remnant" role="img" aria-label="Villagers 到 Remnant 的 Fabric suggests 背包工具匠整合"><title>Fabric suggests ≥0.2.13；未安裝時不註冊替代背包物品或工作單</title><rect x="2990" y="1810" width="500" height="42" rx="14" fill="#33260d"/><text x="3240" y="1838" text-anchor="middle" class="edge" fill="#fcd34d">工具匠製造／販售四階背包</text></g>
+          <g class="edge-label relation" data-kind="compat" data-layer="semantic-provider" data-soft-id="vanilla-automata-observer" data-from="vanilla" data-to="automata" role="img" aria-label="Automata Observer 語意介面 automata_copper_golem 協定版本 1"><title>automata_copper_golem v1；由 TotemAutomata 擁有並重建正式 Screen</title><rect x="1650" y="642" width="540" height="42" rx="14" fill="#28213c"/><text x="1920" y="670" text-anchor="middle" class="edge" fill="#c4b5fd">Observer：Copper Golem v1</text></g>
+          <g class="edge-label relation" data-kind="compat" data-layer="semantic-provider" data-soft-id="vanilla-villagers-observer" data-from="vanilla" data-to="villagers" role="img" aria-label="Villagers Observer 語意介面 villagers_woodcutter 協定版本 1"><title>villagers_woodcutter v1；由 TotemVillagers 擁有並重建正式 Screen</title><rect x="3195" y="1115" width="590" height="42" rx="14" fill="#28213c"/><text x="3490" y="1143" text-anchor="middle" class="edge" fill="#c4b5fd">Observer：Woodcutter v1</text></g>
+          <g class="edge-label relation" data-kind="compat" data-layer="semantic-provider" data-soft-id="vanilla-locksmith-observer" data-from="vanilla" data-to="locksmith" role="img" aria-label="Locksmith Observer 語意介面 locksmith_management 協定版本 1"><title>locksmith_management v1；由 TotemLocksmith 擁有並重建正式 Screen</title><rect x="1030" y="2250" width="670" height="42" rx="14" fill="#28213c"/><text x="1365" y="2278" text-anchor="middle" class="edge" fill="#c4b5fd">Observer：Locksmith Management v1</text></g>
+          <g class="edge-label relation" data-kind="compat" data-layer="semantic-provider" data-soft-id="vanilla-nexus-observer" data-from="vanilla" data-to="nexus" role="img" aria-label="Nexus Observer 語意介面 nexus 協定版本 2 與 nexus_death_node_admin 協定版本 1"><title>nexus v2 六種 variant ＋ nexus_death_node_admin v1；由 TotemNexus 擁有並重建正式 Screen</title><rect x="2180" y="1740" width="740" height="42" rx="14" fill="#28213c"/><text x="2550" y="1768" text-anchor="middle" class="edge" fill="#c4b5fd">Observer：Nexus v2 ＋ Death Admin v1</text></g>
+          <g class="edge-label relation" data-kind="compat" data-layer="semantic-provider" data-soft-id="vanilla-remnant-observer" data-from="vanilla" data-to="remnant" role="img" aria-label="Remnant Observer 語意介面 remnant_backpack 協定版本 1"><title>remnant_backpack v1；由 TotemRemnant 擁有並重建正式 Screen</title><rect x="3090" y="1260" width="590" height="42" rx="14" fill="#28213c"/><text x="3385" y="1288" text-anchor="middle" class="edge" fill="#c4b5fd">Observer：Remnant Backpack v1</text></g>
+          <g class="edge-label relation" data-kind="compat" data-from="nexus" data-to="remnant"><rect x="1600" y="2038" width="520" height="42" rx="14" fill="#0d3440"/><text x="1860" y="2066" text-anchor="middle" class="edge" fill="#67e8f9">Nexus 提供節點＋死亡保留資格</text></g>
+          <g class="edge-label relation" data-kind="optional" data-layer="soft-dependency" data-soft-id="remnant-nexus" data-from="remnant" data-to="nexus" role="img" aria-label="Remnant 到 Nexus 的 runtime optional 死亡節點整合"><title>沒有 Nexus 時死亡背包仍可獨立建立與回收</title><rect x="1600" y="2215" width="520" height="42" rx="14" fill="#33260d"/><text x="1860" y="2243" text-anchor="middle" class="edge" fill="#fcd34d">Remnant 觸發死亡／撿取生命週期</text></g>
+          <g class="edge-label relation" data-kind="optional" data-layer="soft-dependency" data-soft-id="automata-remnant" data-from="automata" data-to="remnant" role="img" aria-label="Automata 到 Remnant 的 runtime optional 背包與容器安全整合"><title>沒有 Remnant 時退回原版可攜容器規則，不辨識 Remnant 背包目的地</title><rect x="1110" y="1835" width="570" height="42" rx="14" fill="#33260d"/><text x="1395" y="1863" text-anchor="middle" class="edge" fill="#fcd34d">背包整理＋禁止巢狀安全規則</text></g>
+          <g class="edge-label relation" data-kind="compat" data-from="core" data-to="discord"><rect x="2540" y="630" width="520" height="42" rx="14" fill="#28213c"/><text x="2800" y="658" text-anchor="middle" class="edge" fill="#c4b5fd">死亡／空間／管理事件通知</text></g>
+          <g class="edge-label relation" data-kind="service" data-from="discord" data-to="cloudflare" role="img" aria-label="DiscordBridge 到 Cloudflare Worker 的外部服務關係"><title>外部 Worker 轉送 Discord API；不是 Fabric 軟依賴</title><rect x="3240" y="450" width="560" height="42" rx="14" fill="#0d3440"/><text x="3520" y="478" text-anchor="middle" class="edge" fill="#67e8f9">外部 Worker → Discord</text></g>
+          <g class="edge-label relation" data-kind="optional" data-layer="soft-dependency" data-soft-id="remnant-trinkets" data-from="remnant" data-to="trinkets" role="img" aria-label="Remnant 到 Trinkets Updated 的 Fabric suggests 死亡擷取整合"><title>Fabric suggests ≥4.1.0-beta.2；未安裝時不掃描飾品 inventory</title><rect x="2910" y="2250" width="720" height="42" rx="14" fill="#33260d"/><text x="3270" y="2278" text-anchor="middle" class="edge" fill="#fcd34d">Trinkets 飾品欄死亡擷取</text></g>
+        </g>
+
+        <g id="feature-owner-links" class="branch-only" fill="none" aria-label="模組到功能分支連線"></g>
+        <g id="feature-dependency-links" class="branch-only" fill="none" aria-label="所選功能的軟依賴連線"></g>
+
+        <g class="node" data-node="core" data-label="TotemCore 0.7.12" transform="translate(1390 1010)" filter="url(#shadow)" role="button" tabindex="0" aria-pressed="false" aria-labelledby="core-name core-description">
+          <rect class="card" width="1060" height="220" rx="40" fill="#083344" stroke="#22d3ee" stroke-width="6"/>
+          <rect x="48" y="22" width="112" height="112" rx="22" fill="#0f5265" stroke="#67e8f9" stroke-width="2"/>
+          <image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABABAMAAABYR2ztAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAnUExURQAAAKBbI+rbhIVAD/377vjupdGnXUHmfwC7RsWHQgBraEfXyP///0pUACwAAAABdFJOUwBA5thmAAAAAWJLR0QMgbNRYwAAAAd0SU1FB+oIEAMjHyqFStcAAACrSURBVEjHzZRdDQQxCITXAhawgIVaOAu1UAtrAQtYwNx1rtekm+3rwk7SkJTvYcLfcbxKtCgHIOJFGyQAEGEuXZ8uZpEcoHYhiZgFlNIakohZQGvniUIhZgGqs1Cq0cBcFhEzDKyq2WWBQgAYw9CaqbrXajYs/60GACiSCJF7KWZ4tbrjb6ni48C0OlLD5K2bAQBsziZlAeOE6E/bdCiwPWFBwBic26A8D3wB2UYweAO41ToAAAAASUVORK5CYII=" x="72" y="46" width="64" height="64"/>
+          <text id="core-name" x="530" y="75" text-anchor="middle" class="coretitle">TotemCore 0.7.12</text>
+          <text id="core-description" x="530" y="156" text-anchor="middle" class="body">Totem 系列的共用 API、手冊、好友、版本握手與 Observer 基座</text>
+        </g>
+
+        <g class="node" data-node="alchemy" data-label="TotemAlchemy 0.1.40" transform="translate(160 210)" filter="url(#shadow)" role="button" tabindex="0" aria-pressed="false" aria-labelledby="alchemy-name alchemy-description">
+          <rect class="card" width="660" height="160" rx="28" fill="#312e81" stroke="#818cf8" stroke-width="4"/>
+          <rect x="22" y="22" width="82" height="82" rx="17" fill="#4338ca"/>
+          <image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABABAMAAABYR2ztAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAnUExURQAAAKBbI+rbhIVAD/377vjupdGnXUHmfwC7RsWHQkMjT6FOsv///0WgHKIAAAABdFJOUwBA5thmAAAAAWJLR0QMgbNRYwAAAAd0SU1FB+oIEAMjIevkV3wAAAClSURBVEjHzZRBFcAgDENnAQu1gAUsYAELWJiFWqgFzI3QbY+9cV27XHrIP+SVlG37lcIkHyAEmrRADIAYiVJX7iKK0QcoXTAxvYCUaoWJ6QXUuu9YFKYXwFyKDDFbA9exACFS+3FAJgBKgtLioVpTBJHPqAYAloRYOYu0IRFEnpZlAGjUy1bk9ZoGAGLKrWWjPgf0C+GhpW0KLL8wI0CL8yrK98ABYulUmA0WHOEAAAAASUVORK5CYII=" x="31" y="31" width="64" height="64"/>
+          <text id="alchemy-name" x="125" y="55" class="name">TotemAlchemy</text><text x="535" y="55" class="ver">0.1.40</text>
+          <text id="alchemy-description" x="125" y="108" class="body">生存煉金、機率釀造與玩家研究</text>
+        </g>
+
+        <g class="node" data-node="enchanting" data-label="TotemEnchanting 0.1.9" transform="translate(1590 245)" filter="url(#shadow)" role="button" tabindex="0" aria-pressed="false" aria-labelledby="enchanting-name enchanting-description">
+          <rect class="card" width="660" height="160" rx="28" fill="#253047" stroke="#64748b" stroke-width="4"/>
+          <rect x="22" y="22" width="82" height="82" rx="17" fill="#334155"/>
+          <image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABABAMAAABYR2ztAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAqUExURQAAAKBbI+rbhIVAD/377vjupdGnXUHmfwC7RlknIMWHQsVrVEfXyP////sXJMkAAAABdFJOUwBA5thmAAAAAWJLR0QN9rRh9QAAAAd0SU1FB+oIEAMjIevkV3wAAACnSURBVEjHzZRRDcAgDERnAQu1UAtYmIVZwMIs1EItzMJErTfCwjJ+aXcfbULfx6UcLMuvlDrFAClRpwHiADATZdNqImKOATYThuhRQM6lYIgeBZSy71gUehQg0halKuILtMciJgQWY5HuAbkAMAaTh6lV1Sc2DgCWxAyTp6lVnHVbnA5Uq2+Tn9t0AKpNXBLqMLTTgfqF6K3h2BUYfmFOQA3OJyjzgQs/zGaok5/fjgAAAABJRU5ErkJggg==" x="31" y="31" width="64" height="64"/>
+          <text id="enchanting-name" x="125" y="55" class="name">TotemEnchanting</text><text x="535" y="55" class="ver">0.1.9</text>
+          <text id="enchanting-description" x="125" y="108" class="body">雕紋書櫃驅動的 64 級附魔力</text>
+        </g>
+
+        <g class="node" data-node="discord" data-label="TotemDiscordBridge 0.1.8" transform="translate(3020 210)" filter="url(#shadow)" role="button" tabindex="0" aria-pressed="false" aria-labelledby="discord-name discord-description">
+          <rect class="card" width="660" height="160" rx="28" fill="#3b2b16" stroke="#f59e0b" stroke-width="4"/>
+          <rect x="22" y="22" width="82" height="82" rx="17" fill="#5b3b13"/>
+          <image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABABAMAAABYR2ztAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAnUExURQAAAKBbI+rbhIVAD/377vjupdGnXUHmfwC7RsWHQiRKhlhl8v////Qbn/4AAAABdFJOUwBA5thmAAAAAWJLR0QMgbNRYwAAAAd0SU1FB+oIEAMjIJzjZ+oAAACcSURBVEjHzZRNDQQxCEbHQi1gAQtYWAtroRbGAhawMOa23xKaJtvMbWDfhaS8A+Gnx/FXtIUaoTVa2CgJAjORDF4DIuYa4T1AErFKEOkdScQqoffzRKMQqwRVm2QLcSxm18RsOaAUAUvC7IKIC6pzbRIENIk5igwBb0sXHxei1NtpJgheZgypRvAvRL9s06nC9gtLEnxxfhbleeEDH6tjeCGQ3hkAAAAASUVORK5CYII=" x="31" y="31" width="64" height="64"/>
+          <text id="discord-name" x="125" y="55" class="name">TotemDiscordBridge</text><text x="545" y="55" class="ver">0.1.8</text>
+          <text id="discord-description" x="125" y="108" class="body">安全轉送聊天、事件與伺服器狀態</text>
+        </g>
+
+        <g class="node" data-node="automata" data-label="TotemAutomata 0.1.18" transform="translate(160 855)" filter="url(#shadow)" role="button" tabindex="0" aria-pressed="false" aria-labelledby="automata-name automata-description">
+          <rect class="card" width="660" height="160" rx="28" fill="#3b2b16" stroke="#f59e0b" stroke-width="4"/>
+          <rect x="22" y="22" width="82" height="82" rx="17" fill="#5b3b13"/>
+          <image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABABAMAAABYR2ztAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAqUExURQAAAKBbI+rbhIVAD/377vjupdGnXUHmfwC7Rng1HsWHQsh1RTqvoP///2kx4SgAAAABdFJOUwBA5thmAAAAAWJLR0QN9rRh9QAAAAd0SU1FB+oIEAMjIJzjZ+oAAACtSURBVEjHzZRRDcUgDEVnoRZqAQtYwAIWsDALtVALtTBRjzv2Ml7G79p3kqXJej5uSmHb/gqaiBGIeGKhOAgpMedO6TCnFCPUDpqoUULOraGJGiW0tu8YFGqUIFKrCAal6i18L4sI2sxo/1wgFwHBsLTWUR0hUa+oDgKGhFil5Gx2HGa1EuHfNMXXhTsqkJPHaToI9wGJ4IsQxhOiJ4uddhaWT5iTMBbnsSjvCx+CGjEAAKzFegAAAABJRU5ErkJggg==" x="31" y="31" width="64" height="64"/>
+          <text id="automata-name" x="125" y="55" class="name">TotemAutomata</text><text x="525" y="55" class="ver">0.1.18</text>
+          <text id="automata-description" x="125" y="108" class="body">銅魁儡分類、採集與限額排程</text>
+        </g>
+
+        <g class="node" data-node="vanilla" data-label="TotemVanillaTweaks 0.1.20" transform="translate(3020 855)" filter="url(#shadow)" role="button" tabindex="0" aria-pressed="false" aria-labelledby="vanilla-name vanilla-description">
+          <rect class="card" width="660" height="160" rx="28" fill="#3f2d59" stroke="#a78bfa" stroke-width="4"/>
+          <rect x="22" y="22" width="82" height="82" rx="17" fill="#513970"/>
+          <image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABABAMAAABYR2ztAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAhUExURQAAAKBbI+rbhIVAD/377vjupdGnXUHmfwC7RsWHQv///3TeEMIAAAABdFJOUwBA5thmAAAAAWJLR0QKaND0VgAAAAd0SU1FB+oIEAMjIevkV3wAAACRSURBVEjHzZTBDcAgCEVdgRVYgRVcoSu4Aiu4gtvWX2MlrddCX0I48A7mi6b0K8gQIxCxYaM4CCLMuXN0mEVihNLBED1KyFkVQ/QoQbVWBIUeJ1h8hflYai1llXlALgKWRB60dq+Ng4CQRIhQkyGZFD8XxlGnNOp1mw7CM6gIYXwh7WI7dhW2X5iTsMJKyVU4AQud/4kHGzwsAAAAAElFTkSuQmCC" x="31" y="31" width="64" height="64"/>
+          <text id="vanilla-name" x="125" y="55" class="name">TotemVanillaTweaks</text><text x="545" y="55" class="ver">0.1.20</text>
+          <text id="vanilla-description" x="125" y="108" class="body">原版調整、容器整理與語意 Observer</text>
+        </g>
+
+        <g class="node" data-node="excavation" data-label="TotemExcavation 0.1.8" transform="translate(160 1465)" filter="url(#shadow)" role="button" tabindex="0" aria-pressed="false" aria-labelledby="excavation-name excavation-description">
+          <rect class="card" width="660" height="160" rx="28" fill="#253047" stroke="#64748b" stroke-width="4"/>
+          <rect x="22" y="22" width="82" height="82" rx="17" fill="#334155"/>
+          <image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABABAMAAABYR2ztAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAnUExURQAAAKBbI+rbhIVAD/377vjupdGnXUHmfwC7RsWHQpycnExPUv///1omL00AAAABdFJOUwBA5thmAAAAAWJLR0QMgbNRYwAAAAd0SU1FB+oIEAMjIevkV3wAAACjSURBVEjHzZRBEcAgDARrIRZiIRawgAUsYAELsVALNVeumbZ0yrdJ70EYso+bcLAsvxINigGIeNAEcQBEmFNX7mIWiQFKF5qoUUBKtaKJGgXU2hoGhRoFqK6XvIHzsWwPDQ/IBUBIENpSVBEcrKpXbBwADEmEKGdclYFEOBum+DlwW4UxM/m6TQcANs0adjGAfSF6aNp2BaZfmBNgwXkF5XtgB3GALUjg/6rMAAAAAElFTkSuQmCC" x="31" y="31" width="64" height="64"/>
+          <text id="excavation-name" x="125" y="55" class="name">TotemExcavation</text><text x="530" y="55" class="ver">0.1.8</text>
+          <text id="excavation-description" x="125" y="108" class="body">七階槌的雙角選區與範圍挖掘</text>
+        </g>
+
+        <g class="node" data-node="villagers" data-label="TotemVillagers 0.1.33" transform="translate(3020 1465)" filter="url(#shadow)" role="button" tabindex="0" aria-pressed="false" aria-labelledby="villagers-name villagers-description">
+          <rect class="card" width="660" height="160" rx="28" fill="#3b2b16" stroke="#f59e0b" stroke-width="4"/>
+          <rect x="22" y="22" width="82" height="82" rx="17" fill="#5b3b13"/>
+          <image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABABAMAAABYR2ztAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAkUExURQAAAKBbI+rbhIVAD/377vjupdGnXUHmfwC7RsWHQgBrPP///+LHOywAAAABdFJOUwBA5thmAAAAAWJLR0QLH9fEwAAAAAd0SU1FB+oIEAMjIevkV3wAAAChSURBVEjHzZRLEcAgDESxgIVYiAUsYAELWMBCLERl2VJm6MC1SfeSw77DTn4h/EpxkQ8QIy06IAYAM1Hqyl1EzD5A6YKJ6gWkVCtMVC+g1tbQKFQvQASNUi1FxBqYxwJEtTVV5tcBmQBYEiwtbAgIIj9RDQA0CbGGnfNElmYZADPqGnKbpgEwBqS3MDgPYLwQuXW0TYHjCzMCxuJsi/I9cAG0zT043ZYF4AAAAABJRU5ErkJggg==" x="31" y="31" width="64" height="64"/>
+          <text id="villagers-name" x="125" y="55" class="name">TotemVillagers</text><text x="525" y="55" class="ver">0.1.33</text>
+          <text id="villagers-description" x="125" y="108" class="body">實體庫存驅動的村民工作經濟</text>
+        </g>
+
+        <g class="node" data-node="locksmith" data-label="TotemLocksmith 0.1.6" transform="translate(80 2000)" filter="url(#shadow)" role="button" tabindex="0" aria-pressed="false" aria-labelledby="locksmith-name locksmith-description">
+          <rect class="card" width="660" height="160" rx="28" fill="#253047" stroke="#cbd5e1" stroke-width="4"/>
+          <rect x="22" y="22" width="82" height="82" rx="17" fill="#334155"/>
+          <image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQBAMAAADt3eJSAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAqUExURQAAAKBbI+rbhIVAD/377vjupdGnXUHmfwC7RsWHQkxPUtjY2JycnP///wzg6v8AAAABdFJOUwBA5thmAAAAAWJLR0QN9rRh9QAAAAd0SU1FB+oIEAMjIevkV3wAAABlSURBVAjXY2BAAEZBQQEwQ0hJSRHMMHIJVQYzzFLVksEMk7KUYjDDvCW8GcywzFo1GaxZeJHmQqABjGpGK6ctnmbAwGAstWrVKmOQGqndp3eBFVsBRcAM5syZBlDGNAiDwRikFAA+mBZDf5CpIAAAAABJRU5ErkJggg==" x="31" y="31" width="64" height="64"/>
+          <text id="locksmith-name" x="125" y="55" class="name">TotemLocksmith</text><text x="535" y="55" class="ver">0.1.6</text>
+          <text id="locksmith-description" x="125" y="108" class="body">一把鎖保護固定漏斗儲存網路</text>
+        </g>
+
+        <g class="node" data-node="nexus" data-label="TotemNexus 0.3.6" transform="translate(760 2000)" filter="url(#shadow)" role="button" tabindex="0" aria-pressed="false" aria-labelledby="nexus-name nexus-description">
+          <rect class="card" width="750" height="160" rx="30" fill="#172554" stroke="#3b82f6" stroke-width="5"/>
+          <rect x="25" y="24" width="104" height="104" rx="20" fill="#1e3a8a"/>
+          <image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABABAMAAABYR2ztAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAqUExURQAAAKBbI+rbhIVAD/377vjupdGnXUHmfwC7RsWHQjggUIBYuEfXyP///+7H1acAAAABdFJOUwBA5thmAAAAAWJLR0QN9rRh9QAAAAd0SU1FB+oIEAMjIJzjZ+oAAACrSURBVEjHzdRRDcQgDAbgWcBCLdQCFrCABSzMQi3UAhYm6vjXuwvJyL3R3v/SZP0eGlY4jr9KmhIDUqIpC+IAmInySBkhYo4BdQRN1CiQc2tookaB1s4TB4UaBUT0G2/wuSyqvWNhRXpXnS6QC8CSMAPISK0AqO9RHQAOidmGLOW6iADwbTrF7cBGBah3AB5/0wHYmD83ajuwJ0TuLNuuYPmEOQFbnMei7Acv3ItlEMbuJfIAAAAASUVORK5CYII=" x="45" y="44" width="64" height="64"/>
+          <text id="nexus-name" x="155" y="58" class="name">TotemNexus</text><text x="620" y="58" class="ver">0.3.6</text>
+          <text id="nexus-description" x="155" y="112" class="body">磁石 Space Unit 與成本化傳送</text>
+        </g>
+
+        <g class="node" data-node="remnant" data-label="TotemRemnant 0.2.16" transform="translate(2210 2000)" filter="url(#shadow)" role="button" tabindex="0" aria-pressed="false" aria-labelledby="remnant-name remnant-description">
+          <rect class="card" width="750" height="160" rx="30" fill="#4a164c" stroke="#e879f9" stroke-width="5"/>
+          <rect x="25" y="24" width="104" height="104" rx="20" fill="#701a75"/>
+          <image href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAABABAMAAABYR2ztAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAqUExURQAAAKBbI+rbhIVAD/377vjupdGnXUHmfwC7RsWHQjokGExPUtjY2P///45sKgEAAAABdFJOUwBA5thmAAAAAWJLR0QN9rRh9QAAAAd0SU1FB+oIEAMjIJzjZ+oAAACrSURBVEjHzZRBEcQgDEVrAQuxEAtYWAtYwEItxEIsxEJFLb9MW3bKlWT/gTDJO2TCD9v2V0qDYoCUaNAEcQCYiXLTp4mIOQYoTSgiRgE514oiYhRQ675jUIhRgEgpekrEG7iWhVkVhhVR/VkgFwAmQflZXjR628YBwJCYkRwB5IYpLgd6qwDMjsMM99drOgC9TVUznFNHLQf6FyKnpmVXYPqFOQHdOC+jrAe+LVYuWLKoA0MAAAAASUVORK5CYII=" x="45" y="44" width="64" height="64"/>
+          <text id="remnant-name" x="155" y="58" class="name">TotemRemnant</text><text x="615" y="58" class="ver">0.2.16</text>
+          <text id="remnant-description" x="155" y="112" class="body">模組化背包、死亡回收與容器安全</text>
+        </g>
+
+        <g class="node external-node" data-node="cloudflare" data-label="Cloudflare Worker" transform="translate(3180 500)" role="button" tabindex="0" aria-pressed="false" aria-labelledby="cloudflare-name cloudflare-description">
+          <rect class="card" width="500" height="120" rx="24" fill="#4b3515" stroke="#fbbf24" stroke-width="3"/>
+          <text id="cloudflare-name" x="250" y="48" text-anchor="middle" class="name">Cloudflare Worker</text>
+          <text id="cloudflare-description" x="250" y="84" text-anchor="middle" class="small">Discord API／附件／Bot 狀態</text>
+        </g>
+
+        <g class="node external-node" data-node="trinkets" data-label="Trinkets Updated" transform="translate(3040 2115)" role="button" tabindex="0" aria-pressed="false" aria-labelledby="trinkets-name trinkets-description">
+          <rect class="card" width="620" height="120" rx="24" fill="#4b3515" stroke="#fbbf24" stroke-width="3"/>
+          <text id="trinkets-name" x="310" y="48" text-anchor="middle" class="name">Trinkets Updated</text>
+          <text id="trinkets-description" x="310" y="84" text-anchor="middle" class="small">選配 ≥4.1.0-beta.2｜飾品欄背包與死亡擷取</text>
+        </g>
+
+        <g id="feature-branch-nodes" class="branch-only" aria-label="11 個現役 Totem 模組的功能分支"></g>
+
+        <g id="runtime-footer">
+          <rect x="120" y="2320" width="3600" height="90" rx="24" fill="#172554" stroke="#3b82f6" stroke-width="3"/>
+          <text x="1920" y="2358" text-anchor="middle" class="name">共同執行環境：Minecraft 26.2｜Java 25｜Fabric Loader ≥0.19.3｜Fabric API</text>
+          <text x="1920" y="2393" text-anchor="middle" class="small">節點版本取自各 repo 的 gradle.properties｜Core 硬依賴採 0.7.x 相容範圍｜跨模組選配功能可在對方不存在時安全停用</text>
+        </g>
+      </g>
+    </svg>
+    <div class="viewport-hint" aria-hidden="true">拖曳平移｜滾輪或 ＋／− 縮放｜「展開功能分支」一次顯示全部功能｜點功能查看精確軟依賴｜Esc 清除</div>
+  </main>
+</div>
+<aside id="detail-panel" class="detail-panel" role="dialog" aria-modal="false" aria-labelledby="detail-title" aria-describedby="detail-summary" hidden>
+  <header class="detail-header">
+    <div id="detail-icon-shell" class="detail-icon-shell"><img id="detail-icon" alt=""></div>
+    <div class="detail-heading">
+      <p id="detail-eyebrow" class="detail-eyebrow">TOTEM 模組</p>
+      <h2 id="detail-title"></h2>
+      <span id="detail-version"></span>
+    </div>
+    <button id="detail-close" type="button" aria-label="關閉模組詳情" title="關閉（Esc）">×</button>
+  </header>
+  <div class="detail-content">
+    <p id="detail-summary"></p>
+    <section class="detail-section" aria-labelledby="detail-branches-title">
+      <h3 id="detail-branches-title">目前功能分支</h3>
+      <ul id="detail-branches"></ul>
+    </section>
+    <section id="detail-soft-section" class="detail-section soft-dependencies" aria-labelledby="detail-soft-title">
+      <h3 id="detail-soft-title">軟依賴功能</h3>
+      <ul id="detail-soft-dependencies"></ul>
+    </section>
+    <section id="detail-external-section" class="detail-section external-services" aria-labelledby="detail-external-title">
+      <h3 id="detail-external-title">外部選配服務</h3>
+      <ul id="detail-external-services"></ul>
+    </section>
+    <section class="detail-section integrations" aria-labelledby="detail-integrations-title">
+      <h3 id="detail-integrations-title">依賴與跨模組整合</h3>
+      <ul id="detail-integrations"></ul>
+    </section>
+    <p id="detail-source" class="detail-source"></p>
+  </div>
+</aside>
+<p id="a11y-instructions" class="sr-only">每個節點都可以用 Tab 鍵聚焦。展開功能分支按鈕會一次顯示全部十一個現役模組的功能樹；功能節點可用 Enter 或空白鍵開啟詳情並顯示精確軟依賴。關閉按鈕或 Escape 會關閉詳情並清除選取；軟依賴總覽與關係切換仍可獨立使用。</p>
+<script>
+(function () {
+  "use strict";
+
+  var GRAPH_WIDTH = 3840;
+  var GRAPH_HEIGHT = 2450;
+  var FEATURE_GRAPH_HEIGHT = 2740;
+  var MIN_SCALE = 0.08;
+  var MAX_SCALE = 2.5;
+  var viewport = document.getElementById("viewport");
+  var scene = document.getElementById("scene");
+  var zoomLevel = document.getElementById("zoom-level");
+  var status = document.getElementById("selection-status");
+  var nodes = Array.from(document.querySelectorAll(".node[data-node]"));
+  var relations = Array.from(document.querySelectorAll(".relation[data-from][data-to]"));
+  var filters = { hard: true, optional: true, compat: true, service: true };
+  var state = { scale: 1, x: 0, y: 0, selected: null, selectedFeature: null, branchesExpanded: false, autoFit: true };
+  var drag = null;
+  var suppressClick = false;
+  var pageErrors = [];
+  var detailPanel = document.getElementById("detail-panel");
+  var detailClose = document.getElementById("detail-close");
+  var softOverviewButton = document.getElementById("soft-overview");
+  var featureBranchesButton = document.getElementById("feature-branches-toggle");
+  var featureOwnerLinks = document.getElementById("feature-owner-links");
+  var featureDependencyLinks = document.getElementById("feature-dependency-links");
+  var featureBranchNodes = document.getElementById("feature-branch-nodes");
+  var sceneBackground = document.getElementById("scene-background");
+  var detailReturnFocus = null;
+  var softDependencyAudit = [
+    {
+      id: "automata-excavation", classification: "A｜Fabric suggests", sourceId: "automata", source: "TotemAutomata", targetId: "excavation", target: "TotemExcavation ≥0.1.5",
+      feature: "辨識七階 Excavation 槌為銅魁儡採集工具；採集交易仍由 Automata 授權。",
+      fallback: "未安裝時不辨識 Excavation 槌，Automata 的一般工具、分類與採集流程維持可用。",
+      evidence: "TotemAutomata fabric.mod.json suggests、README 選配表、TotemExcavationHammerAdapter。"
+    },
+    {
+      id: "villagers-remnant", classification: "A｜Fabric suggests", sourceId: "villagers", source: "TotemVillagers", targetId: "remnant", target: "TotemRemnant ≥0.2.13",
+      feature: "工具匠依伺服器即時 Smithing 配方製造並販售 Basic／Standard／Advanced／Netherite 四階背包。",
+      fallback: "未安裝時不註冊替代背包、工作單或交易列，其餘村民工作經濟照常運作。",
+      evidence: "TotemVillagers fabric.mod.json suggests、README Optional TotemRemnant backpack smithing、RemnantBackpackOrders。"
+    },
+    {
+      id: "remnant-trinkets", classification: "A｜Fabric suggests", sourceId: "remnant", source: "TotemRemnant", targetId: "trinkets", target: "Trinkets Updated ≥4.1.0-beta.2",
+      feature: "死亡背包交易額外擷取已驗證、可掉落的 Trinkets 飾品 inventory。",
+      fallback: "未安裝時只略過飾品欄 provider；一般背包、玩家物品欄死亡擷取與回收維持可用。",
+      evidence: "TotemRemnant fabric.mod.json suggests、README 選配整合、installTrinketsIntegration 與 TrinketsDeathBackpackInventoryProvider。"
+    },
+    {
+      id: "automata-remnant", classification: "B｜Runtime optional", sourceId: "automata", source: "TotemAutomata", targetId: "remnant", target: "TotemRemnant",
+      feature: "辨識可整理的分級背包目的地，並套用 Remnant 可攜容器與防巢狀 policy。",
+      fallback: "未安裝時不辨識 Remnant 背包目的地，容器插入退回 Minecraft 的 canFitInsideContainerItems 安全規則。",
+      evidence: "TotemAutomata README、RemnantBackpackBridge、ContainerSafetyBridge；TotemRemnant PortableContainerSafetyApi。"
+    },
+    {
+      id: "automata-locksmith", classification: "B｜Runtime optional", sourceId: "automata", source: "TotemAutomata", targetId: "locksmith", target: "TotemLocksmith",
+      feature: "銅扳手綁定、玩家操作與銅魁儡搬運遵守 Locksmith v1 玩家／自動化鎖網路權限。",
+      fallback: "未安裝時維持普通操作；若已宣告安裝但反射 API 失效則 fail closed，避免繞過鎖。",
+      evidence: "TotemAutomata README、LocksmithPlayerAccessBridge、LocksmithAutomationBridge。"
+    },
+    {
+      id: "remnant-nexus", classification: "B｜Runtime optional", sourceId: "remnant", source: "TotemRemnant", targetId: "nexus", target: "TotemNexus",
+      feature: "建立、綁定與回收死亡 Space Unit，並在死亡前保留第一件 Nexus 授權的傳送介面。",
+      fallback: "未安裝時不建立死亡節點也不保留 Nexus 傳送物；死亡背包仍可獨立建立與回收。",
+      evidence: "TotemRemnant／TotemNexus README、Core DeathBackpackNodeLifecycle／DeathRetainedItemPolicy、NexusAuthorityBootstrap。"
+    },
+    {
+      id: "vanilla-automata-observer", classification: "B｜Runtime compat／Observer", sourceId: "vanilla", source: "TotemVanillaTweaks", targetId: "automata", target: "TotemAutomata",
+      feature: "使用 Automata 擁有的 automata_copper_golem protocol v1 provider，以正式管理 Screen 唯讀重建。",
+      fallback: "provider 缺少或協定不相容時只顯示 unsupported metadata，不建立替代 UI，也不傳 framebuffer。",
+      evidence: "TotemVanillaTweaks README；TotemAutomata fabric.mod.json observer entrypoint 與 AutomataObserverScreenProvider。"
+    },
+    {
+      id: "vanilla-nexus-observer", classification: "B｜Runtime compat／Observer", sourceId: "vanilla", source: "TotemVanillaTweaks", targetId: "nexus", target: "TotemNexus",
+      feature: "使用 nexus protocol v2（map／map_legacy／friends／friends_legacy／registration／registration_legacy）與 nexus_death_node_admin v1 provider。",
+      fallback: "provider 缺少或協定／variant 不相容時只顯示 unsupported metadata，不建立替代 UI，也不傳 framebuffer。",
+      evidence: "TotemVanillaTweaks README；TotemNexus fabric.mod.json observer entrypoints、NexusObserverScreenProvider、NexusDeathAdminObserverScreenProvider。"
+    },
+    {
+      id: "vanilla-locksmith-observer", classification: "B｜Runtime compat／Observer", sourceId: "vanilla", source: "TotemVanillaTweaks", targetId: "locksmith", target: "TotemLocksmith",
+      feature: "使用 Locksmith 擁有的 locksmith_management protocol v1 provider，以正式鎖具管理 Screen 唯讀重建。",
+      fallback: "provider 缺少或協定不相容時只顯示 unsupported metadata，不建立替代 UI，也不傳 framebuffer。",
+      evidence: "TotemVanillaTweaks README；TotemLocksmith fabric.mod.json observer entrypoint 與 LocksmithObserverScreenProvider。"
+    },
+    {
+      id: "vanilla-villagers-observer", classification: "B｜Runtime compat／Observer", sourceId: "vanilla", source: "TotemVanillaTweaks", targetId: "villagers", target: "TotemVillagers",
+      feature: "使用 Villagers 擁有的 villagers_woodcutter protocol v1 provider，以正式 Woodcutter Screen 唯讀重建。",
+      fallback: "provider 缺少或協定不相容時只顯示 unsupported metadata，不建立替代 UI，也不傳 framebuffer。",
+      evidence: "TotemVanillaTweaks README；TotemVillagers fabric.mod.json observer entrypoint 與 WoodcutterObserverScreenProvider。"
+    },
+    {
+      id: "vanilla-remnant-observer", classification: "B｜Runtime compat／Observer", sourceId: "vanilla", source: "TotemVanillaTweaks", targetId: "remnant", target: "TotemRemnant",
+      feature: "使用 Remnant 擁有的 remnant_backpack protocol v1 provider，以正式 Backpack Screen 唯讀重建。",
+      fallback: "provider 缺少或協定不相容時只顯示 unsupported metadata，不建立替代 UI，也不傳 framebuffer。",
+      evidence: "TotemVanillaTweaks README；TotemRemnant fabric.mod.json observer entrypoint 與 RemnantBackpackObserverScreenProvider。"
+    }
+  ];
+  var externalServiceAudit = [
+    {
+      id: "discord-worker",
+      sourceId: "discord", source: "TotemDiscordBridge", targetId: "cloudflare", target: "Cloudflare Worker → Discord",
+      feature: "以 HTTPS Worker 驗證 Bridge API Key，再轉送 Webhook／Bot 頻道、附件與 Presence。",
+      fallback: "設定缺漏時停用；Worker 失敗時異步失敗，不阻塞 Server tick。",
+      evidence: "TotemDiscordBridge README 的資料流、Worker 設定與安全注意。"
+    },
+    {
+      id: "automata-openai",
+      sourceId: "automata", source: "TotemAutomata", targetId: null, target: "OpenAI-compatible Chat Completions",
+      feature: "為各分類目的地與採集模式提供選配 Prompt 判斷，手動目標與本地規則優先。",
+      fallback: "API 未設定、逾時或格式錯誤時安全失敗，不阻塞 Server tick。",
+      evidence: "TotemAutomata README〈選配 LLM〉。"
+    }
+  ];
+  var moduleDetails = {
+    soft_overview: {
+      kind: "依賴稽核",
+      name: "現役 Totem 軟依賴總覽",
+      version: "2026-08-30 本機 repo 快照",
+      summary: "依 11 個現役 Totem repository 的 Fabric metadata、README 與具體 bridge／provider 程式碼整理。軟依賴線屬第二層，只有選取關係任一端才顯示；它們都不是 Core 硬依賴。",
+      branches: [
+        "A｜Fabric 軟依賴／建議：只收錄 fabric.mod.json 的 recommends／suggests；本快照有 3 條 suggests、0 條 recommends。",
+        "B｜Runtime optional／compat：模組存在時才啟用的 bridge、生命週期 consumer 或 owning-module Observer provider。",
+        "C｜外部選配服務：不是 Fabric 模組依賴；在獨立清單中列出降級行為。"
+      ],
+      integrations: [
+        "排除所有 TotemCore 0.7.x 硬依賴；圖上仍以藍色第一層關係表示。",
+        "純 TotemCore EventBus 發布／訂閱不是軟依賴，不放入軟依賴清單。",
+        "DeadRecall 載入檢查、舊 ID 與反射 hook 僅屬停止維護整合包的 legacy compatibility，未納入現役關係。"
+      ],
+      source: "權威來源：11 個 repo 的 src/main/resources/fabric.mod.json、README.md，以及 Automata bridges、Core death contracts、Nexus bootstrap、Remnant／Villagers adapters 與五個 owning-module Observer providers。"
+    },
+    core: {
+      kind: "TOTEM 模組",
+      name: "TotemCore",
+      version: "0.7.12",
+      summary: "Totem 系列的共用 API 基座。它集中跨模組契約、手冊章節、好友關係、版本協商與 framebuffer-free Observer provider 規則，但不擁有各功能模組的玩法資料。",
+      branches: [
+        "API v1 與 Migration：型別事件、死亡生命週期、保留政策與舊物品遷移。",
+        "Manual Registry：組裝、刷新、拆分、重新整合章節與共用雙頁版面。",
+        "Friendship：全系列唯一的好友與待處理邀請資料來源。",
+        "Observer Provider API：由畫面擁有模組提供唯讀語意快照與正式 Screen 重建。",
+        "DeadRecall 版本握手：登入前比對 Client／Server 的完整模組版本集合。"
+      ],
+      integrations: [
+        "自身只硬依賴 Minecraft 26.2、Fabric Loader ≥0.19.3、Fabric API 與 Java 25。",
+        "圖中所有 Totem 功能模組都透過 0.7.x 相容範圍硬依賴 Core。",
+        "Nexus 與 Locksmith 共用 Friendship；Nexus／Remnant 共用死亡契約；DiscordBridge 訂閱 EventBus。"
+      ],
+      source: "資料來源：TotemCore fabric.mod.json、gradle.properties、README.md。"
+    },
+    alchemy: {
+      kind: "TOTEM 模組",
+      name: "TotemAlchemy",
+      version: "0.1.40",
+      summary: "生存煉金模組，涵蓋原版釀造台與營火煉藥鍋；材料成功率、效果池、基底與處理時間可由資料包擴充，研究結果逐步寫入玩家手冊。",
+      branches: [
+        "生存材料：缽、豬糞、木灰、硝石、火藥、熱可可與專屬藥水。",
+        "機率釀造：材料先判定融合成功，再對效果池逐項獨立判定；同次可得到多效果。",
+        "研究手冊：成功結果才解鎖，樣本逐步縮小處理時間區間並顯示正確度。",
+        "煉藥鍋：直接顯示模糊火候，不依賴 Jade，裝瓶後不揭露精確秒數。",
+        "Data Pack：可定義煉藥鍋配方、材料設定、基底身分與多效果權重。"
+      ],
+      integrations: [
+        "硬依賴 TotemCore ≥0.7.5 <0.8.0；不依賴其他功能模組。",
+        "Alchemy 章節透過 Core Manual Registry 與 Nexus／Remnant 等章節合併。"
+      ],
+      source: "資料來源：TotemAlchemy fabric.mod.json、gradle.properties、README.md。"
+    },
+    enchanting: {
+      kind: "TOTEM 模組",
+      name: "TotemEnchanting",
+      version: "0.1.9",
+      summary: "讓雕紋書櫃依實際書本與附魔等級提供附魔力，將可用力量擴展到 64，同時保留原版物品與附魔相容規則。",
+      branches: [
+        "雕紋書櫃權重：普通書計 1，附魔書依全部附魔等級總和計算。",
+        "30–64 品質曲線：映射到原版候選區間並保留同條件 30 級基準。",
+        "粒子回饋：有效書櫃依書本力量改變粒子頻率、速度與數量。",
+        "節肢剋星擴充：0.1.9 納入骷髏類目標並同步手冊說明。"
+      ],
+      integrations: [
+        "硬依賴 TotemCore ≥0.7.0 <0.8.0。",
+        "不依賴其他功能模組，也不新增自訂附魔 ID。"
+      ],
+      source: "資料來源：TotemEnchanting fabric.mod.json、gradle.properties、README.md。"
+    },
+    discord: {
+      kind: "TOTEM 模組",
+      name: "TotemDiscordBridge",
+      version: "0.1.8",
+      summary: "將 Minecraft 聊天、玩家動態、管理稽核、公開事件與伺服器狀態安全送到外部 Worker，再由 Worker 轉送 Discord。",
+      branches: [
+        "聊天與事件：加入／離開、死亡、Boss、進度、Raid、村民升級與管理稽核。",
+        "伺服器狀態：開關服、低 TPS／恢復與 Bot 在線人數 Presence。",
+        "遊戲內設定：管理員 GUI、reload、最多十個 Discord 頻道與權限重驗證。",
+        "安全邊界：不回傳既有金鑰、不傳完整管理指令、座標或背包內容。",
+        "翻譯：讀取已載入模組語言資源並快取對應版本的官方繁中資產。"
+      ],
+      integrations: [
+        "硬依賴 TotemCore ≥0.7.0 <0.8.0，啟動時自行訂閱 EventBus。",
+        "使用 Cloudflare Worker API 轉送 Webhook／Bot、附件與 Presence。",
+        "Remnant、Nexus、Locksmith 等模組只發布 Core 事件，不直接依賴 Bridge。"
+      ],
+      source: "資料來源：TotemDiscordBridge fabric.mod.json、gradle.properties、README.md。"
+    },
+    automata: {
+      kind: "TOTEM 模組",
+      name: "TotemAutomata",
+      version: "0.1.18",
+      summary: "以銅扳手管理銅魁儡的分類與採集工作，採伺服器授權、loaded-only 掃描、分層預算及阻塞退避，避免工作實體拖慢其他生物。",
+      branches: [
+        "分類模式：依目的地順序與物品規則搬運；失敗交易會安全返回來源。",
+        "熔爐路由：只把實際可產生結果的輸入放進熔爐、煙燻爐或高爐上格。",
+        "採集模式：雙角工作區、多種類 16 件共享背包、路徑重用與全服掃描預算。",
+        "選配 LLM：每個目的地或採集模式可設規則，失敗不阻塞 Server tick。",
+        "Observer：模組自有 automata_copper_golem protocol v1 provider，以正式銅魁儡管理 Screen 唯讀重建。"
+      ],
+      integrations: [
+        "硬依賴 TotemCore ≥0.7.12 <0.8.0。",
+        "建議 TotemExcavation ≥0.1.5，允許槌子進入工具槽。",
+        "選配使用 Remnant 可攜容器安全 policy，並遵守 Locksmith 玩家與自動化權限 API。"
+      ],
+      source: "資料來源：TotemAutomata fabric.mod.json、gradle.properties、README.md 與 Locksmith bridge 原始碼。"
+    },
+    vanilla: {
+      kind: "TOTEM 模組",
+      name: "TotemVanillaTweaks",
+      version: "0.1.20",
+      summary: "集中原版向玩法調整與容器整理，並提供完全 framebuffer-free 的 Spectator Observer View；原版 GUI 使用 Mojang Screen，合作模組 GUI 由擁有者提供。",
+      branches: [
+        "Observer View：25 個 negotiated semantic family、remote cursor 與 metadata-only 隱私降級，全程 framebuffer-free。",
+        "容器整理：依 Item 與 Data Components 合併排序，由 Server 驗證 menu 與 slot 範圍。",
+        "講台與書櫃：覆寫講台配方，調整普通書櫃的生存取得與結構生成。",
+        "混凝土粉末：只在真正接觸水時原地硬化並保留資料。",
+        "熔爐與漏斗經驗：修正自動化取出時的原版經驗行為。"
+      ],
+      integrations: [
+        "硬依賴 TotemCore ≥0.7.12 <0.8.0，使用其 Observer provider 契約。",
+        "合作 provider：Automata automata_copper_golem v1、Locksmith locksmith_management v1、Villagers villagers_woodcutter v1、Remnant remnant_backpack v1。",
+        "Nexus provider：nexus v2 含 map／map_legacy／friends／friends_legacy／registration／registration_legacy，另有 nexus_death_node_admin v1。",
+        "合作 provider 缺少或協定不相容時只顯示 unsupported metadata，不造替代 UI。"
+      ],
+      source: "資料來源：TotemVanillaTweaks fabric.mod.json、gradle.properties、README.md。"
+    },
+    excavation: {
+      kind: "TOTEM 模組",
+      name: "TotemExcavation",
+      version: "0.1.8",
+      summary: "提供木、石、銅、鐵、金、鑽石與獄髓七階槌；選區保存在主手槌堆疊，範圍挖掘由伺服器再次驗證。",
+      branches: [
+        "雙角選區：兩次 Sneak＋左鍵設定；點相同角落即可清除。",
+        "範圍挖掘：普通左鍵在完整選區內啟動 bounded server-side excavation。",
+        "副手相容：模組不消耗右鍵，因此不阻擋原版副手用途。",
+        "戰鬥定位：0.1.8 為槌子加入重型戰鬥屬性與 Mace 相容附魔。"
+      ],
+      integrations: [
+        "硬依賴 TotemCore ≥0.7.0 <0.8.0。",
+        "TotemAutomata 可選辨識其槌子作為採集工具。"
+      ],
+      source: "資料來源：TotemExcavation fabric.mod.json、gradle.properties、README.md。"
+    },
+    villagers: {
+      kind: "TOTEM 模組",
+      name: "TotemVillagers",
+      version: "0.1.33",
+      summary: "把村民出售庫存改為可觀察、伺服器授權的實際工作成果；每名村民使用獨立持久化工作庫存，交易不憑空補貨。",
+      branches: [
+        "實體村莊經濟：出售消耗實際庫存，收購、材料交換與綠寶石付款都原子化驗證。",
+        "專職與工作區：礦工、伐木工、建築工、守衛及原版職業工作鏈。",
+        "Woodcutter：依伺服器即時玩家配方產生木材加工選項，也可由伐木工使用。",
+        "村莊物流：材料市場、資源職缺補位、生成村莊初始資源與育兒成本。",
+        "建築與安全：房屋藍圖、守衛哨站、受管理鐵魔像、飢餓與食物市場。"
+      ],
+      integrations: [
+        "硬依賴 TotemCore ≥0.7.12 <0.8.0。",
+        "建議 TotemRemnant ≥0.2.13，工具匠可製造與販售分級背包。",
+        "Woodcutter 管理畫面由 Villagers 自行提供 villagers_woodcutter protocol v1 Observer reconstruction。"
+      ],
+      source: "資料來源：TotemVillagers fabric.mod.json、gradle.properties、README.md。"
+    },
+    locksmith: {
+      kind: "TOTEM 模組",
+      name: "TotemLocksmith",
+      version: "0.1.6",
+      summary: "以一把實體掛鎖保護箱子、陷阱箱、木桶、雙箱或由固定漏斗連接的整個儲存網路；所有權限只由伺服器判定。",
+      branches: [
+        "網路拓撲：第一個容器是 Root；中間漏斗斷開後，只保留含 Root 的那一側鎖。",
+        "存取控制：Owner、Manager、User、Blocked、實體鑰匙與四種玩家存取模式。",
+        "自動化控制：三種漏斗邊界模式；同鎖網路內部搬運維持運作。",
+        "破壞稽核：非本人仍可按原版規則破壞容器，成功後發布一筆安全稽核事件。",
+        "管理與 Observer：正式鎖具管理 Screen、手冊、鑰匙發行／撤銷，以及 locksmith_management protocol v1 唯讀轉播。"
+      ],
+      integrations: [
+        "硬依賴 TotemCore ≥0.7.12 <0.8.0；好友模式直接使用 Core Friendship API。",
+        "TotemAutomata 綁定與搬運時選配遵守 Locksmith 玩家／自動化權限。",
+        "稽核事件透過 Core EventBus 由 DiscordBridge 選配接收，Locksmith 不直接依賴 Bridge。"
+      ],
+      source: "資料來源：TotemLocksmith fabric.mod.json、gradle.properties、README.md、繁中手冊資源。"
+    },
+    nexus: {
+      kind: "TOTEM 模組",
+      name: "TotemNexus",
+      version: "0.3.6",
+      summary: "以磁石建立 Space Unit，透過羅盤探索、管理與傳送；所有成本、結構狀態、權限與安全落點均由伺服器計算。",
+      branches: [
+        "磁石節點：註冊、探索、結構快照、狀態管理與個人最愛。",
+        "傳送地圖：顯示 Server 報價、倒數 session、食物成本與跨維度紫水晶成本。",
+        "材料 profile：控制容量、擴張、精度、鎖定、穩定、速度、冷卻與維護。",
+        "好友與玩家目標：好友資料由 Core 持有，地圖只揭露粗略位置與距離。",
+        "死亡節點：管理、停用、刪除；nexus protocol v2 六種 variant 與 nexus_death_node_admin v1 由模組自有正式 Screen 重建。"
+      ],
+      integrations: [
+        "硬依賴 TotemCore ≥0.7.12 <0.8.0。",
+        "與 TotemRemnant 選配共用死亡節點生命週期及一件傳送介面保留資格。",
+        "公開節點、死亡回收與管理稽核透過 Core EventBus 供 DiscordBridge 訂閱。"
+      ],
+      source: "資料來源：TotemNexus fabric.mod.json、gradle.properties、README.md。"
+    },
+    remnant: {
+      kind: "TOTEM 模組",
+      name: "TotemRemnant",
+      version: "0.2.16",
+      summary: "提供四階一般背包、十種可混搭擴充、原版物品欄側邊真實格位與死亡背包回收，同時保護可攜式容器資料安全。",
+      branches: [
+        "四階背包：9／18／27／36 基礎容量與 1–4 個擴充格，支援染色與鍛造升級。",
+        "十種擴充：工作台、金屬壓縮、同類收納、容量、靈魂綁定、終界箱與掉落保護。",
+        "物品欄側欄：在原版 E 畫面直接操作背包真實格位，完整支援原版互動。",
+        "死亡背包：擷取物品、Owner 撿取規則、定位光柱、虛空救回與清空回收。",
+        "可攜容器安全：GUI、漏斗、投擲器及自動化路徑都阻止非法巢狀。"
+      ],
+      integrations: [
+        "硬依賴 TotemCore ≥0.7.12 <0.8.0。",
+        "建議 Trinkets Updated ≥4.1.0-beta.2，擷取已驗證的飾品 inventory。",
+        "選配 Nexus 死亡節點與 Automata policy；remnant_backpack protocol v1 由模組自有正式 Backpack Screen 唯讀重建。",
+        "死亡背包事件只發布至 Core EventBus，DiscordBridge 可自行訂閱；這不是 Remnant 的軟依賴。"
+      ],
+      source: "資料來源：TotemRemnant fabric.mod.json、gradle.properties、README.md。"
+    },
+    cloudflare: {
+      kind: "外部服務",
+      name: "Cloudflare Worker",
+      version: "非 Totem 模組",
+      summary: "作為 TotemDiscordBridge 與 Discord 之間的外部 relay；驗證 Bridge API Key，並將請求轉成 Webhook、Bot 頻道或 Presence 操作。",
+      branches: [
+        "接收聊天／事件、伺服器狀態與 Presence endpoints。",
+        "依 Bridge 傳入的刪除秒數執行短期訊息政策，不自行維護另一份事件白名單。"
+      ],
+      integrations: [
+        "由 TotemDiscordBridge 呼叫；不是 Minecraft 或 Totem 功能模組。",
+        "Discord Webhook／Bot Token 保留在 Worker 端，不應出現在圖、截圖或 log。"
+      ],
+      source: "資料來源：TotemDiscordBridge README.md 與本機 DeadRecall Worker 文件。"
+    },
+    trinkets: {
+      kind: "外部選配模組",
+      name: "Trinkets Updated",
+      version: "Remnant 要求 ≥4.1.0-beta.2",
+      summary: "TotemRemnant 的選配飾品欄介面。此圖只記錄 Remnant 已驗證的背包與死亡擷取整合，不代替 Trinkets 自身的功能文件。",
+      branches: [
+        "額外飾品欄可放置一般 Remnant 背包。",
+        "玩家死亡時，Remnant 會擷取已驗證的選配飾品 inventory。"
+      ],
+      integrations: [
+        "由 TotemRemnant fabric metadata 以 suggests 宣告。",
+        "不是 Totem 功能模組；未安裝時 Remnant 其餘功能維持可用。"
+      ],
+      source: "資料來源：TotemRemnant fabric.mod.json 與 README.md。"
+    }
+  };
+
+  var activeModuleIds = [
+    "core", "alchemy", "enchanting", "discord", "automata", "vanilla",
+    "excavation", "villagers", "locksmith", "nexus", "remnant"
+  ];
+  var featureLayout = {
+    core:       { originX: 80,   x: 150,  y: 220,  width: 1060, height: 220 },
+    alchemy:    { originX: 1320, x: 1590, y: 220,  width: 660,  height: 160 },
+    enchanting: { originX: 2560, x: 2830, y: 220,  width: 660,  height: 160 },
+    discord:    { originX: 80,   x: 350,  y: 850,  width: 660,  height: 160 },
+    automata:   { originX: 1320, x: 1590, y: 850,  width: 660,  height: 160 },
+    vanilla:    { originX: 2560, x: 2830, y: 850,  width: 660,  height: 160 },
+    excavation: { originX: 80,   x: 350,  y: 1480, width: 660,  height: 160 },
+    villagers:  { originX: 1320, x: 1590, y: 1480, width: 660,  height: 160 },
+    locksmith:  { originX: 2560, x: 2830, y: 1480, width: 660,  height: 160 },
+    nexus:      { originX: 80,   x: 305,  y: 2110, width: 750,  height: 160 },
+    remnant:    { originX: 1320, x: 1545, y: 2110, width: 750,  height: 160 }
+  };
+  var externalBranchLayout = {
+    cloudflare: { x: 2940, y: 2240, width: 500, height: 120 },
+    trinkets: { x: 2850, y: 2380, width: 620, height: 120 }
+  };
+  var eventBusCompatibilityNotes = {
+    "event-remnant-death": {
+      classification: "EventBus（非模組軟依賴）",
+      relatedIds: ["core", "remnant", "discord"],
+      description: "TotemRemnant 將死亡背包建立／回收事件發布到 TotemCore EventBus；TotemDiscordBridge 可選配訂閱。",
+      fallback: "DiscordBridge 未安裝時沒有訂閱者，Remnant 的死亡背包流程不受影響。"
+    },
+    "event-nexus-audit": {
+      classification: "EventBus（非模組軟依賴）",
+      relatedIds: ["core", "nexus", "discord"],
+      description: "TotemNexus 將公開 Space Unit、死亡回收與管理稽核事件發布到 TotemCore EventBus；TotemDiscordBridge 可選配訂閱。",
+      fallback: "DiscordBridge 未安裝時事件安全成為無訂閱者通知，Nexus 功能照常運作。"
+    },
+    "event-locksmith-break": {
+      classification: "EventBus（非模組軟依賴）",
+      relatedIds: ["core", "locksmith", "discord"],
+      description: "TotemLocksmith 發布 LockedContainerNetworkBrokenEvent 到 TotemCore EventBus；TotemDiscordBridge 可選配轉送稽核訊息。",
+      fallback: "DiscordBridge 未安裝時不產生 Discord 通知，鎖網路破壞與伺服器權限判定不受影響。"
+    }
+  };
+  var featureBranchRules = {
+    core: [
+      {},
+      {},
+      {},
+      { softIds: ["vanilla-automata-observer", "vanilla-nexus-observer", "vanilla-locksmith-observer", "vanilla-villagers-observer", "vanilla-remnant-observer"] },
+      {}
+    ],
+    alchemy: [{}, {}, {}, {}, {}],
+    enchanting: [{}, {}, {}, {}],
+    discord: [
+      { serviceIds: ["discord-worker"], eventIds: ["event-remnant-death", "event-nexus-audit", "event-locksmith-break"] },
+      { serviceIds: ["discord-worker"] },
+      { serviceIds: ["discord-worker"] },
+      { serviceIds: ["discord-worker"] },
+      {}
+    ],
+    automata: [
+      { softIds: ["automata-remnant", "automata-locksmith"], serviceIds: ["automata-openai"] },
+      { softIds: ["automata-locksmith"] },
+      { softIds: ["automata-excavation", "automata-locksmith"] },
+      { serviceIds: ["automata-openai"] },
+      { softIds: ["vanilla-automata-observer"] }
+    ],
+    vanilla: [
+      { softIds: ["vanilla-automata-observer", "vanilla-nexus-observer", "vanilla-locksmith-observer", "vanilla-villagers-observer", "vanilla-remnant-observer"] },
+      {}, {}, {}, {}
+    ],
+    excavation: [
+      {},
+      { softIds: ["automata-excavation"] },
+      {},
+      { softIds: ["automata-excavation"] }
+    ],
+    villagers: [
+      {},
+      { softIds: ["villagers-remnant"] },
+      { softIds: ["vanilla-villagers-observer"] },
+      {}, {}
+    ],
+    locksmith: [
+      { softIds: ["automata-locksmith"] },
+      { softIds: ["automata-locksmith"] },
+      { softIds: ["automata-locksmith"] },
+      { eventIds: ["event-locksmith-break"] },
+      { softIds: ["vanilla-locksmith-observer"] }
+    ],
+    nexus: [
+      { softIds: ["vanilla-nexus-observer"] },
+      { softIds: ["vanilla-nexus-observer"] },
+      {},
+      { softIds: ["vanilla-nexus-observer"] },
+      { softIds: ["remnant-nexus", "vanilla-nexus-observer"], eventIds: ["event-nexus-audit"] }
+    ],
+    remnant: [
+      { softIds: ["villagers-remnant", "automata-remnant"] },
+      {},
+      { softIds: ["vanilla-remnant-observer"] },
+      { softIds: ["remnant-trinkets", "remnant-nexus"], eventIds: ["event-remnant-death"] },
+      { softIds: ["automata-remnant"] }
+    ]
+  };
+  var featureBranchData = [];
+  var featureNodes = [];
+  var originalNodeTransforms = new Map();
+
+  activeModuleIds.forEach(function (ownerId) {
+    var detail = moduleDetails[ownerId];
+    var rules = featureBranchRules[ownerId];
+    detail.branches.forEach(function (summary, index) {
+      var rule = rules[index] || {};
+      featureBranchData.push({
+        id: ownerId + "-feature-" + (index + 1),
+        ownerId: ownerId,
+        ownerIndex: index,
+        title: summary.split("：")[0],
+        summary: summary,
+        softIds: (rule.softIds || []).slice(),
+        serviceIds: (rule.serviceIds || []).slice(),
+        eventIds: (rule.eventIds || []).slice()
+      });
+    });
+  });
+
+  window.addEventListener("error", function (event) {
+    pageErrors.push(String(event.message || "unknown error"));
+  });
+  window.addEventListener("unhandledrejection", function (event) {
+    pageErrors.push(String(event.reason || "unhandled rejection"));
+  });
+
+  function clamp(value, low, high) {
+    return Math.min(high, Math.max(low, value));
+  }
+
+  function renderView() {
+    scene.setAttribute("transform", "translate(" + state.x.toFixed(2) + " " + state.y.toFixed(2) + ") scale(" + state.scale.toFixed(5) + ")");
+    zoomLevel.value = Math.round(state.scale * 100) + "%";
+    zoomLevel.textContent = zoomLevel.value;
+  }
+
+  function fitView() {
+    var width = Math.max(1, viewport.clientWidth);
+    var height = Math.max(1, viewport.clientHeight);
+    var padding = width < 700 ? 10 : 24;
+    var graphHeight = state.branchesExpanded ? FEATURE_GRAPH_HEIGHT : GRAPH_HEIGHT;
+    state.scale = clamp(Math.min((width - padding * 2) / GRAPH_WIDTH, (height - padding * 2) / graphHeight), MIN_SCALE, MAX_SCALE);
+    state.x = Math.round((width - GRAPH_WIDTH * state.scale) / 2);
+    state.y = Math.round((height - graphHeight * state.scale) / 2);
+    state.autoFit = true;
+    renderView();
+  }
+
+  function zoomAt(factor, clientX, clientY) {
+    var rect = viewport.getBoundingClientRect();
+    var px = clientX - rect.left;
+    var py = clientY - rect.top;
+    var previous = state.scale;
+    var next = clamp(previous * factor, MIN_SCALE, MAX_SCALE);
+    if (Math.abs(next - previous) < 0.00001) return;
+    state.x = px - (px - state.x) * (next / previous);
+    state.y = py - (py - state.y) * (next / previous);
+    state.scale = next;
+    state.autoFit = false;
+    renderView();
+  }
+
+  function zoomCenter(factor) {
+    var rect = viewport.getBoundingClientRect();
+    zoomAt(factor, rect.left + rect.width / 2, rect.top + rect.height / 2);
+  }
+
+  function relationPassesFilter(relation) {
+    return filters[relation.dataset.kind] !== false;
+  }
+
+  function relationLayerVisible(relation, selected) {
+    return !relation.dataset.layer
+      || Boolean(selected) && (relation.dataset.from === selected || relation.dataset.to === selected);
+  }
+
+  function relationVisible(relation, selected) {
+    return relationPassesFilter(relation) && relationLayerVisible(relation, selected);
+  }
+
+  function svgElement(name, attributes) {
+    var element = document.createElementNS("http://www.w3.org/2000/svg", name);
+    Object.keys(attributes || {}).forEach(function (key) {
+      element.setAttribute(key, String(attributes[key]));
+    });
+    return element;
+  }
+
+  function softEntryById(id) {
+    return softDependencyAudit.find(function (entry) { return entry.id === id; });
+  }
+
+  function serviceEntryById(id) {
+    return externalServiceAudit.find(function (entry) { return entry.id === id; });
+  }
+
+  function featureById(id) {
+    return featureBranchData.find(function (feature) { return feature.id === id; });
+  }
+
+  function featurePosition(feature) {
+    var layout = featureLayout[feature.ownerId];
+    return {
+      x: layout.originX + (feature.ownerIndex % 2 === 0 ? 10 : 640),
+      y: layout.y + (feature.ownerId === "core" ? 250 : 200) + Math.floor(feature.ownerIndex / 2) * 100,
+      width: 550,
+      height: 80
+    };
+  }
+
+  function shortenFeatureTitle(title) {
+    return title.length > 22 ? title.slice(0, 21) + "…" : title;
+  }
+
+  function featureMeta(feature) {
+    var aCount = feature.softIds.filter(function (id) {
+      var entry = softEntryById(id);
+      return entry && entry.classification.indexOf("A｜") === 0;
+    }).length;
+    var bCount = feature.softIds.length - aCount;
+    var parts = [];
+    if (aCount) parts.push("Fabric suggests " + aCount);
+    if (bCount) parts.push("Runtime／Observer " + bCount);
+    if (feature.serviceIds.length) parts.push("外部服務 " + feature.serviceIds.length);
+    if (feature.eventIds.length) parts.push("EventBus " + feature.eventIds.length);
+    return parts.length ? parts.join("｜") : "無軟依賴";
+  }
+
+  function featureAccessibleLabel(feature) {
+    var dependencyLabels = feature.softIds.map(function (id) {
+      var entry = softEntryById(id);
+      return entry ? entry.classification + "，" + entry.source + " 到 " + entry.target : id;
+    });
+    var serviceLabels = feature.serviceIds.map(function (id) {
+      var entry = serviceEntryById(id);
+      return entry ? "外部服務，" + entry.source + " 到 " + entry.target : id;
+    });
+    var eventLabels = feature.eventIds.map(function (id) {
+      return eventBusCompatibilityNotes[id] ? eventBusCompatibilityNotes[id].classification : id;
+    });
+    var relationText = dependencyLabels.concat(serviceLabels, eventLabels);
+    return moduleDetails[feature.ownerId].name + " 功能分支：" + feature.summary + "。"
+      + (relationText.length ? "關係：" + relationText.join("；") : "無軟依賴，僅使用 TotemCore 硬依賴或本模組功能") + "。按下開啟詳情。";
+  }
+
+  function createFeatureTree() {
+    activeModuleIds.forEach(function (id) {
+      var node = nodes.find(function (candidate) { return candidate.dataset.node === id; });
+      originalNodeTransforms.set(id, node.getAttribute("transform"));
+      var layout = featureLayout[id];
+      node.dataset.branchTransform = "translate(" + layout.x + " " + layout.y + ")";
+    });
+    ["cloudflare", "trinkets"].forEach(function (id) {
+      var node = nodes.find(function (candidate) { return candidate.dataset.node === id; });
+      originalNodeTransforms.set(id, node.getAttribute("transform"));
+    });
+
+    featureBranchData.forEach(function (feature) {
+      var position = featurePosition(feature);
+      var layout = featureLayout[feature.ownerId];
+      var ownerX = layout.x + layout.width / 2;
+      var ownerY = layout.y + layout.height;
+      var targetX = position.x + position.width / 2;
+      var targetY = position.y;
+      var link = svgElement("path", {
+        "class": "feature-owner-link",
+        "data-feature-id": feature.id,
+        "data-owner": feature.ownerId,
+        d: "M" + ownerX + " " + ownerY + " C" + ownerX + " " + (ownerY + 34) + " " + targetX + " " + (targetY - 34) + " " + targetX + " " + targetY,
+        role: "img",
+        "aria-label": moduleDetails[feature.ownerId].name + " 擁有功能分支 " + feature.title
+      });
+      var linkTitle = svgElement("title");
+      linkTitle.textContent = moduleDetails[feature.ownerId].name + " → " + feature.summary;
+      link.appendChild(linkTitle);
+      featureOwnerLinks.appendChild(link);
+
+      var groupClasses = ["feature-node"];
+      if (feature.softIds.some(function (id) {
+        var entry = softEntryById(id);
+        return entry && entry.classification.indexOf("A｜") === 0;
+      })) groupClasses.push("has-soft-dependency");
+      if (feature.softIds.some(function (id) {
+        var entry = softEntryById(id);
+        return entry && entry.classification.indexOf("B｜") === 0;
+      })) groupClasses.push("has-runtime-compat");
+      if (feature.serviceIds.length) groupClasses.push("has-external-service");
+
+      var group = svgElement("g", {
+        "class": groupClasses.join(" "),
+        "data-feature-id": feature.id,
+        "data-owner": feature.ownerId,
+        "data-soft-ids": feature.softIds.join(","),
+        "data-service-ids": feature.serviceIds.join(","),
+        "data-event-ids": feature.eventIds.join(","),
+        transform: "translate(" + position.x + " " + position.y + ")",
+        role: "button",
+        tabindex: "-1",
+        "aria-hidden": "true",
+        "aria-pressed": "false",
+        "aria-haspopup": "dialog",
+        "aria-controls": "detail-panel",
+        "aria-expanded": "false",
+        "aria-label": featureAccessibleLabel(feature)
+      });
+      var title = svgElement("title");
+      title.textContent = moduleDetails[feature.ownerId].name + "｜" + feature.summary + "｜" + featureMeta(feature);
+      group.appendChild(title);
+      group.appendChild(svgElement("rect", { "class": "feature-card", width: position.width, height: position.height, rx: 10 }));
+      group.appendChild(svgElement("rect", { x: 13, y: 13, width: 44, height: 44, rx: 4, fill: "#1e3a5f", stroke: "#60a5fa", "stroke-width": 2 }));
+      var indexText = svgElement("text", { x: 35, y: 43, "text-anchor": "middle", fill: "#bfdbfe", "font-size": 18, "font-weight": 800 });
+      indexText.textContent = String(feature.ownerIndex + 1).padStart(2, "0");
+      group.appendChild(indexText);
+      var nameText = svgElement("text", { x: 70, y: 31, fill: "#f8fafc", "font-size": 22, "font-weight": 800 });
+      nameText.textContent = shortenFeatureTitle(feature.title);
+      group.appendChild(nameText);
+      var metaText = svgElement("text", { x: 70, y: 60, fill: "#a8b6ca", "font-size": 15, "font-weight": 700 });
+      metaText.textContent = featureMeta(feature);
+      group.appendChild(metaText);
+      group.addEventListener("click", function () {
+        if (suppressClick) return;
+        selectFeature(feature.id, group);
+      });
+      group.addEventListener("keydown", function (event) {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          selectFeature(feature.id, group);
+        }
+      });
+      featureBranchNodes.appendChild(group);
+      featureNodes.push(group);
+    });
+  }
+
+  function branchNodeCenter(id) {
+    if (featureLayout[id]) {
+      var layout = featureLayout[id];
+      return { x: layout.x + layout.width / 2, y: layout.y + layout.height / 2 };
+    }
+    if (externalBranchLayout[id]) {
+      var external = externalBranchLayout[id];
+      return { x: external.x + external.width / 2, y: external.y + external.height / 2 };
+    }
+    return null;
+  }
+
+  function featureCenter(feature) {
+    var position = featurePosition(feature);
+    return { x: position.x + position.width / 2, y: position.y + position.height / 2 };
+  }
+
+  function dependencyPath(start, end) {
+    var middleX = (start.x + end.x) / 2;
+    return "M" + start.x + " " + start.y + " C" + middleX + " " + start.y + " " + middleX + " " + end.y + " " + end.x + " " + end.y;
+  }
+
+  function appendFeatureDependencyLink(feature, entry, kind) {
+    if (!entry.targetId) return;
+    var start;
+    var end;
+    var center = featureCenter(feature);
+    if (feature.ownerId === entry.sourceId) {
+      start = center;
+      end = branchNodeCenter(entry.targetId);
+    } else if (feature.ownerId === entry.targetId) {
+      start = branchNodeCenter(entry.sourceId);
+      end = center;
+    } else {
+      start = branchNodeCenter(entry.sourceId);
+      end = branchNodeCenter(entry.targetId);
+    }
+    if (!start || !end) return;
+    var isFabricSuggests = kind !== "service" && entry.classification.indexOf("A｜") === 0;
+    var stroke = kind === "service" ? "#22d3ee" : (isFabricSuggests ? "#fbbf24" : "#a78bfa");
+    var marker = kind === "service" ? "url(#cyan)" : (isFabricSuggests ? "url(#amber)" : "url(#purple)");
+    var link = svgElement("path", {
+      "class": "feature-dependency-link",
+      "data-kind": kind === "service" ? "service" : (isFabricSuggests ? "optional" : "compat"),
+      "data-soft-id": entry.id,
+      "data-feature-id": feature.id,
+      "data-from": entry.sourceId,
+      "data-to": entry.targetId,
+      d: dependencyPath(start, end),
+      stroke: stroke,
+      "stroke-dasharray": isFabricSuggests || kind === "service" ? "none" : "14 10",
+      "marker-end": marker,
+      role: "img",
+      "aria-label": entry.source + " 到 " + entry.target + "；" + (entry.classification || "外部服務")
+    });
+    var title = svgElement("title");
+    title.textContent = (entry.classification || "外部服務") + "｜" + entry.source + " → " + entry.target + "｜" + entry.feature;
+    link.appendChild(title);
+    if (filters[link.dataset.kind] === false) link.classList.add("is-filtered");
+    featureDependencyLinks.appendChild(link);
+  }
+
+  function updateFeatureDependencyLinks(feature) {
+    featureDependencyLinks.replaceChildren();
+    if (!feature) return;
+    feature.softIds.forEach(function (id) {
+      var entry = softEntryById(id);
+      if (entry) appendFeatureDependencyLink(feature, entry, "soft");
+    });
+    feature.serviceIds.forEach(function (id) {
+      var entry = serviceEntryById(id);
+      if (entry && entry.targetId) appendFeatureDependencyLink(feature, entry, "service");
+    });
+  }
+
+  function relatedIdsForFeature(feature) {
+    var related = new Set([feature.ownerId]);
+    feature.softIds.forEach(function (id) {
+      var entry = softEntryById(id);
+      if (!entry) return;
+      if (entry.sourceId) related.add(entry.sourceId);
+      if (entry.targetId) related.add(entry.targetId);
+    });
+    feature.serviceIds.forEach(function (id) {
+      var entry = serviceEntryById(id);
+      if (!entry) return;
+      if (entry.sourceId) related.add(entry.sourceId);
+      if (entry.targetId) related.add(entry.targetId);
+    });
+    feature.eventIds.forEach(function (id) {
+      var note = eventBusCompatibilityNotes[id];
+      if (note) note.relatedIds.forEach(function (relatedId) { related.add(relatedId); });
+    });
+    return related;
+  }
+
+  createFeatureTree();
+
+  function fillDetailList(id, items) {
+    var list = document.getElementById(id);
+    list.replaceChildren();
+    items.forEach(function (item) {
+      var row = document.createElement("li");
+      row.textContent = item;
+      list.appendChild(row);
+    });
+    var section = list.closest(".detail-section");
+    if (section) section.hidden = items.length === 0;
+  }
+
+  function formatSoftDependency(entry) {
+    return "【" + entry.classification + "】" + entry.source + " → " + entry.target
+      + "｜功能：" + entry.feature + "｜降級：" + entry.fallback + "｜依據：" + entry.evidence;
+  }
+
+  function formatExternalService(entry) {
+    return entry.source + " → " + entry.target
+      + "｜功能：" + entry.feature + "｜降級：" + entry.fallback + "｜依據：" + entry.evidence;
+  }
+
+  function softDependenciesFor(id) {
+    var entries = id === "soft_overview"
+      ? softDependencyAudit
+      : softDependencyAudit.filter(function (entry) {
+          return entry.sourceId === id || entry.targetId === id;
+        });
+    return entries.map(formatSoftDependency);
+  }
+
+  function externalServicesFor(id) {
+    var entries = id === "soft_overview"
+      ? externalServiceAudit
+      : externalServiceAudit.filter(function (entry) {
+          return entry.sourceId === id || entry.targetId === id;
+        });
+    return entries.map(formatExternalService);
+  }
+
+  function formatEventBusNote(id) {
+    var note = eventBusCompatibilityNotes[id];
+    if (!note) return "";
+    return "【" + note.classification + "】" + note.description + "｜降級：" + note.fallback;
+  }
+
+  function softDependenciesForFeature(feature) {
+    var entries = feature.softIds.map(softEntryById).filter(Boolean);
+    if (entries.length) return entries.map(formatSoftDependency);
+    return [feature.ownerId === "core"
+      ? "無軟依賴（TotemCore 基座／本模組功能）"
+      : "無軟依賴（僅使用 TotemCore 硬依賴／本模組功能）"];
+  }
+
+  function externalServicesForFeature(feature) {
+    return feature.serviceIds.map(serviceEntryById).filter(Boolean).map(formatExternalService);
+  }
+
+  function openFeatureDetails(feature, invokingElement) {
+    var owner = moduleDetails[feature.ownerId];
+    var ownerNode = nodes.find(function (candidate) { return candidate.dataset.node === feature.ownerId; });
+    var featureNode = featureNodes.find(function (candidate) { return candidate.dataset.featureId === feature.id; });
+    var integrations = [
+      "所屬模組：" + owner.name + " " + owner.version + "。圖上依賴方向保持『功能來源／依賴者 → 被使用的模組或服務』。"
+    ].concat(feature.eventIds.map(formatEventBusNote).filter(Boolean));
+
+    detailReturnFocus = invokingElement || featureNode || null;
+    document.getElementById("detail-eyebrow").textContent = "功能分支";
+    document.getElementById("detail-title").textContent = owner.name + "｜" + feature.title;
+    document.getElementById("detail-version").textContent = owner.version + "｜" + featureMeta(feature);
+    document.getElementById("detail-summary").textContent = feature.summary;
+    document.getElementById("detail-source").textContent = "分支說明取自 " + owner.name + " 的目前功能資料；軟依賴分類與降級行為取自 2026-08-30 現役 repository 稽核。";
+    document.getElementById("detail-branches-title").textContent = "功能說明";
+    document.getElementById("detail-soft-title").textContent = "精確軟依賴模組";
+    document.getElementById("detail-external-title").textContent = "外部選配服務";
+    document.getElementById("detail-integrations-title").textContent = "擁有者、方向與 EventBus";
+    fillDetailList("detail-branches", [feature.summary]);
+    fillDetailList("detail-soft-dependencies", softDependenciesForFeature(feature));
+    fillDetailList("detail-external-services", externalServicesForFeature(feature));
+    fillDetailList("detail-integrations", integrations);
+
+    var icon = ownerNode ? ownerNode.querySelector("image") : null;
+    var iconShell = document.getElementById("detail-icon-shell");
+    var detailIcon = document.getElementById("detail-icon");
+    detailPanel.querySelector(".detail-header").classList.toggle("no-icon", !icon);
+    if (icon) {
+      detailIcon.src = icon.getAttribute("href");
+      detailIcon.alt = owner.name + " icon";
+      iconShell.hidden = false;
+    } else {
+      detailIcon.removeAttribute("src");
+      detailIcon.alt = "";
+      iconShell.hidden = true;
+    }
+
+    nodes.forEach(function (node) { node.setAttribute("aria-expanded", "false"); });
+    featureNodes.forEach(function (node) { node.setAttribute("aria-expanded", node === featureNode ? "true" : "false"); });
+    detailPanel.dataset.detailId = feature.id;
+    detailPanel.dataset.detailMode = "feature";
+    detailPanel.hidden = false;
+    detailPanel.querySelector(".detail-content").scrollTop = 0;
+    detailClose.focus({ preventScroll: true });
+  }
+
+  function openDetails(id, invokingElement) {
+    var detail = moduleDetails[id];
+    var node = nodes.find(function (candidate) { return candidate.dataset.node === id; });
+    if (!detail) return;
+
+    detailReturnFocus = invokingElement || node || null;
+    document.getElementById("detail-eyebrow").textContent = detail.kind;
+    document.getElementById("detail-title").textContent = detail.name;
+    document.getElementById("detail-version").textContent = detail.version;
+    document.getElementById("detail-summary").textContent = detail.summary;
+    document.getElementById("detail-source").textContent = detail.source;
+    document.getElementById("detail-branches-title").textContent = "目前功能分支";
+    document.getElementById("detail-soft-title").textContent = "軟依賴功能";
+    document.getElementById("detail-external-title").textContent = "外部選配服務";
+    document.getElementById("detail-integrations-title").textContent = "依賴與跨模組整合";
+    fillDetailList("detail-branches", detail.branches);
+    fillDetailList("detail-soft-dependencies", softDependenciesFor(id));
+    fillDetailList("detail-external-services", externalServicesFor(id));
+    fillDetailList("detail-integrations", detail.integrations);
+
+    var icon = node ? node.querySelector("image") : null;
+    var iconShell = document.getElementById("detail-icon-shell");
+    var detailIcon = document.getElementById("detail-icon");
+    detailPanel.querySelector(".detail-header").classList.toggle("no-icon", !icon);
+    if (icon) {
+      detailIcon.src = icon.getAttribute("href");
+      detailIcon.alt = detail.name + " icon";
+      iconShell.hidden = false;
+    } else {
+      detailIcon.removeAttribute("src");
+      detailIcon.alt = "";
+      iconShell.hidden = true;
+    }
+
+    nodes.forEach(function (candidate) { candidate.setAttribute("aria-expanded", candidate === node ? "true" : "false"); });
+    featureNodes.forEach(function (candidate) { candidate.setAttribute("aria-expanded", "false"); });
+    detailPanel.dataset.detailId = id;
+    detailPanel.dataset.detailMode = "module";
+    detailPanel.hidden = false;
+    detailPanel.querySelector(".detail-content").scrollTop = 0;
+    detailClose.focus({ preventScroll: true });
+  }
+
+  function closeDetails(restoreFocus, clearSelected) {
+    if (detailPanel.hidden) return;
+    detailPanel.hidden = true;
+    delete detailPanel.dataset.detailId;
+    delete detailPanel.dataset.detailMode;
+    nodes.forEach(function (node) { node.setAttribute("aria-expanded", "false"); });
+    featureNodes.forEach(function (node) { node.setAttribute("aria-expanded", "false"); });
+    if (clearSelected) {
+      state.selected = null;
+      state.selectedFeature = null;
+      applySelection();
+    }
+    var returnTarget = detailReturnFocus;
+    detailReturnFocus = null;
+    if (restoreFocus && returnTarget) returnTarget.focus({ preventScroll: true });
+  }
+
+  function applySelection() {
+    var selected = state.selected;
+    var selectedFeature = state.selectedFeature ? featureById(state.selectedFeature) : null;
+    var directlyRelated = new Set();
+    if (selected) {
+      directlyRelated.add(selected);
+      relations.forEach(function (relation) {
+        if (!relationVisible(relation, selected)) return;
+        if (relation.dataset.from === selected) directlyRelated.add(relation.dataset.to);
+        if (relation.dataset.to === selected) directlyRelated.add(relation.dataset.from);
+      });
+    }
+    var featureRelated = selectedFeature ? relatedIdsForFeature(selectedFeature) : new Set();
+
+    nodes.forEach(function (node) {
+      var id = node.dataset.node;
+      node.setAttribute("aria-pressed", id === selected ? "true" : "false");
+      node.classList.toggle("feature-related", Boolean(selectedFeature) && featureRelated.has(id));
+      var dimmed = state.branchesExpanded
+        ? (Boolean(selectedFeature) && !featureRelated.has(id)) || (Boolean(selected) && id !== selected)
+        : Boolean(selected) && !directlyRelated.has(id);
+      node.classList.toggle("is-dimmed", dimmed);
+    });
+
+    relations.forEach(function (relation) {
+      var layerVisible = relationLayerVisible(relation, selected);
+      var connected = Boolean(selected) && layerVisible && relationPassesFilter(relation)
+        && (relation.dataset.from === selected || relation.dataset.to === selected);
+      relation.classList.toggle("is-filtered", !relationPassesFilter(relation));
+      relation.classList.toggle("is-secondary-hidden", !layerVisible);
+      relation.classList.toggle("is-dimmed", Boolean(selected) && !connected);
+      relation.classList.toggle("is-active", connected);
+    });
+
+    featureNodes.forEach(function (node) {
+      var isSelected = Boolean(selectedFeature) && node.dataset.featureId === selectedFeature.id;
+      node.setAttribute("aria-pressed", isSelected ? "true" : "false");
+      node.classList.toggle("is-dimmed", Boolean(selectedFeature) ? !isSelected : Boolean(selected) && node.dataset.owner !== selected);
+    });
+    Array.from(featureOwnerLinks.querySelectorAll(".feature-owner-link")).forEach(function (link) {
+      link.classList.toggle("is-dimmed", Boolean(selectedFeature)
+        ? link.dataset.featureId !== selectedFeature.id
+        : Boolean(selected) && link.dataset.owner !== selected);
+    });
+    updateFeatureDependencyLinks(state.branchesExpanded ? selectedFeature : null);
+
+    if (selectedFeature) {
+      status.textContent = "功能：" + moduleDetails[selectedFeature.ownerId].name + "／" + selectedFeature.title
+        + "｜軟依賴 " + selectedFeature.softIds.length + " 個";
+      return;
+    }
+
+    if (!selected) {
+      status.textContent = state.branchesExpanded ? "已展開 11 個模組、" + featureBranchData.length + " 個功能分支" : "未選取模組";
+      return;
+    }
+    var selectedNode = nodes.find(function (node) { return node.dataset.node === selected; });
+    var count = Math.max(0, directlyRelated.size - 1);
+    status.textContent = "已選取：" + selectedNode.dataset.label + "｜直接關係 " + count + " 個";
+  }
+
+  function selectNode(id) {
+    state.selectedFeature = null;
+    state.selected = id;
+    applySelection();
+    openDetails(id);
+  }
+
+  function selectFeature(id, invokingElement) {
+    var feature = featureById(id);
+    if (!state.branchesExpanded || !feature) return;
+    state.selected = null;
+    state.selectedFeature = id;
+    applySelection();
+    openFeatureDetails(feature, invokingElement);
+  }
+
+  function clearSelection() {
+    state.selected = null;
+    state.selectedFeature = null;
+    applySelection();
+    closeDetails(false, false);
+  }
+
+  function setFeatureBranches(expanded) {
+    state.branchesExpanded = Boolean(expanded);
+    state.selected = null;
+    state.selectedFeature = null;
+    if (!detailPanel.hidden) closeDetails(false, false);
+    scene.classList.toggle("branch-mode", state.branchesExpanded);
+    featureBranchesButton.setAttribute("aria-pressed", state.branchesExpanded ? "true" : "false");
+    featureBranchesButton.textContent = state.branchesExpanded ? "收合功能分支" : "展開功能分支";
+    featureBranchesButton.title = state.branchesExpanded
+      ? "收合全部功能分支並回到依賴總覽"
+      : "在圖上展開全部 11 個現役 Totem 模組的功能分支";
+    featureBranchNodes.setAttribute("aria-hidden", state.branchesExpanded ? "false" : "true");
+    featureNodes.forEach(function (node) {
+      node.setAttribute("tabindex", state.branchesExpanded ? "0" : "-1");
+      node.setAttribute("aria-hidden", state.branchesExpanded ? "false" : "true");
+    });
+    activeModuleIds.forEach(function (id) {
+      var node = nodes.find(function (candidate) { return candidate.dataset.node === id; });
+      node.setAttribute("transform", state.branchesExpanded ? node.dataset.branchTransform : originalNodeTransforms.get(id));
+    });
+    Object.keys(externalBranchLayout).forEach(function (id) {
+      var node = nodes.find(function (candidate) { return candidate.dataset.node === id; });
+      var layout = externalBranchLayout[id];
+      node.setAttribute("transform", state.branchesExpanded
+        ? "translate(" + layout.x + " " + layout.y + ")"
+        : originalNodeTransforms.get(id));
+    });
+    sceneBackground.setAttribute("height", state.branchesExpanded ? FEATURE_GRAPH_HEIGHT : GRAPH_HEIGHT);
+    document.getElementById("graph-description").textContent = state.branchesExpanded
+      ? "十一個現役 Totem 模組以三欄四列功能樹排列，共 " + featureBranchData.length + " 個可操作功能分支；點選分支會顯示精確軟依賴、外部服務與 EventBus 非依賴關係。"
+      : "TotemCore 0.7.12 位於中央；十個 Totem 功能模組、Cloudflare Worker 與 Trinkets Updated 位於周圍，以硬依賴、可選依賴、跨模組服務及相容事件連線。";
+    applySelection();
+    fitView();
+  }
+
+  function updateFilters() {
+    applySelection();
+  }
+
+  nodes.forEach(function (node) {
+    node.setAttribute("aria-haspopup", "dialog");
+    node.setAttribute("aria-controls", "detail-panel");
+    node.setAttribute("aria-expanded", "false");
+    node.addEventListener("click", function () {
+      if (suppressClick) return;
+      selectNode(node.dataset.node);
+    });
+    node.addEventListener("keydown", function (event) {
+      if (event.key === "Enter" || event.key === " ") {
+        event.preventDefault();
+        selectNode(node.dataset.node);
+      }
+    });
+  });
+
+  detailClose.addEventListener("click", function () { closeDetails(true, true); });
+  softOverviewButton.addEventListener("click", function () {
+    state.selected = null;
+    state.selectedFeature = null;
+    applySelection();
+    status.textContent = "現役 Totem 軟依賴總覽";
+    openDetails("soft_overview", softOverviewButton);
+  });
+  featureBranchesButton.addEventListener("click", function () {
+    setFeatureBranches(!state.branchesExpanded);
+  });
+
+  document.querySelectorAll(".toggle[data-kind]").forEach(function (button) {
+    button.addEventListener("click", function () {
+      var kind = button.dataset.kind;
+      filters[kind] = !filters[kind];
+      button.setAttribute("aria-pressed", filters[kind] ? "true" : "false");
+      updateFilters();
+    });
+  });
+
+  document.getElementById("zoom-in").addEventListener("click", function () { zoomCenter(1.2); });
+  document.getElementById("zoom-out").addEventListener("click", function () { zoomCenter(1 / 1.2); });
+  document.getElementById("fit-view").addEventListener("click", fitView);
+  document.getElementById("reset-view").addEventListener("click", function () {
+    filters = { hard: true, optional: true, compat: true, service: true };
+    document.querySelectorAll(".toggle[data-kind]").forEach(function (button) {
+      button.setAttribute("aria-pressed", "true");
+    });
+    setFeatureBranches(false);
+    updateFilters();
+  });
+
+  viewport.addEventListener("wheel", function (event) {
+    event.preventDefault();
+    zoomAt(Math.exp(-event.deltaY * 0.0015), event.clientX, event.clientY);
+  }, { passive: false });
+
+  viewport.addEventListener("pointerdown", function (event) {
+    if (event.button !== 0) return;
+    drag = { pointerId: event.pointerId, x: event.clientX, y: event.clientY, moved: false };
+    suppressClick = false;
+    viewport.setPointerCapture(event.pointerId);
+    viewport.classList.add("dragging");
+  });
+
+  viewport.addEventListener("pointermove", function (event) {
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    var dx = event.clientX - drag.x;
+    var dy = event.clientY - drag.y;
+    if (Math.abs(dx) + Math.abs(dy) > 2) drag.moved = true;
+    state.x += dx;
+    state.y += dy;
+    drag.x = event.clientX;
+    drag.y = event.clientY;
+    state.autoFit = false;
+    renderView();
+  });
+
+  function finishDrag(event) {
+    if (!drag || drag.pointerId !== event.pointerId) return;
+    suppressClick = drag.moved;
+    drag = null;
+    viewport.classList.remove("dragging");
+    window.setTimeout(function () { suppressClick = false; }, 0);
+  }
+  viewport.addEventListener("pointerup", finishDrag);
+  viewport.addEventListener("pointercancel", finishDrag);
+
+  document.addEventListener("keydown", function (event) {
+    if (!detailPanel.hidden && event.key === "Tab") {
+      event.preventDefault();
+      detailClose.focus({ preventScroll: true });
+      return;
+    }
+    if (event.key === "Escape") {
+      if (!detailPanel.hidden) closeDetails(true, true);
+      else clearSelection();
+      return;
+    }
+    if (event.target instanceof HTMLButtonElement) return;
+    if (event.key === "+" || event.key === "=") {
+      event.preventDefault();
+      zoomCenter(1.2);
+    } else if (event.key === "-") {
+      event.preventDefault();
+      zoomCenter(1 / 1.2);
+    } else if (event.key === "0") {
+      event.preventDefault();
+      fitView();
+    } else if (event.key.startsWith("Arrow")) {
+      event.preventDefault();
+      var amount = event.shiftKey ? 120 : 48;
+      if (event.key === "ArrowLeft") state.x += amount;
+      if (event.key === "ArrowRight") state.x -= amount;
+      if (event.key === "ArrowUp") state.y += amount;
+      if (event.key === "ArrowDown") state.y -= amount;
+      state.autoFit = false;
+      renderView();
+    }
+  });
+
+  var resizeObserver = new ResizeObserver(function () {
+    if (state.autoFit) fitView();
+  });
+  resizeObserver.observe(viewport);
+
+  window.__totemGraphTest = function () {
+    var assertions = [];
+    function assert(condition, label) {
+      assertions.push({ label: label, pass: Boolean(condition) });
+      if (!condition) throw new Error("Self-test failed: " + label);
+    }
+
+    assert(nodes.length === 13, "graph exposes 11 Totem and 2 external nodes");
+    assert(nodes.every(function (node) {
+      var detail = moduleDetails[node.dataset.node];
+      return detail && detail.summary && detail.branches.length > 0 && detail.integrations.length > 0;
+    }), "every node exposes sourced second-layer details");
+    assert(document.querySelectorAll("#relations > .relation").length === 24, "graph exposes 24 dependency, integration and service edges");
+    assert(document.querySelectorAll("#edge-labels > .relation").length === 24, "every graph edge exposes an inline label");
+    assert(relations.length === 48, "relation registry includes 24 edges and 24 labels");
+    assert(softDependencyAudit.length === 11, "audit exposes all 11 verified soft-dependency and runtime-compat relations");
+    assert(softDependencyAudit.filter(function (entry) { return entry.classification.indexOf("A｜") === 0; }).length === 3,
+      "audit distinguishes 3 Fabric suggests relations");
+    assert(softDependencyAudit.filter(function (entry) { return entry.classification.indexOf("B｜") === 0; }).length === 8,
+      "audit distinguishes 8 runtime optional or Observer relations");
+    assert(externalServiceAudit.length === 2, "audit separately exposes 2 external optional services");
+    assert(softDependencyAudit.every(function (entry) {
+      return document.querySelectorAll('[data-soft-id="' + entry.id + '"]').length === 2 && entry.fallback && entry.evidence;
+    }), "every audited soft relation has one edge, one label, a fallback and evidence");
+    var secondaryRelations = Array.from(document.querySelectorAll('.relation[data-layer]'));
+    assert(secondaryRelations.length === 22, "11 second-layer relations each expose an edge and label");
+    assert(secondaryRelations.every(function (relation) { return relation.classList.contains("is-secondary-hidden"); }),
+      "all second-layer soft and Observer relations are hidden in the clean overview");
+    assert(document.querySelectorAll('.relation[data-layer="semantic-provider"]').length === 10,
+      "five owning-module Observer providers each expose an edge and label");
+    assert(secondaryRelations.every(function (relation) {
+      return relation.getAttribute("aria-label") && relation.querySelector("title");
+    }), "every second-layer edge and label exposes an accessible name and title");
+    assert(document.querySelectorAll('.relation[data-kind="service"]').length === 2
+      && document.querySelectorAll('.relation[data-kind="optional"][data-to="cloudflare"]').length === 0,
+      "Cloudflare is classified as an external service rather than a Fabric soft dependency");
+    assert(document.querySelectorAll(".node image").length === 11, "every Totem node exposes a canonical icon");
+    assert(Array.from(document.querySelectorAll(".node image")).every(function (icon) {
+      return icon.getAttribute("width") === "64" && icon.getAttribute("height") === "64";
+    }), "all canonical icons render at native 64px or exact 4x size");
+    assert(featureBranchesButton.getAttribute("aria-pressed") === "false"
+      && getComputedStyle(featureBranchNodes).display === "none",
+      "feature branch tree starts collapsed for a clean overview");
+    assert(featureBranchData.length === 53 && featureNodes.length === 53,
+      "graph exposes all 53 authoritative feature branches");
+    assert(activeModuleIds.length === 11 && activeModuleIds.every(function (id) {
+      return featureBranchData.filter(function (feature) { return feature.ownerId === id; }).length === moduleDetails[id].branches.length;
+    }), "feature branch tree completely covers all 11 active Totem modules");
+    assert(featureBranchData.every(function (feature) {
+      return feature.summary && feature.title && featureNodes.some(function (node) {
+        return node.dataset.featureId === feature.id && node.getAttribute("aria-label") && node.querySelector("title");
+      });
+    }), "every feature branch has sourced text, tooltip and narration");
+    assert(softDependencyAudit.every(function (entry) {
+      return featureBranchData.some(function (feature) { return feature.softIds.indexOf(entry.id) >= 0; });
+    }) && externalServiceAudit.every(function (entry) {
+      return featureBranchData.some(function (feature) { return feature.serviceIds.indexOf(entry.id) >= 0; });
+    }), "every audited soft dependency and external service is mapped to at least one feature branch");
+    assert(featureBranchData.every(function (feature) { return feature.ownerId !== "deadrecall"; }),
+      "DeadRecall is excluded as an active feature owner");
+
+    fitView();
+    assert(Number.isFinite(state.scale) && state.scale >= MIN_SCALE, "fit view computes a valid scale");
+    var beforeZoom = state.scale;
+    document.getElementById("zoom-in").click();
+    assert(state.scale > beforeZoom, "zoom-in control changes scale");
+    document.getElementById("fit-view").click();
+    assert(state.autoFit, "fit control restores auto-fit");
+
+    var hardToggle = document.querySelector('.toggle[data-kind="hard"]');
+    hardToggle.click();
+    assert(hardToggle.getAttribute("aria-pressed") === "false", "hard dependency toggle updates ARIA state");
+    assert(document.querySelectorAll('.relation[data-kind="hard"].is-filtered').length > 0, "hard dependency toggle hides lines");
+    hardToggle.click();
+
+    var serviceToggle = document.querySelector('.toggle[data-kind="service"]');
+    serviceToggle.click();
+    assert(serviceToggle.getAttribute("aria-pressed") === "false", "external service toggle updates ARIA state");
+    assert(document.querySelectorAll('.relation[data-kind="service"].is-filtered').length === 2,
+      "external service toggle hides its edge and label");
+    serviceToggle.click();
+
+    softOverviewButton.focus();
+    softOverviewButton.click();
+    assert(detailPanel.hidden === false && detailPanel.dataset.detailId === "soft_overview",
+      "soft dependency overview opens in the accessible detail drawer");
+    assert(document.querySelectorAll("#detail-soft-dependencies > li").length === 11,
+      "soft dependency overview lists all source-to-target feature relations");
+    assert(document.querySelectorAll("#detail-external-services > li").length === 2,
+      "soft dependency overview separately lists external optional services");
+    assert(detailPanel.querySelector(".detail-header").classList.contains("no-icon")
+      && document.getElementById("detail-title").getBoundingClientRect().width > 200,
+      "synthetic overview header uses the full mobile width when no module icon exists");
+    assert(getComputedStyle(detailPanel.querySelector(".detail-content")).overflowY === "auto",
+      "overview drawer remains vertically scrollable on narrow screens");
+    detailClose.click();
+    assert(detailPanel.hidden && document.activeElement === softOverviewButton,
+      "closing soft dependency overview restores toolbar focus");
+
+    var automataNode = document.querySelector('.node[data-node="automata"]');
+    automataNode.focus();
+    automataNode.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    assert(state.selected === "automata", "Enter selects the focused module");
+    assert(detailPanel.hidden === false, "Enter opens the detail drawer");
+    assert(document.getElementById("detail-title").textContent === "TotemAutomata", "detail drawer shows the selected module");
+    assert(document.querySelectorAll("#detail-branches > li").length === moduleDetails.automata.branches.length, "detail drawer shows current feature branches");
+    assert(document.querySelectorAll("#detail-integrations > li").length === moduleDetails.automata.integrations.length, "detail drawer shows dependencies and integrations");
+    assert(document.querySelectorAll("#detail-soft-dependencies > li").length === 4,
+      "Automata drawer lists its three optional integrations and incoming Observer provider relation");
+    assert(document.querySelectorAll("#detail-external-services > li").length === 1,
+      "Automata drawer separately lists its OpenAI-compatible external service");
+    assert(document.querySelectorAll('.relation[data-layer]:not(.is-secondary-hidden)').length === 8,
+      "selecting Automata reveals exactly its four second-layer relations and labels");
+    assert(Array.from(document.querySelectorAll('[data-soft-id="vanilla-automata-observer"]')).every(function (relation) {
+      return !relation.classList.contains("is-secondary-hidden") && relation.classList.contains("is-active");
+    }), "selecting Automata reveals and highlights automata_copper_golem v1");
+    assert(automataNode.getAttribute("aria-expanded") === "true", "selected node exposes expanded state");
+    var detailRect = detailPanel.getBoundingClientRect();
+    assert(detailRect.left >= -1 && detailRect.right <= window.innerWidth + 1, "detail drawer stays inside the viewport");
+    assert(detailPanel.scrollWidth <= detailPanel.clientWidth + 1, "detail drawer has no horizontal clipping");
+    detailClose.click();
+    assert(detailPanel.hidden && state.selected === null, "close button closes details and clears selection");
+    assert(document.activeElement === automataNode, "close button restores focus to the invoking node");
+    assert(secondaryRelations.every(function (relation) { return relation.classList.contains("is-secondary-hidden"); }),
+      "closing a module restores the clean overview and hides second-layer relations");
+
+    var vanillaNode = document.querySelector('.node[data-node="vanilla"]');
+    vanillaNode.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    assert(document.querySelectorAll("#detail-soft-dependencies > li").length === 5,
+      "VanillaTweaks drawer lists all five owning-module Observer relations");
+    assert(document.querySelectorAll('.relation[data-layer="semantic-provider"]:not(.is-secondary-hidden)').length === 10,
+      "selecting VanillaTweaks reveals all five Observer provider edges and labels");
+    assert(Array.from(document.querySelectorAll('.relation[data-layer="semantic-provider"]')).every(function (relation) {
+      return relation.classList.contains("is-active");
+    }), "all revealed VanillaTweaks Observer relations are highlighted");
+    var compatToggle = document.querySelector('.toggle[data-kind="compat"]');
+    compatToggle.click();
+    assert(document.querySelectorAll('.relation[data-layer="semantic-provider"].is-filtered').length === 10,
+      "compatibility toggle hides selected Observer provider relations");
+    compatToggle.click();
+    detailClose.click();
+
+    automataNode.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true }));
+    assert(document.querySelector('.node[data-node="core"]').classList.contains("is-dimmed") === false, "direct Core relation remains highlighted");
+    assert(document.querySelector('.node[data-node="excavation"]').classList.contains("is-dimmed") === false, "direct optional relation remains highlighted");
+    assert(document.querySelector('.node[data-node="locksmith"]').classList.contains("is-dimmed") === false, "direct Locksmith relation remains highlighted");
+    assert(document.querySelector('.node[data-node="remnant"]').classList.contains("is-dimmed") === false, "direct Remnant relation remains highlighted");
+    assert(document.querySelector('.node[data-node="vanilla"]').classList.contains("is-dimmed") === false, "incoming Observer relation remains highlighted");
+    assert(document.querySelector('.node[data-node="enchanting"]').classList.contains("is-dimmed"), "unrelated node is dimmed");
+
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    assert(state.selected === null, "Escape clears selection");
+    assert(detailPanel.hidden, "Escape closes the detail drawer");
+    assert(document.activeElement === automataNode, "Escape restores focus to the invoking node");
+    assert(document.querySelectorAll(".node.is-dimmed").length === 0, "clearing selection restores nodes");
+
+    document.getElementById("reset-view").click();
+    assert(document.querySelectorAll(".relation.is-filtered").length === 0, "reset restores all filters");
+    assert(secondaryRelations.every(function (relation) { return relation.classList.contains("is-secondary-hidden"); }),
+      "reset keeps detail-only relations hidden until a related node is selected");
+
+    featureBranchesButton.focus();
+    featureBranchesButton.click();
+    assert(state.branchesExpanded && scene.classList.contains("branch-mode"),
+      "one toolbar click enters the all-branches tree mode");
+    assert(featureBranchesButton.getAttribute("aria-pressed") === "true"
+      && featureBranchesButton.textContent === "收合功能分支",
+      "branch button exposes persistent pressed state and collapse label");
+    assert(getComputedStyle(featureBranchNodes).display !== "none"
+      && featureNodes.every(function (node) { return node.getAttribute("tabindex") === "0" && node.getAttribute("aria-hidden") === "false"; }),
+      "expanded branch nodes are visible and keyboard reachable");
+    assert(activeModuleIds.every(function (id) {
+      var node = document.querySelector('.node[data-node="' + id + '"]');
+      return node.getAttribute("transform") === node.dataset.branchTransform;
+    }), "all active module cards move into the non-overlapping three-column tree layout");
+    assert(document.querySelectorAll("#feature-owner-links > .feature-owner-link").length === featureBranchData.length,
+      "every feature node is visually connected to its owning module");
+
+    var automataGathering = document.querySelector('.feature-node[data-feature-id="automata-feature-3"]');
+    automataGathering.focus();
+    automataGathering.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true }));
+    assert(state.selectedFeature === "automata-feature-3" && detailPanel.dataset.detailMode === "feature",
+      "Enter selects a feature branch and opens feature-detail mode");
+    assert(document.getElementById("detail-title").textContent.indexOf("TotemAutomata") >= 0
+      && document.getElementById("detail-summary").textContent === featureById("automata-feature-3").summary,
+      "feature drawer identifies its owning module and exact explanation");
+    assert(document.querySelectorAll("#detail-soft-dependencies > li").length === 2
+      && document.getElementById("detail-soft-dependencies").textContent.indexOf("TotemExcavation") >= 0
+      && document.getElementById("detail-soft-dependencies").textContent.indexOf("TotemLocksmith") >= 0
+      && document.getElementById("detail-soft-dependencies").textContent.indexOf("A｜Fabric suggests") >= 0
+      && document.getElementById("detail-soft-dependencies").textContent.indexOf("B｜Runtime optional") >= 0,
+      "feature drawer shows exact dependent modules, classifications and fallbacks");
+    var featureLinkIds = Array.from(featureDependencyLinks.querySelectorAll(".feature-dependency-link")).map(function (link) { return link.dataset.softId; }).sort();
+    assert(featureLinkIds.join(",") === "automata-excavation,automata-locksmith",
+      "feature selection draws only its two relevant soft-dependency edges");
+    assert(["automata", "excavation", "locksmith"].every(function (id) {
+      return document.querySelector('.node[data-node="' + id + '"]').classList.contains("feature-related");
+    }) && document.querySelector('.node[data-node="remnant"]').classList.contains("is-dimmed"),
+      "feature selection highlights only its owner and related soft-dependency modules");
+    var optionalToggle = document.querySelector('.toggle[data-kind="optional"]');
+    optionalToggle.click();
+    assert(featureDependencyLinks.querySelector('[data-soft-id="automata-excavation"]').classList.contains("is-filtered")
+      && !featureDependencyLinks.querySelector('[data-soft-id="automata-locksmith"]').classList.contains("is-filtered"),
+      "feature dependency edges continue to obey their exact relation filters");
+    optionalToggle.click();
+    detailClose.click();
+    assert(state.branchesExpanded && state.selectedFeature === null && document.activeElement === automataGathering,
+      "closing a feature keeps branch mode expanded and restores feature focus");
+
+    var remnantDeath = document.querySelector('.feature-node[data-feature-id="remnant-feature-4"]');
+    remnantDeath.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true }));
+    assert(document.querySelectorAll("#detail-soft-dependencies > li").length === 2
+      && document.getElementById("detail-soft-dependencies").textContent.indexOf("Trinkets Updated") >= 0
+      && document.getElementById("detail-soft-dependencies").textContent.indexOf("TotemNexus") >= 0,
+      "incoming and outgoing feature integrations identify their exact endpoints");
+    assert(document.getElementById("detail-integrations").textContent.indexOf("EventBus（非模組軟依賴）") >= 0,
+      "EventBus compatibility is explicitly presented as not being a module soft dependency");
+    assert(document.querySelector('.node[data-node="trinkets"]').classList.contains("feature-related")
+      && getComputedStyle(document.querySelector('.node[data-node="trinkets"]')).display !== "none",
+      "selected feature reveals and highlights its external optional module endpoint");
+    detailClose.click();
+
+    var discordEvents = document.querySelector('.feature-node[data-feature-id="discord-feature-1"]');
+    discordEvents.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    assert(document.querySelectorAll("#detail-external-services > li").length === 1
+      && featureDependencyLinks.querySelectorAll('.feature-dependency-link[data-kind="service"]').length === 1,
+      "feature drawer and graph keep external services separate from Fabric soft dependencies");
+    assert(document.querySelector('.node[data-node="cloudflare"]').classList.contains("feature-related"),
+      "external service endpoint is highlighted only for its mapped feature");
+    detailClose.click();
+
+    var alchemySurvival = document.querySelector('.feature-node[data-feature-id="alchemy-feature-1"]');
+    alchemySurvival.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
+    assert(document.querySelectorAll("#detail-soft-dependencies > li").length === 1
+      && document.getElementById("detail-soft-dependencies").textContent.indexOf("無軟依賴（僅使用 TotemCore 硬依賴／本模組功能）") >= 0
+      && featureDependencyLinks.children.length === 0,
+      "features without optional integrations say so explicitly and draw no dependency edge");
+    detailClose.click();
+
+    var featureSerialization = JSON.stringify(featureBranchData);
+    assert(!/sk-[A-Za-z0-9_-]{12,}|password\s*[=:]|token\s*[=:]|api[_-]?key\s*[=:]/i.test(featureSerialization)
+      && !/<canvas|data:video|framebuffer[_-]?bytes/i.test(featureSerialization),
+      "feature branch data contains no credentials, raw framebuffer, screenshot or video payload");
+    featureBranchesButton.click();
+    assert(!state.branchesExpanded && featureBranchesButton.getAttribute("aria-pressed") === "false"
+      && getComputedStyle(featureBranchNodes).display === "none"
+      && featureDependencyLinks.children.length === 0,
+      "one click cleanly collapses branches and removes feature-only highlights");
+    assert(activeModuleIds.every(function (id) {
+      return document.querySelector('.node[data-node="' + id + '"]').getAttribute("transform") === originalNodeTransforms.get(id);
+    }), "collapse restores every module card to the dependency overview layout");
+    featureBranchesButton.click();
+    document.getElementById("reset-view").click();
+    assert(!state.branchesExpanded && featureBranchesButton.getAttribute("aria-pressed") === "false",
+      "reset always returns to the clean collapsed overview");
+    assert(document.documentElement.scrollWidth <= window.innerWidth + 1, "page fits viewport without horizontal overflow");
+    assert(document.querySelector(".controls").clientWidth <= window.innerWidth, "control strip stays within viewport");
+    assert(pageErrors.length === 0, "no captured page errors");
+    return assertions;
+  };
+
+  requestAnimationFrame(function () {
+    updateFilters();
+    fitView();
+    if (location.hash === "#selftest") {
+      try {
+        var result = window.__totemGraphTest();
+        document.documentElement.dataset.selfTest = "pass";
+        document.documentElement.dataset.selfTestCount = String(result.length);
+      } catch (error) {
+        document.documentElement.dataset.selfTest = "fail";
+        document.documentElement.dataset.selfTestError = String(error && error.message ? error.message : error);
+        console.error(error);
+      }
+    } else if (location.hash === "#branches") {
+      setFeatureBranches(true);
+    } else if (location.hash.indexOf("#feature=") === 0) {
+      var featureId = decodeURIComponent(location.hash.slice(9));
+      var featureNode = document.querySelector('.feature-node[data-feature-id="' + featureId + '"]');
+      if (featureById(featureId) && featureNode) {
+        setFeatureBranches(true);
+        selectFeature(featureId, featureNode);
+      }
+    } else if (location.hash.indexOf("#detail=") === 0) {
+      var detailId = decodeURIComponent(location.hash.slice(8));
+      if (detailId === "soft_overview") openDetails(detailId, softOverviewButton);
+      else if (moduleDetails[detailId]) selectNode(detailId);
+    }
+  });
+}());
+</script>
+</body>
+</html>

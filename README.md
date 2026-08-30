@@ -1,0 +1,30 @@
+# TotemWorkspace
+
+TotemWorkspace 是 11 個現役 Totem 模組的公開協作與文件總表。這裡集中保存模組版本快照、依賴契約、開發規範、發布檢查表，以及可互動的統一功能／依賴圖；本 repository 本身不是 Minecraft 模組。
+
+[開啟互動式模組圖](index.html)
+
+![Totem 模組功能與依賴圖預覽](docs/images/dependency-graph.png)
+
+## 快速連結
+
+- [模組總表](docs/module-catalog.md)
+- [依賴與軟整合契約](docs/dependency-contracts.md)
+- [開發注意事項](docs/development-guidelines.md)
+- [發布檢查表](docs/release-checklist.md)
+- [目前原始碼狀態](docs/current-status.md)
+- [機器可讀快照](data/modules.json)
+
+## 資料更新原則
+
+各功能、畫面與 API 仍由原本的 11 個模組 repository 擁有；本 repository 只統整跨模組事實。版本、預設分支、完整 commit SHA、Fabric 依賴範圍與 Observer protocol 必須從擁有者 repository 重新核對後更新。`current-status.md` 與 `modules.json` 記錄的是原始碼快照，不代表 GitHub Actions 已全綠，也不證明 Modrinth 已發布。
+
+DeadRecall 已停止維護；僅保留為相容性歷史背景，不列入現役模組或依賴圖。
+
+## 本機驗證
+
+```sh
+node scripts/validate-workspace.mjs
+```
+
+驗證器不需要安裝 npm 套件，使用 Node.js 22 即可。
