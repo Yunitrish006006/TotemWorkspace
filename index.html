@@ -174,12 +174,26 @@
   .edge-label.is-active rect { stroke: #fff; stroke-width: 3; }
   .is-filtered { display: none !important; }
   .is-secondary-hidden { display: none !important; }
-  #feature-branches-toggle[aria-pressed="true"] {
-    opacity: 1;
-    border-color: #67e8f9;
-    background: #164e63;
-    color: #ecfeff;
-    filter: none;
+  .feature-toggle {
+    cursor: pointer;
+    pointer-events: all;
+    filter: drop-shadow(0 4px 5px rgba(0, 0, 0, .38));
+  }
+  .feature-toggle .feature-toggle-card {
+    fill: #0b3344;
+    stroke: #67e8f9;
+    stroke-width: 3;
+    transition: fill 120ms linear, stroke-width 120ms linear, filter 120ms linear;
+  }
+  .feature-toggle:hover .feature-toggle-card { fill: #155e75; }
+  .feature-toggle text { pointer-events: none; }
+  .feature-toggle:focus { outline: none; }
+  .feature-toggle:focus-visible .feature-toggle-card,
+  .feature-toggle[aria-pressed="true"] .feature-toggle-card {
+    fill: #155e75;
+    stroke: #fff;
+    stroke-width: 5;
+    filter: drop-shadow(0 0 10px rgba(103,232,249,.72));
   }
   .feature-owner-link,
   .feature-dependency-link {
@@ -193,6 +207,7 @@
   }
   .feature-node {
     cursor: pointer;
+    pointer-events: all;
     transition: opacity 140ms linear, filter 140ms linear;
   }
   .feature-node .feature-card {
@@ -213,6 +228,8 @@
   .feature-node.has-runtime-compat .feature-card { stroke: #a78bfa; }
   .feature-node.has-external-service .feature-card { stroke: #22d3ee; }
   .feature-node.is-dimmed { opacity: .14; filter: saturate(.3); }
+  .feature-node.is-owner-hidden,
+  .feature-owner-link.is-owner-hidden { display: none; }
   .node.feature-related .card {
     stroke: #fef3c7;
     stroke-width: 9;
@@ -220,13 +237,6 @@
   }
   .branch-only { display: none; }
   #scene.branch-mode .branch-only { display: inline; }
-  #scene.branch-mode #relations,
-  #scene.branch-mode #edge-labels,
-  #scene.branch-mode .external-node,
-  #scene.branch-mode #runtime-footer {
-    display: none;
-  }
-  #scene.branch-mode .external-node.feature-related { display: inline; }
   .viewport-hint {
     position: absolute;
     right: 12px;
@@ -381,7 +391,6 @@
     .snapshot { flex: 0 0 auto; }
     .brand p { display: none; }
     .controls { width: 100%; min-width: 0; max-width: 100%; justify-content: flex-start; overflow-x: auto; padding-bottom: 2px; flex-wrap: nowrap; }
-    #feature-branches-toggle { order: -2; flex: 0 0 auto; }
     #soft-overview { order: -1; flex: 0 0 auto; }
     .control-group { flex: 0 0 auto; }
     .control-group-label, #selection-status { display: none; }
@@ -445,7 +454,6 @@
         </button>
       </div>
       <button id="soft-overview" type="button" aria-haspopup="dialog" aria-controls="detail-panel" title="開啟完整軟依賴與外部選配服務清單">軟依賴總覽</button>
-      <button id="feature-branches-toggle" type="button" aria-pressed="false" aria-controls="feature-branch-nodes" title="在圖上展開全部 11 個現役 Totem 模組的功能分支">展開功能分支</button>
       <div id="selection-status" role="status" aria-live="polite">未選取模組</div>
     </nav>
   </header>
@@ -670,7 +678,8 @@
           <text id="trinkets-description" x="310" y="84" text-anchor="middle" class="small">選配 ≥4.1.0-beta.2｜飾品欄背包與死亡擷取</text>
         </g>
 
-        <g id="feature-branch-nodes" class="branch-only" aria-label="11 個現役 Totem 模組的功能分支"></g>
+        <g id="feature-toggle-buttons" aria-label="各模組的功能分支展開按鈕"></g>
+        <g id="feature-branch-nodes" class="branch-only" aria-label="所選模組散開的功能分支"></g>
 
         <g id="runtime-footer">
           <rect x="120" y="2320" width="3600" height="90" rx="24" fill="#172554" stroke="#3b82f6" stroke-width="3"/>
@@ -679,7 +688,7 @@
         </g>
       </g>
     </svg>
-    <div class="viewport-hint" aria-hidden="true">拖曳平移｜滾輪或 ＋／− 縮放｜「展開功能分支」一次顯示全部功能｜點功能查看精確軟依賴｜Esc 清除</div>
+    <div class="viewport-hint" aria-hidden="true">拖曳平移｜滾輪或 ＋／− 縮放｜點父節點上的「功能」按鈕散開分支｜點功能查看啟用時的軟依賴｜Esc 清除</div>
   </main>
 </div>
 <aside id="detail-panel" class="detail-panel" role="dialog" aria-modal="false" aria-labelledby="detail-title" aria-describedby="detail-summary" hidden>
@@ -713,14 +722,13 @@
     <p id="detail-source" class="detail-source"></p>
   </div>
 </aside>
-<p id="a11y-instructions" class="sr-only">每個節點都可以用 Tab 鍵聚焦。展開功能分支按鈕會一次顯示全部十一個現役模組的功能樹；功能節點可用 Enter 或空白鍵開啟詳情並顯示精確軟依賴。關閉按鈕或 Escape 會關閉詳情並清除選取；軟依賴總覽與關係切換仍可獨立使用。</p>
+<p id="a11y-instructions" class="sr-only">每個節點與父節點上的功能按鈕都可以用 Tab 鍵聚焦。啟用某個模組的功能按鈕會在總圖上散開該模組的功能分支；功能節點可用 Enter 或空白鍵開啟詳情，並顯示啟用時可搭配的精確軟依賴。關閉按鈕或 Escape 會關閉詳情並清除選取；軟依賴總覽與關係切換仍可獨立使用。</p>
 <script>
 (function () {
   "use strict";
 
   var GRAPH_WIDTH = 3840;
   var GRAPH_HEIGHT = 2450;
-  var FEATURE_GRAPH_HEIGHT = 2740;
   var MIN_SCALE = 0.08;
   var MAX_SCALE = 2.5;
   var viewport = document.getElementById("viewport");
@@ -730,14 +738,15 @@
   var nodes = Array.from(document.querySelectorAll(".node[data-node]"));
   var relations = Array.from(document.querySelectorAll(".relation[data-from][data-to]"));
   var filters = { hard: true, optional: true, compat: true, service: true };
-  var state = { scale: 1, x: 0, y: 0, selected: null, selectedFeature: null, branchesExpanded: false, autoFit: true };
+  var state = { scale: 1, x: 0, y: 0, selected: null, selectedFeature: null, expandedOwner: null, branchesExpanded: false, autoFit: true };
   var drag = null;
   var suppressClick = false;
   var pageErrors = [];
   var detailPanel = document.getElementById("detail-panel");
   var detailClose = document.getElementById("detail-close");
   var softOverviewButton = document.getElementById("soft-overview");
-  var featureBranchesButton = document.getElementById("feature-branches-toggle");
+  var featureToggleLayer = document.getElementById("feature-toggle-buttons");
+  var featureToggleButtons = [];
   var featureOwnerLinks = document.getElementById("feature-owner-links");
   var featureDependencyLinks = document.getElementById("feature-dependency-links");
   var featureBranchNodes = document.getElementById("feature-branch-nodes");
@@ -1087,23 +1096,37 @@
     "core", "alchemy", "enchanting", "discord", "automata", "vanilla",
     "excavation", "villagers", "locksmith", "nexus", "remnant"
   ];
-  var featureLayout = {
-    core:       { originX: 80,   x: 150,  y: 220,  width: 1060, height: 220 },
-    alchemy:    { originX: 1320, x: 1590, y: 220,  width: 660,  height: 160 },
-    enchanting: { originX: 2560, x: 2830, y: 220,  width: 660,  height: 160 },
-    discord:    { originX: 80,   x: 350,  y: 850,  width: 660,  height: 160 },
-    automata:   { originX: 1320, x: 1590, y: 850,  width: 660,  height: 160 },
-    vanilla:    { originX: 2560, x: 2830, y: 850,  width: 660,  height: 160 },
-    excavation: { originX: 80,   x: 350,  y: 1480, width: 660,  height: 160 },
-    villagers:  { originX: 1320, x: 1590, y: 1480, width: 660,  height: 160 },
-    locksmith:  { originX: 2560, x: 2830, y: 1480, width: 660,  height: 160 },
-    nexus:      { originX: 80,   x: 305,  y: 2110, width: 750,  height: 160 },
-    remnant:    { originX: 1320, x: 1545, y: 2110, width: 750,  height: 160 }
+  var overviewNodeLayout = {
+    core:       { x: 1390, y: 1010, width: 1060, height: 220 },
+    alchemy:    { x: 160,  y: 210,  width: 660,  height: 160 },
+    enchanting: { x: 1590, y: 245, width: 660,  height: 160 },
+    discord:    { x: 3020, y: 210, width: 660,  height: 160 },
+    automata:   { x: 160,  y: 855,  width: 660,  height: 160 },
+    vanilla:    { x: 3020, y: 855,  width: 660,  height: 160 },
+    excavation: { x: 160,  y: 1465, width: 660,  height: 160 },
+    villagers:  { x: 3020, y: 1465, width: 660,  height: 160 },
+    locksmith:  { x: 80,   y: 2000, width: 660,  height: 160 },
+    nexus:      { x: 760,  y: 2000, width: 750,  height: 160 },
+    remnant:    { x: 2210, y: 2000, width: 750,  height: 160 },
+    cloudflare: { x: 3180, y: 500, width: 500, height: 120 },
+    trinkets:   { x: 3040, y: 2115, width: 620, height: 120 }
   };
-  var externalBranchLayout = {
-    cloudflare: { x: 2940, y: 2240, width: 500, height: 120 },
-    trinkets: { x: 2850, y: 2380, width: 620, height: 120 }
+  var featureFanSide = {
+    core: "top",
+    alchemy: "right",
+    enchanting: "bottom",
+    discord: "left",
+    automata: "right",
+    vanilla: "left",
+    excavation: "right",
+    villagers: "left",
+    locksmith: "top",
+    nexus: "top",
+    remnant: "top"
   };
+  var FEATURE_CARD_WIDTH = 430;
+  var FEATURE_CARD_HEIGHT = 76;
+  var FEATURE_CARD_GAP = 18;
   var eventBusCompatibilityNotes = {
     "event-remnant-death": {
       classification: "EventBus（非模組軟依賴）",
@@ -1188,7 +1211,6 @@
   };
   var featureBranchData = [];
   var featureNodes = [];
-  var originalNodeTransforms = new Map();
 
   activeModuleIds.forEach(function (ownerId) {
     var detail = moduleDetails[ownerId];
@@ -1229,7 +1251,7 @@
     var width = Math.max(1, viewport.clientWidth);
     var height = Math.max(1, viewport.clientHeight);
     var padding = width < 700 ? 10 : 24;
-    var graphHeight = state.branchesExpanded ? FEATURE_GRAPH_HEIGHT : GRAPH_HEIGHT;
+    var graphHeight = GRAPH_HEIGHT;
     state.scale = clamp(Math.min((width - padding * 2) / GRAPH_WIDTH, (height - padding * 2) / graphHeight), MIN_SCALE, MAX_SCALE);
     state.x = Math.round((width - GRAPH_WIDTH * state.scale) / 2);
     state.y = Math.round((height - graphHeight * state.scale) / 2);
@@ -1290,12 +1312,38 @@
   }
 
   function featurePosition(feature) {
-    var layout = featureLayout[feature.ownerId];
+    var layout = overviewNodeLayout[feature.ownerId];
+    var side = featureFanSide[feature.ownerId];
+    var count = moduleDetails[feature.ownerId].branches.length;
+    var index = feature.ownerIndex;
+    var x;
+    var y;
+
+    if (side === "left" || side === "right") {
+      var totalHeight = count * FEATURE_CARD_HEIGHT + Math.max(0, count - 1) * FEATURE_CARD_GAP;
+      var startY = clamp(layout.y + layout.height / 2 - totalHeight / 2, 36, GRAPH_HEIGHT - totalHeight - 36);
+      x = side === "right"
+        ? layout.x + layout.width + 80
+        : layout.x - FEATURE_CARD_WIDTH - 80;
+      y = startY + index * (FEATURE_CARD_HEIGHT + FEATURE_CARD_GAP);
+    } else {
+      var columns = Math.min(3, count);
+      var rows = Math.ceil(count / columns);
+      var row = Math.floor(index / columns);
+      var column = index % columns;
+      var totalWidth = columns * FEATURE_CARD_WIDTH + Math.max(0, columns - 1) * FEATURE_CARD_GAP;
+      var startX = clamp(layout.x + layout.width / 2 - totalWidth / 2, 36, GRAPH_WIDTH - totalWidth - 36);
+      var fanHeight = rows * FEATURE_CARD_HEIGHT + Math.max(0, rows - 1) * FEATURE_CARD_GAP;
+      x = startX + column * (FEATURE_CARD_WIDTH + FEATURE_CARD_GAP);
+      y = side === "top"
+        ? layout.y - 60 - fanHeight + row * (FEATURE_CARD_HEIGHT + FEATURE_CARD_GAP)
+        : layout.y + layout.height + 60 + row * (FEATURE_CARD_HEIGHT + FEATURE_CARD_GAP);
+    }
     return {
-      x: layout.originX + (feature.ownerIndex % 2 === 0 ? 10 : 640),
-      y: layout.y + (feature.ownerId === "core" ? 250 : 200) + Math.floor(feature.ownerIndex / 2) * 100,
-      width: 550,
-      height: 80
+      x: x,
+      y: y,
+      width: FEATURE_CARD_WIDTH,
+      height: FEATURE_CARD_HEIGHT
     };
   }
 
@@ -1336,28 +1384,74 @@
 
   function createFeatureTree() {
     activeModuleIds.forEach(function (id) {
-      var node = nodes.find(function (candidate) { return candidate.dataset.node === id; });
-      originalNodeTransforms.set(id, node.getAttribute("transform"));
-      var layout = featureLayout[id];
-      node.dataset.branchTransform = "translate(" + layout.x + " " + layout.y + ")";
-    });
-    ["cloudflare", "trinkets"].forEach(function (id) {
-      var node = nodes.find(function (candidate) { return candidate.dataset.node === id; });
-      originalNodeTransforms.set(id, node.getAttribute("transform"));
+      var layout = overviewNodeLayout[id];
+      var count = moduleDetails[id].branches.length;
+      var buttonWidth = 154;
+      var buttonHeight = 38;
+      var buttonX = layout.x + layout.width - buttonWidth - 18;
+      var buttonY = layout.y + layout.height - buttonHeight - 12;
+      var button = svgElement("g", {
+        "class": "feature-toggle",
+        "data-owner": id,
+        transform: "translate(" + buttonX + " " + buttonY + ")",
+        role: "button",
+        tabindex: "0",
+        "aria-pressed": "false",
+        "aria-expanded": "false",
+        "aria-controls": "feature-branch-nodes",
+        "aria-label": "展開 " + moduleDetails[id].name + " 的 " + count + " 個功能分支"
+      });
+      button.appendChild(svgElement("rect", {
+        "class": "feature-toggle-card",
+        width: buttonWidth,
+        height: buttonHeight,
+        rx: 12
+      }));
+      var buttonText = svgElement("text", {
+        x: buttonWidth / 2,
+        y: 26,
+        "text-anchor": "middle",
+        fill: "#ecfeff",
+        "font-size": 18,
+        "font-weight": 800
+      });
+      buttonText.textContent = "功能 ×" + count + " ＋";
+      button.appendChild(buttonText);
+      button.addEventListener("pointerdown", function (event) {
+        event.stopPropagation();
+        suppressClick = false;
+      });
+      button.addEventListener("pointerup", function (event) {
+        event.stopPropagation();
+      });
+      button.addEventListener("click", function (event) {
+        event.stopPropagation();
+        if (suppressClick) return;
+        toggleFeatureOwner(id);
+      });
+      button.addEventListener("keydown", function (event) {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          event.stopPropagation();
+          toggleFeatureOwner(id);
+        }
+      });
+      featureToggleLayer.appendChild(button);
+      featureToggleButtons.push(button);
     });
 
     featureBranchData.forEach(function (feature) {
       var position = featurePosition(feature);
-      var layout = featureLayout[feature.ownerId];
+      var layout = overviewNodeLayout[feature.ownerId];
       var ownerX = layout.x + layout.width / 2;
-      var ownerY = layout.y + layout.height;
+      var ownerY = layout.y + layout.height / 2;
       var targetX = position.x + position.width / 2;
-      var targetY = position.y;
+      var targetY = position.y + position.height / 2;
       var link = svgElement("path", {
-        "class": "feature-owner-link",
+        "class": "feature-owner-link is-owner-hidden",
         "data-feature-id": feature.id,
         "data-owner": feature.ownerId,
-        d: "M" + ownerX + " " + ownerY + " C" + ownerX + " " + (ownerY + 34) + " " + targetX + " " + (targetY - 34) + " " + targetX + " " + targetY,
+        d: dependencyPath({ x: ownerX, y: ownerY }, { x: targetX, y: targetY }),
         role: "img",
         "aria-label": moduleDetails[feature.ownerId].name + " 擁有功能分支 " + feature.title
       });
@@ -1366,7 +1460,7 @@
       link.appendChild(linkTitle);
       featureOwnerLinks.appendChild(link);
 
-      var groupClasses = ["feature-node"];
+      var groupClasses = ["feature-node", "is-owner-hidden"];
       if (feature.softIds.some(function (id) {
         var entry = softEntryById(id);
         return entry && entry.classification.indexOf("A｜") === 0;
@@ -1408,6 +1502,13 @@
       var metaText = svgElement("text", { x: 70, y: 60, fill: "#a8b6ca", "font-size": 15, "font-weight": 700 });
       metaText.textContent = featureMeta(feature);
       group.appendChild(metaText);
+      group.addEventListener("pointerdown", function (event) {
+        event.stopPropagation();
+        suppressClick = false;
+      });
+      group.addEventListener("pointerup", function (event) {
+        event.stopPropagation();
+      });
       group.addEventListener("click", function () {
         if (suppressClick) return;
         selectFeature(feature.id, group);
@@ -1424,14 +1525,8 @@
   }
 
   function branchNodeCenter(id) {
-    if (featureLayout[id]) {
-      var layout = featureLayout[id];
-      return { x: layout.x + layout.width / 2, y: layout.y + layout.height / 2 };
-    }
-    if (externalBranchLayout[id]) {
-      var external = externalBranchLayout[id];
-      return { x: external.x + external.width / 2, y: external.y + external.height / 2 };
-    }
+    var layout = overviewNodeLayout[id];
+    if (layout) return { x: layout.x + layout.width / 2, y: layout.y + layout.height / 2 };
     return null;
   }
 
@@ -1594,7 +1689,7 @@
     document.getElementById("detail-summary").textContent = feature.summary;
     document.getElementById("detail-source").textContent = "分支說明取自 " + owner.name + " 的目前功能資料；軟依賴分類與降級行為取自 2026-08-30 現役 repository 稽核。";
     document.getElementById("detail-branches-title").textContent = "功能說明";
-    document.getElementById("detail-soft-title").textContent = "精確軟依賴模組";
+    document.getElementById("detail-soft-title").textContent = "啟用此功能時可搭配的軟依賴模組";
     document.getElementById("detail-external-title").textContent = "外部選配服務";
     document.getElementById("detail-integrations-title").textContent = "擁有者、方向與 EventBus";
     fillDetailList("detail-branches", [feature.summary]);
@@ -1688,6 +1783,7 @@
   function applySelection() {
     var selected = state.selected;
     var selectedFeature = state.selectedFeature ? featureById(state.selectedFeature) : null;
+    var expandedOwner = state.expandedOwner;
     var directlyRelated = new Set();
     if (selected) {
       directlyRelated.add(selected);
@@ -1703,8 +1799,8 @@
       var id = node.dataset.node;
       node.setAttribute("aria-pressed", id === selected ? "true" : "false");
       node.classList.toggle("feature-related", Boolean(selectedFeature) && featureRelated.has(id));
-      var dimmed = state.branchesExpanded
-        ? (Boolean(selectedFeature) && !featureRelated.has(id)) || (Boolean(selected) && id !== selected)
+      var dimmed = Boolean(selectedFeature)
+        ? !featureRelated.has(id)
         : Boolean(selected) && !directlyRelated.has(id);
       node.classList.toggle("is-dimmed", dimmed);
     });
@@ -1715,19 +1811,32 @@
         && (relation.dataset.from === selected || relation.dataset.to === selected);
       relation.classList.toggle("is-filtered", !relationPassesFilter(relation));
       relation.classList.toggle("is-secondary-hidden", !layerVisible);
-      relation.classList.toggle("is-dimmed", Boolean(selected) && !connected);
+      relation.classList.toggle("is-dimmed", Boolean(selectedFeature) || Boolean(selected) && !connected);
       relation.classList.toggle("is-active", connected);
     });
 
     featureNodes.forEach(function (node) {
+      var ownerVisible = Boolean(expandedOwner) && node.dataset.owner === expandedOwner;
       var isSelected = Boolean(selectedFeature) && node.dataset.featureId === selectedFeature.id;
+      node.classList.toggle("is-owner-hidden", !ownerVisible);
+      node.setAttribute("tabindex", ownerVisible ? "0" : "-1");
+      node.setAttribute("aria-hidden", ownerVisible ? "false" : "true");
       node.setAttribute("aria-pressed", isSelected ? "true" : "false");
       node.classList.toggle("is-dimmed", Boolean(selectedFeature) ? !isSelected : Boolean(selected) && node.dataset.owner !== selected);
     });
     Array.from(featureOwnerLinks.querySelectorAll(".feature-owner-link")).forEach(function (link) {
+      link.classList.toggle("is-owner-hidden", !expandedOwner || link.dataset.owner !== expandedOwner);
       link.classList.toggle("is-dimmed", Boolean(selectedFeature)
         ? link.dataset.featureId !== selectedFeature.id
         : Boolean(selected) && link.dataset.owner !== selected);
+    });
+    featureToggleButtons.forEach(function (button) {
+      var isExpanded = button.dataset.owner === expandedOwner;
+      var count = moduleDetails[button.dataset.owner].branches.length;
+      button.setAttribute("aria-pressed", isExpanded ? "true" : "false");
+      button.setAttribute("aria-expanded", isExpanded ? "true" : "false");
+      button.setAttribute("aria-label", (isExpanded ? "收合 " : "展開 ") + moduleDetails[button.dataset.owner].name + " 的 " + count + " 個功能分支");
+      button.querySelector("text").textContent = "功能 ×" + count + (isExpanded ? " −" : " ＋");
     });
     updateFeatureDependencyLinks(state.branchesExpanded ? selectedFeature : null);
 
@@ -1738,7 +1847,9 @@
     }
 
     if (!selected) {
-      status.textContent = state.branchesExpanded ? "已展開 11 個模組、" + featureBranchData.length + " 個功能分支" : "未選取模組";
+      status.textContent = expandedOwner
+        ? "已散開：" + moduleDetails[expandedOwner].name + "｜功能分支 " + moduleDetails[expandedOwner].branches.length + " 個"
+        : "未選取模組";
       return;
     }
     var selectedNode = nodes.find(function (node) { return node.dataset.node === selected; });
@@ -1755,7 +1866,7 @@
 
   function selectFeature(id, invokingElement) {
     var feature = featureById(id);
-    if (!state.branchesExpanded || !feature) return;
+    if (!feature || state.expandedOwner !== feature.ownerId) return;
     state.selected = null;
     state.selectedFeature = id;
     applySelection();
@@ -1769,39 +1880,24 @@
     closeDetails(false, false);
   }
 
-  function setFeatureBranches(expanded) {
-    state.branchesExpanded = Boolean(expanded);
+  function setFeatureOwner(ownerId) {
+    var expandedOwner = activeModuleIds.indexOf(ownerId) >= 0 ? ownerId : null;
+    state.expandedOwner = expandedOwner;
+    state.branchesExpanded = Boolean(expandedOwner);
     state.selected = null;
     state.selectedFeature = null;
     if (!detailPanel.hidden) closeDetails(false, false);
     scene.classList.toggle("branch-mode", state.branchesExpanded);
-    featureBranchesButton.setAttribute("aria-pressed", state.branchesExpanded ? "true" : "false");
-    featureBranchesButton.textContent = state.branchesExpanded ? "收合功能分支" : "展開功能分支";
-    featureBranchesButton.title = state.branchesExpanded
-      ? "收合全部功能分支並回到依賴總覽"
-      : "在圖上展開全部 11 個現役 Totem 模組的功能分支";
     featureBranchNodes.setAttribute("aria-hidden", state.branchesExpanded ? "false" : "true");
-    featureNodes.forEach(function (node) {
-      node.setAttribute("tabindex", state.branchesExpanded ? "0" : "-1");
-      node.setAttribute("aria-hidden", state.branchesExpanded ? "false" : "true");
-    });
-    activeModuleIds.forEach(function (id) {
-      var node = nodes.find(function (candidate) { return candidate.dataset.node === id; });
-      node.setAttribute("transform", state.branchesExpanded ? node.dataset.branchTransform : originalNodeTransforms.get(id));
-    });
-    Object.keys(externalBranchLayout).forEach(function (id) {
-      var node = nodes.find(function (candidate) { return candidate.dataset.node === id; });
-      var layout = externalBranchLayout[id];
-      node.setAttribute("transform", state.branchesExpanded
-        ? "translate(" + layout.x + " " + layout.y + ")"
-        : originalNodeTransforms.get(id));
-    });
-    sceneBackground.setAttribute("height", state.branchesExpanded ? FEATURE_GRAPH_HEIGHT : GRAPH_HEIGHT);
     document.getElementById("graph-description").textContent = state.branchesExpanded
-      ? "十一個現役 Totem 模組以三欄四列功能樹排列，共 " + featureBranchData.length + " 個可操作功能分支；點選分支會顯示精確軟依賴、外部服務與 EventBus 非依賴關係。"
+      ? moduleDetails[expandedOwner].name + " 的 " + moduleDetails[expandedOwner].branches.length + " 個功能分支散開在總圖父節點周圍；點選分支會顯示啟用此功能時可搭配的軟依賴模組、外部服務與 EventBus 非依賴關係。"
       : "TotemCore 0.7.12 位於中央；十個 Totem 功能模組、Cloudflare Worker 與 Trinkets Updated 位於周圍，以硬依賴、可選依賴、跨模組服務及相容事件連線。";
     applySelection();
-    fitView();
+    if (state.autoFit) fitView();
+  }
+
+  function toggleFeatureOwner(ownerId) {
+    setFeatureOwner(state.expandedOwner === ownerId ? null : ownerId);
   }
 
   function updateFilters() {
@@ -1832,10 +1928,6 @@
     status.textContent = "現役 Totem 軟依賴總覽";
     openDetails("soft_overview", softOverviewButton);
   });
-  featureBranchesButton.addEventListener("click", function () {
-    setFeatureBranches(!state.branchesExpanded);
-  });
-
   document.querySelectorAll(".toggle[data-kind]").forEach(function (button) {
     button.addEventListener("click", function () {
       var kind = button.dataset.kind;
@@ -1853,7 +1945,7 @@
     document.querySelectorAll(".toggle[data-kind]").forEach(function (button) {
       button.setAttribute("aria-pressed", "true");
     });
-    setFeatureBranches(false);
+    setFeatureOwner(null);
     updateFilters();
   });
 
@@ -1971,9 +2063,11 @@
     assert(Array.from(document.querySelectorAll(".node image")).every(function (icon) {
       return icon.getAttribute("width") === "64" && icon.getAttribute("height") === "64";
     }), "all canonical icons render at native 64px or exact 4x size");
-    assert(featureBranchesButton.getAttribute("aria-pressed") === "false"
+    assert(state.expandedOwner === null
+      && featureToggleButtons.length === 11
+      && featureToggleButtons.every(function (button) { return button.getAttribute("aria-pressed") === "false"; })
       && getComputedStyle(featureBranchNodes).display === "none",
-      "feature branch tree starts collapsed for a clean overview");
+      "every active parent has a collapsed feature button and the overview starts clean");
     assert(featureBranchData.length === 53 && featureNodes.length === 53,
       "graph exposes all 53 authoritative feature branches");
     assert(activeModuleIds.length === 11 && activeModuleIds.every(function (id) {
@@ -2092,22 +2186,28 @@
     assert(secondaryRelations.every(function (relation) { return relation.classList.contains("is-secondary-hidden"); }),
       "reset keeps detail-only relations hidden until a related node is selected");
 
-    featureBranchesButton.focus();
-    featureBranchesButton.click();
-    assert(state.branchesExpanded && scene.classList.contains("branch-mode"),
-      "one toolbar click enters the all-branches tree mode");
-    assert(featureBranchesButton.getAttribute("aria-pressed") === "true"
-      && featureBranchesButton.textContent === "收合功能分支",
-      "branch button exposes persistent pressed state and collapse label");
+    var automataFeatureToggle = featureToggleButtons.find(function (button) { return button.dataset.owner === "automata"; });
+    automataFeatureToggle.focus();
+    automataFeatureToggle.click();
+    assert(state.branchesExpanded && state.expandedOwner === "automata" && scene.classList.contains("branch-mode"),
+      "the Automata parent button scatters only its feature branches on the overview");
+    assert(automataFeatureToggle.getAttribute("aria-pressed") === "true"
+      && automataFeatureToggle.getAttribute("aria-expanded") === "true"
+      && automataFeatureToggle.textContent.indexOf("−") >= 0,
+      "the parent feature button exposes pressed state and a collapse label");
+    var visibleFeatureNodes = featureNodes.filter(function (node) { return !node.classList.contains("is-owner-hidden"); });
     assert(getComputedStyle(featureBranchNodes).display !== "none"
-      && featureNodes.every(function (node) { return node.getAttribute("tabindex") === "0" && node.getAttribute("aria-hidden") === "false"; }),
-      "expanded branch nodes are visible and keyboard reachable");
+      && visibleFeatureNodes.length === moduleDetails.automata.branches.length
+      && visibleFeatureNodes.every(function (node) {
+        return node.dataset.owner === "automata" && node.getAttribute("tabindex") === "0" && node.getAttribute("aria-hidden") === "false";
+      }), "only the chosen parent's scattered feature cards are visible and keyboard reachable");
     assert(activeModuleIds.every(function (id) {
       var node = document.querySelector('.node[data-node="' + id + '"]');
-      return node.getAttribute("transform") === node.dataset.branchTransform;
-    }), "all active module cards move into the non-overlapping three-column tree layout");
-    assert(document.querySelectorAll("#feature-owner-links > .feature-owner-link").length === featureBranchData.length,
-      "every feature node is visually connected to its owning module");
+      var layout = overviewNodeLayout[id];
+      return node.getAttribute("transform") === "translate(" + layout.x + " " + layout.y + ")";
+    }), "feature expansion preserves every module's overview position");
+    assert(Array.from(featureOwnerLinks.querySelectorAll(".feature-owner-link:not(.is-owner-hidden)")).length === moduleDetails.automata.branches.length,
+      "every visible feature card remains connected to its parent module");
 
     var automataGathering = document.querySelector('.feature-node[data-feature-id="automata-feature-3"]');
     automataGathering.focus();
@@ -2137,9 +2237,15 @@
       "feature dependency edges continue to obey their exact relation filters");
     optionalToggle.click();
     detailClose.click();
-    assert(state.branchesExpanded && state.selectedFeature === null && document.activeElement === automataGathering,
-      "closing a feature keeps branch mode expanded and restores feature focus");
+    assert(state.expandedOwner === "automata" && state.selectedFeature === null && document.activeElement === automataGathering,
+      "closing a feature keeps that parent expanded and restores feature focus");
 
+    var remnantFeatureToggle = featureToggleButtons.find(function (button) { return button.dataset.owner === "remnant"; });
+    remnantFeatureToggle.click();
+    assert(state.expandedOwner === "remnant"
+      && automataGathering.classList.contains("is-owner-hidden")
+      && featureNodes.filter(function (node) { return !node.classList.contains("is-owner-hidden"); }).every(function (node) { return node.dataset.owner === "remnant"; }),
+      "opening another parent cleanly replaces the previous feature fan");
     var remnantDeath = document.querySelector('.feature-node[data-feature-id="remnant-feature-4"]');
     remnantDeath.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, cancelable: true }));
     assert(document.querySelectorAll("#detail-soft-dependencies > li").length === 2
@@ -2153,6 +2259,8 @@
       "selected feature reveals and highlights its external optional module endpoint");
     detailClose.click();
 
+    var discordFeatureToggle = featureToggleButtons.find(function (button) { return button.dataset.owner === "discord"; });
+    discordFeatureToggle.click();
     var discordEvents = document.querySelector('.feature-node[data-feature-id="discord-feature-1"]');
     discordEvents.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     assert(document.querySelectorAll("#detail-external-services > li").length === 1
@@ -2162,6 +2270,8 @@
       "external service endpoint is highlighted only for its mapped feature");
     detailClose.click();
 
+    var alchemyFeatureToggle = featureToggleButtons.find(function (button) { return button.dataset.owner === "alchemy"; });
+    alchemyFeatureToggle.click();
     var alchemySurvival = document.querySelector('.feature-node[data-feature-id="alchemy-feature-1"]');
     alchemySurvival.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true }));
     assert(document.querySelectorAll("#detail-soft-dependencies > li").length === 1
@@ -2174,17 +2284,16 @@
     assert(!/sk-[A-Za-z0-9_-]{12,}|password\s*[=:]|token\s*[=:]|api[_-]?key\s*[=:]/i.test(featureSerialization)
       && !/<canvas|data:video|framebuffer[_-]?bytes/i.test(featureSerialization),
       "feature branch data contains no credentials, raw framebuffer, screenshot or video payload");
-    featureBranchesButton.click();
-    assert(!state.branchesExpanded && featureBranchesButton.getAttribute("aria-pressed") === "false"
+    alchemyFeatureToggle.click();
+    assert(!state.branchesExpanded && state.expandedOwner === null
+      && featureToggleButtons.every(function (button) { return button.getAttribute("aria-pressed") === "false"; })
       && getComputedStyle(featureBranchNodes).display === "none"
       && featureDependencyLinks.children.length === 0,
-      "one click cleanly collapses branches and removes feature-only highlights");
-    assert(activeModuleIds.every(function (id) {
-      return document.querySelector('.node[data-node="' + id + '"]').getAttribute("transform") === originalNodeTransforms.get(id);
-    }), "collapse restores every module card to the dependency overview layout");
-    featureBranchesButton.click();
+      "clicking the active parent button cleanly collapses its fan and removes feature-only highlights");
+    automataFeatureToggle.click();
     document.getElementById("reset-view").click();
-    assert(!state.branchesExpanded && featureBranchesButton.getAttribute("aria-pressed") === "false",
+    assert(!state.branchesExpanded && state.expandedOwner === null
+      && featureToggleButtons.every(function (button) { return button.getAttribute("aria-pressed") === "false"; }),
       "reset always returns to the clean collapsed overview");
     assert(document.documentElement.scrollWidth <= window.innerWidth + 1, "page fits viewport without horizontal overflow");
     assert(document.querySelector(".controls").clientWidth <= window.innerWidth, "control strip stays within viewport");
@@ -2205,13 +2314,15 @@
         document.documentElement.dataset.selfTestError = String(error && error.message ? error.message : error);
         console.error(error);
       }
+    } else if (location.hash.indexOf("#features=") === 0) {
+      setFeatureOwner(decodeURIComponent(location.hash.slice(10)));
     } else if (location.hash === "#branches") {
-      setFeatureBranches(true);
+      setFeatureOwner("core");
     } else if (location.hash.indexOf("#feature=") === 0) {
       var featureId = decodeURIComponent(location.hash.slice(9));
       var featureNode = document.querySelector('.feature-node[data-feature-id="' + featureId + '"]');
       if (featureById(featureId) && featureNode) {
-        setFeatureBranches(true);
+        setFeatureOwner(featureById(featureId).ownerId);
         selectFeature(featureId, featureNode);
       }
     } else if (location.hash.indexOf("#detail=") === 0) {

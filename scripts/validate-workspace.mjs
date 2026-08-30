@@ -188,7 +188,7 @@ if (fs.existsSync(indexPath)) {
   }
 
   const detailMatch = html.match(/var moduleDetails = (\{[\s\S]*?\n  \});\s*\n\s*var activeModuleIds/);
-  const activeMatch = html.match(/var activeModuleIds = (\[[\s\S]*?\]);\s*\n\s*var featureLayout/);
+  const activeMatch = html.match(/var activeModuleIds = (\[[\s\S]*?\]);\s*\n\s*var overviewNodeLayout/);
   const softMatch = html.match(/var softDependencyAudit = (\[[\s\S]*?\n  \]);\s*\n\s*var externalServiceAudit/);
   const serviceMatch = html.match(/var externalServiceAudit = (\[[\s\S]*?\n  \]);\s*\n\s*var moduleDetails/);
   check(Boolean(detailMatch && activeMatch && softMatch && serviceMatch), "index.html 缺少可稽核的模組或依賴資料");
@@ -213,7 +213,14 @@ if (fs.existsSync(indexPath)) {
       check(external.length === 2, "index.html 外部選配服務數量必須是 2");
     }
   }
-  check(/id="soft-overview"/.test(html) && /id="feature-branches-toggle"/.test(html), "index.html 必須提供軟依賴總覽與功能分支按鈕");
+  check(/id="soft-overview"/.test(html) && /id="feature-toggle-buttons"/.test(html), "index.html 必須提供軟依賴總覽與父節點功能按鈕層");
+  check(/function toggleFeatureOwner\(ownerId\)/.test(html)
+    && /data-owner/.test(html)
+    && /啟用此功能時可搭配的軟依賴模組/.test(html),
+  "index.html 父節點功能按鈕必須能散開分支並呈現功能級軟依賴");
+  check((html.match(/addEventListener\("pointerdown"[\s\S]{0,180}?event\.stopPropagation\(\)/g) ?? []).length >= 2,
+    "父節點功能按鈕與功能卡片必須攔截拖曳 pointerdown，避免點擊被總圖拖曳取消");
+  check(!/id="feature-branches-toggle"/.test(html), "index.html 不得保留一次展開全部分支的工具列按鈕");
 }
 
 function walk(directory, relative = "") {
