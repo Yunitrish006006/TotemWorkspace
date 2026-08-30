@@ -2,7 +2,8 @@
 
 TotemWorkspace 是 11 個現役 Totem 模組的公開協作與文件總表。這裡集中保存模組版本快照、依賴契約、開發規範、發布檢查表，以及可互動的統一功能／依賴圖；本 repository 本身不是 Minecraft 模組。
 
-[開啟互動式模組圖](index.html)
+[開啟 GitHub Pages 互動式模組圖](https://yunitrish006006.github.io/TotemWorkspace/)
+｜[直接開啟 repository 內的 HTML](index.html)
 
 在總圖中，每個現役模組父節點都有自己的「功能 ×N」按鈕。按下後會在
 父節點周圍散開該模組的功能分支；再選取功能，即可查看啟用此功能時可
