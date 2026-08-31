@@ -2,6 +2,8 @@
 
 TotemWorkspace 是 11 個現役 Totem 模組的公開協作與文件總表。這裡集中保存模組版本快照、依賴契約、開發規範、發布檢查表，以及可互動的統一功能／依賴圖；本 repository 本身不是 Minecraft 模組。
 
+目前快照日期為 **2026-08-31**。本次新增整理 TotemCore 共用世界輪廓 API、Automata 採集區與容器連線、Excavation 深度遮擋選區，以及 Nexus 的 Server 權威傳送陣方塊診斷；互動圖共有 **58 個**可展開功能分支。
+
 [開啟 GitHub Pages 互動式模組圖](https://yunitrish006006.github.io/TotemWorkspace/)
 ｜[直接開啟 repository 內的 HTML](index.html)
 

@@ -36,13 +36,13 @@ function evaluateLiteral(source, label) {
 
 const expectedModules = [
   ["totem-alchemy", "TotemAlchemy", "0.1.40", "main", "0d90b905d5d53ff8275046ea93572d10a10bd8f2", "TotemAlchemy", ">=0.7.5 <0.8.0"],
-  ["totem-automata", "TotemAutomata", "0.1.18", "master", "dc1f2b10369d96f2ee7e2a4d46d88a416e35c047", "TotemAutomata", ">=0.7.12 <0.8.0"],
-  ["totem-core", "TotemCore", "0.7.12", "master", "270bac834839b2a9dcbf9fe067f6b22d4e6f7851", "TotemCore", null],
+  ["totem-automata", "TotemAutomata", "0.1.20", "master", "23a2cf504a993ca50697c93e335b7513ed070ed2", "TotemAutomata", ">=0.7.14 <0.8.0"],
+  ["totem-core", "TotemCore", "0.7.14", "master", "8407f3ad58c21db03758242a2dea552364b08963", "TotemCore", null],
   ["totem-discord-bridge", "TotemDiscordBridge", "0.1.8", "master", "381ba9f3b0d2bad47a31061abec1981534c6c92c", "TotemDiscordBridge", ">=0.7.0 <0.8.0"],
   ["totem-enchanting", "TotemEnchanting", "0.1.9", "main", "96977007116cd47ca877a6af57f863e87f1b7875", "TotemEnchanting", ">=0.7.0 <0.8.0"],
-  ["totem-excavation", "TotemExcavation", "0.1.8", "master", "1b6f861ff14630d7af7c04ed16a5f9d63910f8bd", "TotemExcavation", ">=0.7.0 <0.8.0"],
+  ["totem-excavation", "TotemExcavation", "0.1.9", "master", "1831c31cfe16ac23392e28fe155e222c510fbae9", "TotemExcavation", ">=0.7.13 <0.8.0"],
   ["totem-locksmith", "TotemLocksmith", "0.1.6", "main", "7b4005028279df31e96d7e8446e4293086595a25", "TotemLocksmith", ">=0.7.12 <0.8.0"],
-  ["totem-nexus", "TotemNexus", "0.3.6", "master", "7cc019a113c9037eaa0f6818b1d7a8a044f90d5f", "TotemNexus", ">=0.7.12 <0.8.0"],
+  ["totem-nexus", "TotemNexus", "0.3.7", "master", "2ac678451a37536ce5ea86c234e6268af37cbc06", "TotemNexus", ">=0.7.13 <0.8.0"],
   ["totem-remnant", "TotemRemnant", "0.2.16", "master", "b7a8479f3d51456cf9be83d645d2c777097ac124", "TotemRemnant", ">=0.7.12 <0.8.0"],
   ["totem-vanilla-tweaks", "TotemVanillaTweaks", "0.1.20", "main", "a6ac2bfe57476a4db9692bca2e6be7687b624ae8", "TotemVanillaTweaks", ">=0.7.12 <0.8.0"],
   ["totem-villagers", "TotemVillagers", "0.1.33", "main", "c32faf6ffd5d9135f68a3915e1dfa7f31d09dad9", "TotemVillagers", ">=0.7.12 <0.8.0"]
@@ -67,7 +67,7 @@ try {
 
 if (data) {
   check(data.schemaVersion === 1, "modules.json schemaVersion 必須是 1");
-  check(data.snapshot?.date === "2026-08-30", "快照日期必須是 2026-08-30");
+  check(data.snapshot?.date === "2026-08-31", "快照日期必須是 2026-08-31");
   check(data.snapshot?.minecraft === "26.2", "Minecraft 基線必須是 26.2");
   check(data.snapshot?.java === 25, "Java 基線必須是 25");
   check(data.snapshot?.publicationStateInferred === false, "不得從原始碼快照推論發布狀態");
@@ -148,6 +148,10 @@ if (data) {
   const nexusProvider = modules.find((module) => module.id === "totem-nexus")?.observerProviders
     .find((provider) => provider.family === "nexus");
   check(sameSet(nexusProvider?.variants ?? [], ["map", "map_legacy", "friends", "friends_legacy", "registration", "registration_legacy"]), "nexus v2 variants 不正確");
+  check(modules.find((module) => module.id === "totem-core")?.featureGroups.includes("無狀態世界輪廓 API"), "TotemCore 快照缺少世界輪廓 API 功能群");
+  check(modules.find((module) => module.id === "totem-automata")?.featureGroups.includes("深度遮擋工作區與容器連線"), "TotemAutomata 快照缺少世界內視覺化功能群");
+  check(modules.find((module) => module.id === "totem-excavation")?.featureGroups.includes("深度遮擋選區輪廓"), "TotemExcavation 快照缺少深度遮擋選區功能群");
+  check(modules.find((module) => module.id === "totem-nexus")?.featureGroups.includes("傳送陣方塊診斷"), "TotemNexus 快照缺少傳送陣方塊診斷功能群");
 
   const events = Array.isArray(audit.eventBusOptionalSubscribers) ? audit.eventBusOptionalSubscribers : [];
   check(events.length === 3 && events.every((entry) => entry.subscriber === "totem-discord-bridge"), "EventBus 選配訂閱關係必須獨立保存 3 組");
@@ -199,7 +203,14 @@ if (fs.existsSync(indexPath)) {
     if (details && activeIds) {
       check(activeIds.length === 11 && new Set(activeIds).size === 11, "index.html 必須恰好包含 11 個現役模組");
       const branchCount = activeIds.reduce((total, id) => total + (details[id]?.branches?.length ?? 0), 0);
-      check(branchCount === 53, "index.html 必須包含 53 個功能分支");
+      check(branchCount === 58, "index.html 必須包含 58 個功能分支");
+      check(details.core?.version === "0.7.14" && details.core.branches.some((branch) => branch.startsWith("世界輪廓 API：")), "index.html TotemCore 版本或世界輪廓分支不正確");
+      check(details.automata?.version === "0.1.20"
+        && details.automata.branches.some((branch) => branch.startsWith("採集區框線："))
+        && details.automata.branches.some((branch) => branch.startsWith("容器連線：")),
+      "index.html TotemAutomata 版本或視覺分支不正確");
+      check(details.excavation?.version === "0.1.9" && details.excavation.branches.some((branch) => branch.startsWith("選區輪廓：")), "index.html TotemExcavation 版本或選區輪廓分支不正確");
+      check(details.nexus?.version === "0.3.7" && details.nexus.branches.some((branch) => branch.startsWith("傳送陣診斷：")), "index.html TotemNexus 版本或傳送陣診斷分支不正確");
       check(Boolean(details.soft_overview) && /軟依賴總覽/.test(details.soft_overview.name), "index.html 必須包含軟依賴總覽");
     }
   }

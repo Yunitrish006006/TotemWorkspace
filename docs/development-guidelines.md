@@ -8,6 +8,7 @@
 - 軟依賴未安裝時必須安全降級。安全與權限 API 若已宣告存在卻無法載入，採 fail closed，避免繞過保護。
 - 所有玩家物品、容器、權限、成本、交易與世界變更由伺服器再次驗證；客戶端只提供意圖與呈現。
 - 實體 AI、掃描、路徑、網路同步及外部呼叫都要有明確上限、共享預算、快取或退避。不得用無界掃描或阻塞 I/O 佔住伺服器 tick。
+- 世界內選區、連線或診斷框線共用 TotemCore 的無狀態 `TotemWorldOutlines` 提交 API；位置、選取、權限、封包、逾時與清除生命週期仍由功能模組擁有，不得搬進 Core。
 
 ## Observer UI 所有權
 
@@ -25,6 +26,7 @@
 ## UI、視覺與文字
 
 - 優先使用原版 Screen、widget、slot、字型、tooltip、narration、音效、焦點順序及整數座標。
+- 世界輪廓必須明確選擇遮擋語意：一般選區／連線用 `DEPTH_TESTED`，只有經核准的診斷用途才可用 `THROUGH_WALLS`；兩種模式都不得傳送 framebuffer、截圖、影片或像素資料。
 - 模組 icon 以共同 16×16 Totem 輪廓與各自 emblem 區分；runtime 64×64 版本只能是 4× nearest-neighbor 放大。
 - 道具與方塊維持原版像素密度、透明背景、整數像素、左上光源與材料語彙；禁止模糊縮放或抗鋸齒邊緣。
 - 不把翻譯文字烘焙進 texture，也不在 Java 或 JSON 畫面模型中硬寫玩家可見句子。使用 language key，並驗證英文與繁體中文的碰撞、裁切與 tooltip。
