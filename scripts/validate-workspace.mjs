@@ -35,17 +35,17 @@ function evaluateLiteral(source, label) {
 }
 
 const expectedModules = [
-  ["totem-alchemy", "TotemAlchemy", "0.1.40", "main", "0d90b905d5d53ff8275046ea93572d10a10bd8f2", "TotemAlchemy", ">=0.7.5 <0.8.0"],
-  ["totem-automata", "TotemAutomata", "0.1.20", "master", "23a2cf504a993ca50697c93e335b7513ed070ed2", "TotemAutomata", ">=0.7.14 <0.8.0"],
-  ["totem-core", "TotemCore", "0.7.14", "master", "8407f3ad58c21db03758242a2dea552364b08963", "TotemCore", null],
-  ["totem-discord-bridge", "TotemDiscordBridge", "0.1.8", "master", "381ba9f3b0d2bad47a31061abec1981534c6c92c", "TotemDiscordBridge", ">=0.7.0 <0.8.0"],
-  ["totem-enchanting", "TotemEnchanting", "0.1.9", "main", "96977007116cd47ca877a6af57f863e87f1b7875", "TotemEnchanting", ">=0.7.0 <0.8.0"],
-  ["totem-excavation", "TotemExcavation", "0.1.9", "master", "1831c31cfe16ac23392e28fe155e222c510fbae9", "TotemExcavation", ">=0.7.13 <0.8.0"],
-  ["totem-locksmith", "TotemLocksmith", "0.1.6", "main", "7b4005028279df31e96d7e8446e4293086595a25", "TotemLocksmith", ">=0.7.12 <0.8.0"],
-  ["totem-nexus", "TotemNexus", "0.3.7", "master", "2ac678451a37536ce5ea86c234e6268af37cbc06", "TotemNexus", ">=0.7.13 <0.8.0"],
-  ["totem-remnant", "TotemRemnant", "0.2.16", "master", "b7a8479f3d51456cf9be83d645d2c777097ac124", "TotemRemnant", ">=0.7.12 <0.8.0"],
-  ["totem-vanilla-tweaks", "TotemVanillaTweaks", "0.1.20", "main", "a6ac2bfe57476a4db9692bca2e6be7687b624ae8", "TotemVanillaTweaks", ">=0.7.12 <0.8.0"],
-  ["totem-villagers", "TotemVillagers", "0.1.33", "main", "c32faf6ffd5d9135f68a3915e1dfa7f31d09dad9", "TotemVillagers", ">=0.7.12 <0.8.0"]
+  ["totem-alchemy", "TotemAlchemy", "0.1.41", "main", "0056a0096dcdb06f03f870edbc9f6b56259a466d", "TotemAlchemy", ">=0.7.15 <0.8.0"],
+  ["totem-automata", "TotemAutomata", "0.1.21", "master", "8c9b90bbffb64f4058ffc7978bad1798e8944779", "TotemAutomata", ">=0.7.14 <0.8.0"],
+  ["totem-core", "TotemCore", "0.7.16", "master", "b0b57bc98a98140a1c12a660a33952ea61167278", "TotemCore", null],
+  ["totem-discord-bridge", "TotemDiscordBridge", "0.1.8", "master", "6ef67ed58ebe3a6b9ee9a4d328c668ab93c17453", "TotemDiscordBridge", ">=0.7.0 <0.8.0"],
+  ["totem-enchanting", "TotemEnchanting", "0.1.9", "main", "17719ec20eed31938107aa069986c32e5ce5b053", "TotemEnchanting", ">=0.7.0 <0.8.0"],
+  ["totem-excavation", "TotemExcavation", "0.1.10", "master", "646f82e5961255dc1b28aee1f800463b55f70002", "TotemExcavation", ">=0.7.13 <0.8.0"],
+  ["totem-locksmith", "TotemLocksmith", "0.1.8", "main", "d73112169e73e717f02ef4a068e5cbd2782eb5e7", "TotemLocksmith", ">=0.7.15 <0.8.0"],
+  ["totem-nexus", "TotemNexus", "0.3.12", "master", "41ba0b2e11b0a5745f8b7ffb9c6d71e45d9288f7", "TotemNexus", ">=0.7.16 <0.8.0"],
+  ["totem-remnant", "TotemRemnant", "0.2.18", "master", "c828f42cee767b98a69d2bebd532b63f322c3b0e", "TotemRemnant", ">=0.7.15 <0.8.0"],
+  ["totem-vanilla-tweaks", "TotemVanillaTweaks", "0.1.21", "main", "5d2d352453ef6abd9f59ddac8b203d7d5c5d87af", "TotemVanillaTweaks", ">=0.7.14 <0.8.0"],
+  ["totem-villagers", "TotemVillagers", "0.1.34", "main", "9798ee3578affc2624edfcfb2343ec7aa95405df", "TotemVillagers", ">=0.7.12 <0.8.0"]
 ].map(([id, name, version, branch, commit, repositoryName, coreDependency]) => ({
   id,
   name,
@@ -67,7 +67,7 @@ try {
 
 if (data) {
   check(data.schemaVersion === 1, "modules.json schemaVersion 必須是 1");
-  check(data.snapshot?.date === "2026-08-31", "快照日期必須是 2026-08-31");
+  check(data.snapshot?.date === "2026-09-02", "快照日期必須是 2026-09-02");
   check(data.snapshot?.minecraft === "26.2", "Minecraft 基線必須是 26.2");
   check(data.snapshot?.java === 25, "Java 基線必須是 25");
   check(data.snapshot?.publicationStateInferred === false, "不得從原始碼快照推論發布狀態");
@@ -204,13 +204,13 @@ if (fs.existsSync(indexPath)) {
       check(activeIds.length === 11 && new Set(activeIds).size === 11, "index.html 必須恰好包含 11 個現役模組");
       const branchCount = activeIds.reduce((total, id) => total + (details[id]?.branches?.length ?? 0), 0);
       check(branchCount === 58, "index.html 必須包含 58 個功能分支");
-      check(details.core?.version === "0.7.14" && details.core.branches.some((branch) => branch.startsWith("世界輪廓 API：")), "index.html TotemCore 版本或世界輪廓分支不正確");
-      check(details.automata?.version === "0.1.20"
+      check(details.core?.version === "0.7.16" && details.core.branches.some((branch) => branch.startsWith("世界輪廓 API：")), "index.html TotemCore 版本或世界輪廓分支不正確");
+      check(details.automata?.version === "0.1.21"
         && details.automata.branches.some((branch) => branch.startsWith("採集區框線："))
         && details.automata.branches.some((branch) => branch.startsWith("容器連線：")),
       "index.html TotemAutomata 版本或視覺分支不正確");
-      check(details.excavation?.version === "0.1.9" && details.excavation.branches.some((branch) => branch.startsWith("選區輪廓：")), "index.html TotemExcavation 版本或選區輪廓分支不正確");
-      check(details.nexus?.version === "0.3.7" && details.nexus.branches.some((branch) => branch.startsWith("傳送陣診斷：")), "index.html TotemNexus 版本或傳送陣診斷分支不正確");
+      check(details.excavation?.version === "0.1.10" && details.excavation.branches.some((branch) => branch.startsWith("選區輪廓：")), "index.html TotemExcavation 版本或選區輪廓分支不正確");
+      check(details.nexus?.version === "0.3.12" && details.nexus.branches.some((branch) => branch.startsWith("傳送陣診斷：")), "index.html TotemNexus 版本或傳送陣診斷分支不正確");
       check(Boolean(details.soft_overview) && /軟依賴總覽/.test(details.soft_overview.name), "index.html 必須包含軟依賴總覽");
     }
   }

@@ -2,7 +2,7 @@
 
 TotemWorkspace 是 11 個現役 Totem 模組的公開協作與文件總表。這裡集中保存模組版本快照、依賴契約、開發規範、發布檢查表，以及可互動的統一功能／依賴圖；本 repository 本身不是 Minecraft 模組。
 
-目前快照日期為 **2026-08-31**。本次新增整理 TotemCore 共用世界輪廓 API、Automata 採集區與容器連線、Excavation 深度遮擋選區，以及 Nexus 的 Server 權威傳送陣方塊診斷；互動圖共有 **58 個**可展開功能分支。
+目前快照日期為 **2026-09-02**。本次整理 11 個現役模組的正式版本，補齊 Totem 物品配方取得進度、Alchemy 可切換的釀造材料自動登錄，以及 Remnant 回聲碎片結晶途徑；互動圖共有 **58 個**可展開功能分支。
 
 [開啟 GitHub Pages 互動式模組圖](https://yunitrish006006.github.io/TotemWorkspace/)
 ｜[直接開啟 repository 內的 HTML](index.html)
@@ -24,7 +24,7 @@ TotemWorkspace 是 11 個現役 Totem 模組的公開協作與文件總表。這
 
 ## 資料更新原則
 
-各功能、畫面與 API 仍由原本的 11 個模組 repository 擁有；本 repository 只統整跨模組事實。版本、預設分支、完整 commit SHA、Fabric 依賴範圍與 Observer protocol 必須從擁有者 repository 重新核對後更新。`current-status.md` 與 `modules.json` 記錄的是原始碼快照，不代表 GitHub Actions 已全綠，也不證明 Modrinth 已發布。
+各功能、畫面與 API 仍由原本的 11 個模組 repository 擁有；本 repository 只統整跨模組事實。版本、預設分支、完整 commit SHA、Fabric 依賴範圍與 Observer protocol 必須從擁有者 repository 重新核對後更新。`current-status.md` 與 `modules.json` 以原始碼快照為主；若另記 CI／Modrinth 狀態，必須附上獨立查驗證據，不從版本號推論。
 
 DeadRecall 已停止維護；僅保留為相容性歷史背景，不列入現役模組或依賴圖。
 

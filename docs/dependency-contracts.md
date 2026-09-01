@@ -6,10 +6,13 @@
 
 除 TotemCore 本身以外，十個現役功能模組都在 `fabric.mod.json` 硬依賴 TotemCore 0.7.x：
 
-- TotemAlchemy：`>=0.7.5 <0.8.0`
+- TotemAlchemy：`>=0.7.15 <0.8.0`（使用共用世界規則分類）
 - TotemAutomata：`>=0.7.14 <0.8.0`（使用共用兩點實線）
-- TotemExcavation、TotemNexus：`>=0.7.13 <0.8.0`（使用共用方塊／長方體輪廓與遮擋模式）
-- TotemLocksmith、TotemRemnant、TotemVanillaTweaks、TotemVillagers：`>=0.7.12 <0.8.0`
+- TotemExcavation：`>=0.7.13 <0.8.0`（使用共用長方體輪廓與遮擋模式）
+- TotemNexus：`>=0.7.16 <0.8.0`（使用共用方塊輪廓與目前死亡節點契約）
+- TotemLocksmith、TotemRemnant：`>=0.7.15 <0.8.0`
+- TotemVanillaTweaks：`>=0.7.14 <0.8.0`
+- TotemVillagers：`>=0.7.12 <0.8.0`
 - TotemDiscordBridge、TotemEnchanting：`>=0.7.0 <0.8.0`
 
 所有模組以 Minecraft 26.2、Java 25、Fabric Loader 0.19.3+ 為共同基線。
