@@ -78,6 +78,10 @@ function externalName(contract, nodeId) {
   return nodeId.replace(/^external:/, "");
 }
 
+function graphTimestamp(knowledge, index) {
+  return index?.generatedAt ?? knowledge.snapshot?.date ?? null;
+}
+
 export function buildCodeDetailGraph({ knowledge = loadKnowledge(), index = loadCodeIndex({ knowledge }) } = {}) {
   const nodes = [];
   const edges = [];
@@ -85,7 +89,7 @@ export function buildCodeDetailGraph({ knowledge = loadKnowledge(), index = load
   if (!index?.fileStates || !index?.chunks) {
     return Object.freeze({
       schemaVersion: 1,
-      generatedAt: new Date().toISOString(),
+      generatedAt: graphTimestamp(knowledge, index),
       sourceIndexGeneratedAt: index?.generatedAt ?? null,
       indexed: false,
       nodes: Object.freeze([]),
@@ -102,8 +106,8 @@ export function buildCodeDetailGraph({ knowledge = loadKnowledge(), index = load
   }
 
   for (const module of knowledge.modules) {
-    const moduleFiles = index.fileStates
-      .filter((file) => file.moduleId === module.id)
+    const moduleFileStates = index.fileStates.filter((file) => file.moduleId === module.id);
+    const moduleFiles = moduleFileStates
       .map((file) => {
         const chunks = chunksByFile.get(`${module.id}\0${file.path}`) ?? [];
         const symbols = uniqueSymbols(chunks);
@@ -178,7 +182,7 @@ export function buildCodeDetailGraph({ knowledge = loadKnowledge(), index = load
 
     moduleStats.push(Object.freeze({
       moduleId: module.id,
-      indexedFiles: index.fileStates.filter((file) => file.moduleId === module.id).length,
+      indexedFiles: moduleFileStates.length,
       visualizedFiles: moduleFiles.length,
       visualizedSymbols: moduleFiles.reduce((sum, entry) => sum + Math.min(SYMBOL_LIMIT_PER_FILE, entry.symbols.length), 0),
       categories: Object.freeze([...categories.keys()])
@@ -187,7 +191,7 @@ export function buildCodeDetailGraph({ knowledge = loadKnowledge(), index = load
 
   return Object.freeze({
     schemaVersion: 1,
-    generatedAt: new Date().toISOString(),
+    generatedAt: graphTimestamp(knowledge, index),
     sourceIndexGeneratedAt: index.generatedAt ?? null,
     indexed: true,
     nodes: Object.freeze(nodes),
@@ -212,7 +216,7 @@ export function buildGraphViewModel({ knowledge = loadKnowledge(), index = loadC
 
   return Object.freeze({
     schemaVersion: 2,
-    generatedAt: new Date().toISOString(),
+    generatedAt: graphTimestamp(knowledge, index),
     snapshot: knowledge.snapshot,
     modules: Object.freeze(knowledge.modules.map((module) => Object.freeze({
       id: module.id,
