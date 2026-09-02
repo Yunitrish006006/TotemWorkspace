@@ -1,7 +1,11 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
+import { buildCodeIndex, refreshCodeIndex, searchCode } from "../intelligence/code-index.mjs";
 import { buildContextPack } from "../intelligence/context-pack.mjs";
 import { graphForModule, knowledgeSummary, loadKnowledge, resolveTask, testPlan } from "../intelligence/workspace-knowledge.mjs";
 
@@ -43,6 +47,54 @@ assert.ok(observerPlan.validationCategories.includes("privacy-redaction"), "Obse
 const pack = buildContextPack("死亡背包跟 Nexus 同步有問題", { audience: "primary", maxTokens: 4000, knowledge });
 assert.ok(pack.modules.some((module) => module.id === "totem-remnant"), "primary context pack must contain the owner module");
 assert.ok(pack.rendered.length > 0, "context pack must render bounded JSON text");
+assert.ok(pack.codeIndex.freshness, "context pack must report code-index freshness state");
+
+function validateIncrementalIndex() {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "totem-intelligence-"));
+  const repoRoot = path.join(tempRoot, "TotemRemnant");
+  const sourceDir = path.join(repoRoot, "src", "main", "java", "dev", "totem", "remnant");
+  const sourceFile = path.join(sourceDir, "IncrementalProbe.java");
+  const indexPath = path.join(tempRoot, "code-index.json");
+
+  try {
+    fs.mkdirSync(sourceDir, { recursive: true });
+    fs.writeFileSync(sourceFile, "package dev.totem.remnant;\npublic final class BeforeRefreshMarker {}\n", "utf8");
+
+    const initial = buildCodeIndex({ knowledge, reposRoot: tempRoot, outputPath: indexPath });
+    assert.equal(initial.schemaVersion, 2, "code index must use schema v2 with per-file freshness metadata");
+    assert.ok(initial.fileStates.some((entry) => entry.moduleId === "totem-remnant" && entry.path.endsWith("IncrementalProbe.java")), "full index must record indexed file state");
+
+    const before = searchCode("BeforeRefreshMarker", {
+      knowledge,
+      modules: ["totem-remnant"],
+      reposRoot: tempRoot,
+      indexPath
+    });
+    assert.ok(before.results.some((result) => result.path.endsWith("IncrementalProbe.java")), "initial code search must find the indexed probe");
+
+    fs.writeFileSync(sourceFile, "package dev.totem.remnant;\npublic final class AfterIncrementalRefreshMarkerWithDifferentSize {}\n", "utf8");
+    const after = searchCode("AfterIncrementalRefreshMarkerWithDifferentSize", {
+      knowledge,
+      modules: ["totem-remnant"],
+      reposRoot: tempRoot,
+      indexPath
+    });
+    assert.equal(after.freshness.mode, "incremental", "search must incrementally refresh a modified selected module before retrieval");
+    assert.ok(after.freshness.refreshedModules.includes("totem-remnant"), "incremental refresh must report the touched module");
+    assert.ok(after.freshness.changedFiles.some((entry) => entry.endsWith("IncrementalProbe.java")), "incremental refresh must report the modified file");
+    assert.ok(after.results.some((result) => result.path.endsWith("IncrementalProbe.java")), "search after edit must retrieve the new file content");
+
+    fs.rmSync(sourceFile);
+    const removed = refreshCodeIndex({ knowledge, reposRoot: tempRoot, indexPath, modules: ["totem-remnant"] });
+    assert.equal(removed.freshness.mode, "incremental", "deleting an indexed file must trigger incremental refresh");
+    assert.ok(removed.freshness.removedFiles.some((entry) => entry.endsWith("IncrementalProbe.java")), "incremental refresh must report deleted indexed files");
+    assert.ok(!removed.index.chunks.some((chunk) => chunk.moduleId === "totem-remnant" && chunk.path.endsWith("IncrementalProbe.java")), "deleted source chunks must be removed from the index");
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+}
+
+validateIncrementalIndex();
 
 async function validateMcpServer() {
   const child = spawn(process.execPath, ["mcp/server.mjs"], {
@@ -88,11 +140,12 @@ async function validateMcpServer() {
       capabilities: {}
     });
     assert.equal(initialized.serverInfo?.name, "totem-workspace-intelligence", "MCP server must identify itself");
+    assert.equal(initialized.serverInfo?.version, "0.2.0", "MCP server version must expose incremental-refresh capability");
     child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} })}\n`);
 
     const listed = await request(2, "tools/list", {});
     const names = (listed.tools ?? []).map((tool) => tool.name);
-    for (const required of ["resolve_task", "search", "context_pack", "impact", "test_plan", "workspace_status"]) {
+    for (const required of ["resolve_task", "search", "context_pack", "impact", "test_plan", "workspace_status", "refresh_index"]) {
       assert.ok(names.includes(required), `MCP tool list must include ${required}`);
     }
 
@@ -109,4 +162,4 @@ async function validateMcpServer() {
 }
 
 await validateMcpServer();
-console.log(`Totem workspace intelligence validation passed: ${summary.moduleCount} modules, ${summary.featureCount} features, ${summary.contractCount} contracts.`);
+console.log(`Totem workspace intelligence validation passed: ${summary.moduleCount} modules, ${summary.featureCount} features, ${summary.contractCount} contracts; incremental index refresh passed.`);
