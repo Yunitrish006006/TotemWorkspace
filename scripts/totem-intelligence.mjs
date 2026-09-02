@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { buildCodeIndex, searchCode } from "../intelligence/code-index.mjs";
+import { buildCodeIndex, refreshCodeIndex, searchCode } from "../intelligence/code-index.mjs";
 import { buildContextPack } from "../intelligence/context-pack.mjs";
 import { defaultReposRoot, graphForModule, impactAnalysis, knowledgeSummary, loadKnowledge, resolveTask, testPlan, workspaceStatus } from "../intelligence/workspace-knowledge.mjs";
 
@@ -14,6 +14,7 @@ function print(value) {
 
 const [command, ...args] = process.argv.slice(2);
 const knowledge = loadKnowledge();
+const reposRoot = defaultReposRoot(knowledge.root);
 
 switch (command) {
   case "summary":
@@ -28,7 +29,7 @@ switch (command) {
   case "search": {
     const query = args[0] ?? "";
     const modules = parseList(args[1]);
-    print(searchCode(query, { knowledge, modules, limit: Number(args[2] || 12) }));
+    print(searchCode(query, { knowledge, modules, limit: Number(args[2] || 12), reposRoot }));
     break;
   }
   case "context": {
@@ -46,11 +47,22 @@ switch (command) {
     print(testPlan({ query: args[0] ?? "", changedModules: parseList(args[1]), changedFiles: parseList(args[2]) }, knowledge));
     break;
   case "status":
-    print(workspaceStatus({ knowledge, reposRoot: defaultReposRoot(knowledge.root) }));
+    print(workspaceStatus({ knowledge, reposRoot }));
     break;
   case "build-index": {
-    const index = buildCodeIndex({ knowledge, reposRoot: defaultReposRoot(knowledge.root) });
-    print({ generatedAt: index.generatedAt, chunks: index.chunks.length, modules: index.modules });
+    const index = buildCodeIndex({ knowledge, reposRoot });
+    print({ generatedAt: index.generatedAt, schemaVersion: index.schemaVersion, chunks: index.chunks.length, modules: index.modules });
+    break;
+  }
+  case "refresh-index": {
+    const modules = parseList(args[0]);
+    const refreshed = refreshCodeIndex({ knowledge, reposRoot, modules });
+    print({
+      generatedAt: refreshed.index.generatedAt,
+      schemaVersion: refreshed.index.schemaVersion,
+      chunks: refreshed.index.chunks.length,
+      freshness: refreshed.freshness
+    });
     break;
   }
   default:
@@ -63,6 +75,7 @@ switch (command) {
   node scripts/totem-intelligence.mjs impact "<file1,file2>" "<module1,module2>"
   node scripts/totem-intelligence.mjs test-plan "<task>" "<module1,module2>" "<file1,file2>"
   node scripts/totem-intelligence.mjs status
-  node scripts/totem-intelligence.mjs build-index`);
+  node scripts/totem-intelligence.mjs build-index
+  node scripts/totem-intelligence.mjs refresh-index [module1,module2]`);
     process.exitCode = 2;
 }
