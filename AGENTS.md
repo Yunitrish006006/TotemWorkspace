@@ -34,15 +34,25 @@ the 11 active Totem repositories. It is not a Minecraft mod.
 - Live sibling-repository source wins for implementation details when it is
   newer than the recorded snapshot. The workspace snapshot still defines the
   documented cross-module contract until deliberately refreshed.
-- `graph-v2.html` is a generated presentation artifact. Its curated architecture
-  data must come from the same validated knowledge engine, while generated code
-  detail may contain only factual indexed metadata such as relative source paths,
-  test files, deterministic categories, and symbol names. It must not contain
-  source bodies or infer new dependency contracts.
-- Normal MCP/CLI `impact` and index-refresh paths may regenerate `graph-v2.html`
-  after source changes. Rendering is best-effort: viewer failure must never turn
-  a successful RAG refresh, impact analysis, test plan, build, or test into a
-  failure.
+
+## V2 viewer isolation rules
+
+- `graph-v2.html` is a static renderer shell and must contain no module, feature,
+  contract, file, symbol, or code-index data. Do not embed a JSON snapshot or an
+  inline graph-data script in the HTML.
+- `viewer/graph-v2.css`, `viewer/graph-v2-adapter.js`, and
+  `viewer/graph-v2.js` are presentation code. Normal workspace/code updates must
+  not rewrite them.
+- `viewer/generated/graph-data.js` is the only generated V2 data artifact. It is
+  produced by `scripts/render-graph-v2.mjs` from validated workspace knowledge
+  plus factual local index metadata. Do not hand-edit it.
+- Generated code detail may contain only factual indexed metadata such as
+  relative source paths, test files, deterministic categories, and symbol names.
+  It must not contain source bodies or infer new dependency contracts.
+- Normal MCP/CLI `impact` and index-refresh paths may regenerate only the V2 data
+  artifact after source changes. Generation is best-effort: viewer-data failure
+  must never turn a successful RAG refresh, impact analysis, test plan, build, or
+  test into a failure.
 
 ## Observer and visual rules
 
@@ -57,7 +67,8 @@ the 11 active Totem repositories. It is not a Minecraft mod.
 - V2 2D overview routing should be layered and predominantly left-to-right;
   unavoidable reverse semantic edges should use separate rails instead of
   cutting back through the main dependency tree.
-- V2 3D is presentation-only. It must remain self-contained, must not become a
-  source of truth, and must not be required by MCP, RAG, validation, or CI.
+- V2 3D is presentation-only. It reads the same generated view model, must not
+  become a source of truth, and must not be required by MCP, RAG, validation, or
+  CI correctness.
 - Visual changes must follow the workspace Totem art-direction rules and be
   checked at desktop and mobile sizes.
