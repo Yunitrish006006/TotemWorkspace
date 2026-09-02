@@ -20,3 +20,5 @@ jobs:
           node-version: "22"
       - name: Validate coordination snapshot
         run: node scripts/validate-workspace.mjs
+      - name: Validate workspace intelligence
+        run: node scripts/validate-intelligence.mjs
