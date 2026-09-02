@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline'">
+<title>TOTEM Architecture V2｜等待本機生成</title>
+<style>
+:root{color-scheme:dark}*{box-sizing:border-box}html,body{width:100%;height:100%;margin:0}body{display:grid;place-items:center;padding:24px;background:radial-gradient(circle at 40% 20%,#102840 0,#07111e 38%,#050c16 80%);color:#edf6ff;font-family:"Noto Sans TC","Microsoft JhengHei",system-ui,sans-serif}.card{width:min(760px,100%);padding:28px;border:1px solid #2d435c;border-radius:18px;background:#081523e8;box-shadow:0 24px 70px #0008}h1{margin:0 0 10px;font-size:clamp(24px,5vw,40px)}p{color:#b8c9da;line-height:1.7}.flow{margin:22px 0;padding:16px;border-left:4px solid #34d399;background:#0d2030;color:#d8f7e9;font:600 14px/1.8 ui-monospace,SFMono-Regular,Menlo,monospace;white-space:pre-wrap}.note{padding:12px;border:1px solid #334155;border-radius:10px;color:#9db1c6;font-size:13px}.pill{display:inline-block;margin-top:8px;padding:5px 9px;border:1px solid #22d3ee;border-radius:999px;color:#a5f3fc;font-size:12px}
+</style>
+</head>
+<body>
+<main class="card">
+<h1>TOTEM Architecture V2</h1>
+<p>這是安全的 bootstrap 頁面，不內嵌另一份手工 dependency graph。正式 V2 由現有 validated architecture knowledge 與本機 code index 自動產生。</p>
+<div class="flow">node scripts/totem-intelligence.mjs build-index
+        ↓
+incremental code index
+        ↓
+render graph-v2.html
+        ↓
+2D layered tree + factual code detail + isolated 3D preview</div>
+<p>之後正常 Codex 開發會在 <code>impact</code> 更新 touched modules 後自動重新產生此檔。若 viewer 生成失敗，只回報 warning，不會讓 MCP、RAG、impact、test plan 或 Gradle/GameTest 失敗。</p>
+<div class="note">Generated layer 僅允許實際 file path、test file、symbol 名稱與 deterministic category；它不能新增或改寫 hard dependency、runtime optional、EventBus、Observer ownership/protocol 等 curated contract。</div>
+<span class="pill">3D = presentation only</span>
+</main>
+</body>
+</html>
