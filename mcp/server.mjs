@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 import readline from "node:readline";
-import { buildCodeIndex, refreshCodeIndex, searchCode } from "../intelligence/code-index.mjs";
+import { buildCodeIndex, loadCodeIndex, refreshCodeIndex, searchCode } from "../intelligence/code-index.mjs";
 import { buildContextPack } from "../intelligence/context-pack.mjs";
 import { defaultReposRoot, graphForModule, impactAnalysis, knowledgeSummary, loadKnowledge, resolveTask, testPlan, workspaceStatus } from "../intelligence/workspace-knowledge.mjs";
+import { renderGraphV2 } from "../scripts/render-graph-v2.mjs";
 
 const SERVER_NAME = "totem-workspace-intelligence";
-const SERVER_VERSION = "0.2.0";
+const SERVER_VERSION = "0.3.0";
 
 function jsonSchema(properties, required = []) {
   return { type: "object", additionalProperties: false, properties, required };
@@ -47,7 +48,7 @@ const TOOLS = Object.freeze([
   },
   {
     name: "impact",
-    description: "Analyze changed files/modules against the Totem dependency graph and proactively refresh code-index chunks for directly touched modules before review/validation.",
+    description: "Analyze changed files/modules against the Totem dependency graph, refresh directly touched code-index chunks, and regenerate the non-authoritative V2 visualization without letting viewer failures block automation.",
     inputSchema: jsonSchema({
       changed_files: { type: "array", items: { type: "string" }, default: [] },
       changed_modules: { type: "array", items: { type: "string" }, default: [] }
@@ -69,7 +70,7 @@ const TOOLS = Object.freeze([
   },
   {
     name: "refresh_index",
-    description: "Incrementally refresh selected modules in the local code index, or force a complete rebuild. Normal search/context_pack/impact flows already refresh automatically.",
+    description: "Incrementally refresh selected modules in the local code index, or force a complete rebuild. Successful refreshes also regenerate graph-v2.html; visualization failures are reported but do not fail the index operation.",
     inputSchema: jsonSchema({
       modules: { type: "array", items: { type: "string" }, default: [] },
       force_full: { type: "boolean", default: false }
@@ -96,22 +97,58 @@ function toolError(error) {
   return { content: [{ type: "text", text: message }], isError: true };
 }
 
+function graphError(error) {
+  return Object.freeze({
+    status: "warning",
+    regenerated: false,
+    message: error instanceof Error ? error.message : String(error)
+  });
+}
+
+function safeRenderGraph(knowledge, index = loadCodeIndex({ knowledge })) {
+  try {
+    const rendered = renderGraphV2({ knowledge, index });
+    return Object.freeze({
+      status: "ok",
+      regenerated: true,
+      output: "graph-v2.html",
+      generatedAt: rendered.generatedAt,
+      codeIndexed: rendered.codeIndexed,
+      codeNodes: rendered.codeNodes,
+      codeEdges: rendered.codeEdges
+    });
+  } catch (error) {
+    return graphError(error);
+  }
+}
+
 function safeRefresh(knowledge, modules) {
   try {
-    return refreshCodeIndex({
+    const refreshed = refreshCodeIndex({
       knowledge,
       reposRoot: defaultReposRoot(knowledge.root),
       modules
-    }).freshness;
+    });
+    return {
+      freshness: refreshed.freshness,
+      graphPreview: safeRenderGraph(knowledge, refreshed.index)
+    };
   } catch (error) {
     return {
-      mode: "error",
-      reason: "refresh-failed",
-      checkedModules: modules,
-      refreshedModules: [],
-      changedFiles: [],
-      removedFiles: [],
-      message: error instanceof Error ? error.message : String(error)
+      freshness: {
+        mode: "error",
+        reason: "refresh-failed",
+        checkedModules: modules,
+        refreshedModules: [],
+        changedFiles: [],
+        removedFiles: [],
+        message: error instanceof Error ? error.message : String(error)
+      },
+      graphPreview: Object.freeze({
+        status: "skipped",
+        regenerated: false,
+        message: "Code-index refresh failed; V2 graph regeneration was skipped."
+      })
     };
   }
 }
@@ -123,20 +160,30 @@ function callTool(name, args = {}) {
       return resolveTask(args.query, knowledge);
     case "graph":
       return graphForModule(args.module_id, { depth: args.depth ?? 1, knowledge });
-    case "search":
-      return searchCode(args.query, { knowledge, modules: args.modules ?? [], limit: args.limit ?? 12 });
-    case "context_pack":
-      return buildContextPack(args.query, {
+    case "search": {
+      const result = searchCode(args.query, { knowledge, modules: args.modules ?? [], limit: args.limit ?? 12 });
+      if (result.freshness && result.freshness.mode !== "fresh") {
+        return { ...result, graphPreview: safeRenderGraph(knowledge) };
+      }
+      return result;
+    }
+    case "context_pack": {
+      const pack = buildContextPack(args.query, {
         knowledge,
         audience: args.audience ?? "primary",
         moduleId: args.module_id ?? null,
         maxTokens: args.max_tokens ?? 8000,
         includeCode: args.include_code !== false
       });
+      if (pack.codeIndex?.freshness && pack.codeIndex.freshness.mode !== "fresh") {
+        return { ...pack, graphPreview: safeRenderGraph(knowledge) };
+      }
+      return pack;
+    }
     case "impact": {
       const impact = impactAnalysis({ changedFiles: args.changed_files ?? [], changedModules: args.changed_modules ?? [] }, knowledge);
-      const indexRefresh = safeRefresh(knowledge, impact.touchedModules);
-      return { ...impact, indexRefresh };
+      const refreshed = safeRefresh(knowledge, impact.touchedModules);
+      return { ...impact, indexRefresh: refreshed.freshness, graphPreview: refreshed.graphPreview };
     }
     case "test_plan":
       return testPlan({ query: args.query ?? "", changedModules: args.changed_modules ?? [], changedFiles: args.changed_files ?? [] }, knowledge);
@@ -156,7 +203,8 @@ function callTool(name, args = {}) {
             refreshedModules: index.modules.filter((module) => module.present).map((module) => module.id),
             changedFiles: null,
             removedFiles: null
-          }
+          },
+          graphPreview: safeRenderGraph(knowledge, index)
         };
       }
       const refreshed = refreshCodeIndex({
@@ -168,7 +216,8 @@ function callTool(name, args = {}) {
         generatedAt: refreshed.index.generatedAt,
         chunks: refreshed.index.chunks.length,
         modules: refreshed.index.modules,
-        freshness: refreshed.freshness
+        freshness: refreshed.freshness,
+        graphPreview: safeRenderGraph(knowledge, refreshed.index)
       };
     }
     case "summary":
