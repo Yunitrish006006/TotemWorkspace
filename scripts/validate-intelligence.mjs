@@ -99,6 +99,7 @@ function validateIncrementalIndex() {
 function validateV2Graph() {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "totem-graph-v2-"));
   const outputPath = path.join(tempRoot, "graph-v2.html");
+  const outputPath2 = path.join(tempRoot, "graph-v2-repeat.html");
   const sourceBodyMarker = "SOURCE_BODY_MUST_NEVER_APPEAR_IN_GRAPH_VIEW_MODEL";
   const syntheticIndex = {
     schemaVersion: 2,
@@ -140,21 +141,28 @@ function validateV2Graph() {
     assert.equal(model.modules.length, 11, "V2 view model must retain all 11 validated modules");
     assert.equal(model.features.length, 58, "V2 view model must retain all 58 curated feature branches");
     assert.equal(model.contracts.length, 32, "V2 view model must retain all 32 validated contracts");
+    assert.equal(model.generatedAt, syntheticIndex.generatedAt, "V2 generated timestamp must follow the source index instead of changing on every render");
     assert.ok(model.code.nodes.some((node) => node.type === "code-file" && node.path.endsWith("GeneratedGraphProbeApi.java")), "V2 generated detail must expose factual source-file metadata");
     assert.ok(model.code.nodes.some((node) => node.type === "code-symbol" && node.label === "GeneratedGraphProbeApi"), "V2 generated detail must expose factual indexed symbols");
     assert.ok(model.code.nodes.some((node) => node.type === "code-category" && node.category === "api"), "V2 generated detail must classify API source without redefining architecture contracts");
     assert.ok(!JSON.stringify(model).includes(sourceBodyMarker), "V2 graph view model must never expose indexed source text");
 
     const rendered = renderGraphV2({ knowledge, index: syntheticIndex, outputPath });
+    renderGraphV2({ knowledge, index: syntheticIndex, outputPath: outputPath2 });
     const html = fs.readFileSync(outputPath, "utf8");
+    const htmlRepeated = fs.readFileSync(outputPath2, "utf8");
     assert.equal(rendered.modules, 11, "V2 renderer must report 11 modules");
+    assert.equal(htmlRepeated, html, "Rendering an unchanged index twice must be deterministic and must not create timestamp-only Git churn");
     assert.ok(html.includes("TOTEM Architecture V2"), "V2 renderer must emit the layered architecture viewer");
     assert.ok(html.includes("3D 預覽"), "V2 viewer must expose the optional 3D preview control");
     assert.ok(html.includes("3D 僅是展示層，不參與 MCP/RAG/驗證"), "V2 viewer must state the 3D isolation boundary");
     assert.ok(!html.includes("__TOTEM_GRAPH_DATA__"), "V2 renderer must replace the data placeholder");
     assert.ok(!html.includes(sourceBodyMarker), "V2 HTML must not contain code-index source bodies");
     assert.ok(!/<script[^>]+src=|<link[^>]+href=/i.test(html), "V2 viewer must be self-contained without external CDN scripts or styles");
-    assert.ok(html.includes("function monotonicPath"), "V2 2D viewer must use the monotonic/rail edge router to reduce backward-growing lines");
+    assert.ok(html.includes("function overviewPath"), "V2 2D viewer must use the layered rail router to reduce backward-growing lines");
+    const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/i);
+    assert.ok(scriptMatch, "V2 viewer must contain one self-contained inline script");
+    assert.doesNotThrow(() => new Function(scriptMatch[1]), "V2 inline viewer JavaScript must parse successfully");
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }
