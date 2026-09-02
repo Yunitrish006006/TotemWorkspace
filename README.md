@@ -18,9 +18,24 @@ TotemWorkspace 是 11 個現役 Totem 模組的公開協作與文件總表。這
 - [模組總表](docs/module-catalog.md)
 - [依賴與軟整合契約](docs/dependency-contracts.md)
 - [開發注意事項](docs/development-guidelines.md)
+- [Codex Workspace Intelligence](docs/codex-intelligence.md)
 - [發布檢查表](docs/release-checklist.md)
 - [目前原始碼狀態](docs/current-status.md)
 - [機器可讀快照](data/modules.json)
+
+## Codex Workspace Intelligence
+
+本 repository 同時提供一層給 Codex／CodexDiscord 使用的 **graph-first workspace RAG**。它不另外維護第三份依賴圖，而是直接從已驗證的 `index.html` 與 `data/modules.json` 導出 11 個模組、58 個功能分支、硬依賴、Fabric `suggests`、runtime optional、EventBus、外部服務與 Observer provider 關係。
+
+V1 使用本機 lexical／symbol code index，不需要 embedding、向量資料庫或外部 API。主模型可先用 MCP 的 `resolve_task` 與 `context_pack` 縮小模組與契約範圍，再把 implementation、探索與 review 分配給 bounded subagents；修改後則使用 `impact` 與 `test_plan` 決定需回看哪些 sibling modules。
+
+```sh
+node scripts/totem-intelligence.mjs resolve "死亡背包跟 Nexus 同步有問題"
+node scripts/totem-intelligence.mjs build-index
+node scripts/totem-intelligence.mjs context "銅魁儡背包防巢狀" primary
+```
+
+本機 index 只寫入 `.totem-index/`，不進 Git。MCP、Codex Skill、CodexDiscord 設定方式見 [Codex Workspace Intelligence](docs/codex-intelligence.md)。
 
 ## 資料更新原則
 
@@ -32,6 +47,7 @@ DeadRecall 已停止維護；僅保留為相容性歷史背景，不列入現役
 
 ```sh
 node scripts/validate-workspace.mjs
+node scripts/validate-intelligence.mjs
 ```
 
 驗證器不需要安裝 npm 套件，使用 Node.js 22 即可。
