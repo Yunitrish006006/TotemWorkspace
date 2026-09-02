@@ -92,7 +92,7 @@ export function buildContextPack(query, { audience = "primary", moduleId = null,
       modules: selectedModuleIds,
       limit: audience === "primary" ? 6 : audience === "reviewer" ? 10 : 16
     })
-    : { indexed: false, results: [] };
+    : { indexed: false, freshness: null, results: [] };
 
   const pack = {
     schemaVersion: 1,
@@ -111,15 +111,17 @@ export function buildContextPack(query, { audience = "primary", moduleId = null,
     codeIndex: {
       indexed: code.indexed,
       generatedAt: code.generatedAt ?? null,
+      freshness: code.freshness ?? null,
       message: code.message ?? null
     },
     codeResults: pruneCodeResults(code.results ?? [], audience),
     operatingRules: [
+      "Code retrieval automatically checks the selected modules for local source changes and incrementally refreshes changed file chunks before search.",
       "Use live repository source for implementation details when it differs from the TotemWorkspace snapshot.",
       "Use TotemWorkspace graph/contracts as the cross-module architecture source of truth.",
       "Do not broaden repository-wide reads before using this narrowed context unless evidence requires it.",
       "For shared contract changes, stabilize the contract before parallel module implementation.",
-      "After edits, run impact analysis and the returned validation categories."
+      "After edits, run impact analysis; the MCP impact path refreshes touched module index chunks before validation/review."
     ]
   };
 
