@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import { spawn } from "node:child_process";
+import { createInterface } from "node:readline";
 import { buildContextPack } from "../intelligence/context-pack.mjs";
 import { graphForModule, knowledgeSummary, loadKnowledge, resolveTask, testPlan } from "../intelligence/workspace-knowledge.mjs";
 
@@ -39,4 +41,69 @@ const pack = buildContextPack("死亡背包跟 Nexus 同步有問題", { audienc
 assert.ok(pack.modules.some((module) => module.id === "totem-remnant"), "primary context pack must contain the owner module");
 assert.ok(pack.rendered.length > 0, "context pack must render bounded JSON text");
 
+async function validateMcpServer() {
+  const child = spawn(process.execPath, ["mcp/server.mjs"], {
+    cwd: knowledge.root,
+    env: { ...process.env, TOTEM_WORKSPACE_ROOT: knowledge.root },
+    stdio: ["pipe", "pipe", "pipe"]
+  });
+  const lines = createInterface({ input: child.stdout, crlfDelay: Infinity });
+  const pending = new Map();
+  let stderr = "";
+  child.stderr.on("data", (chunk) => { stderr += chunk; });
+  lines.on("line", (line) => {
+    let message;
+    try {
+      message = JSON.parse(line);
+    } catch {
+      return;
+    }
+    const waiter = pending.get(String(message.id));
+    if (!waiter) return;
+    pending.delete(String(message.id));
+    if (message.error) waiter.reject(new Error(message.error.message));
+    else waiter.resolve(message.result);
+  });
+
+  const request = (id, method, params = undefined) => new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      pending.delete(String(id));
+      reject(new Error(`MCP ${method} timed out${stderr ? `: ${stderr.trim()}` : ""}`));
+    }, 5000);
+    timer.unref();
+    pending.set(String(id), {
+      resolve: (value) => { clearTimeout(timer); resolve(value); },
+      reject: (error) => { clearTimeout(timer); reject(error); }
+    });
+    child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", id, method, ...(params === undefined ? {} : { params }) })}\n`);
+  });
+
+  try {
+    const initialized = await request(1, "initialize", {
+      protocolVersion: "2025-06-18",
+      clientInfo: { name: "TotemWorkspace validation", version: "1" },
+      capabilities: {}
+    });
+    assert.equal(initialized.serverInfo?.name, "totem-workspace-intelligence", "MCP server must identify itself");
+    child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} })}\n`);
+
+    const listed = await request(2, "tools/list", {});
+    const names = (listed.tools ?? []).map((tool) => tool.name);
+    for (const required of ["resolve_task", "search", "context_pack", "impact", "test_plan", "workspace_status"]) {
+      assert.ok(names.includes(required), `MCP tool list must include ${required}`);
+    }
+
+    const called = await request(3, "tools/call", {
+      name: "resolve_task",
+      arguments: { query: "死亡背包跟 Nexus 同步" }
+    });
+    assert.equal(called.isError, false, "MCP resolve_task call must succeed");
+    assert.ok(called.structuredContent?.modules?.some((module) => module.id === "totem-remnant"), "MCP resolve_task must return TotemRemnant");
+  } finally {
+    lines.close();
+    if (!child.killed) child.kill("SIGTERM");
+  }
+}
+
+await validateMcpServer();
 console.log(`Totem workspace intelligence validation passed: ${summary.moduleCount} modules, ${summary.featureCount} features, ${summary.contractCount} contracts.`);
