@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 import readline from "node:readline";
-import { buildCodeIndex, searchCode } from "../intelligence/code-index.mjs";
+import { buildCodeIndex, refreshCodeIndex, searchCode } from "../intelligence/code-index.mjs";
 import { buildContextPack } from "../intelligence/context-pack.mjs";
 import { defaultReposRoot, graphForModule, impactAnalysis, knowledgeSummary, loadKnowledge, resolveTask, testPlan, workspaceStatus } from "../intelligence/workspace-knowledge.mjs";
 
 const SERVER_NAME = "totem-workspace-intelligence";
-const SERVER_VERSION = "0.1.0";
+const SERVER_VERSION = "0.2.0";
 
 function jsonSchema(properties, required = []) {
   return { type: "object", additionalProperties: false, properties, required };
@@ -27,7 +27,7 @@ const TOOLS = Object.freeze([
   },
   {
     name: "search",
-    description: "Search the local code index after graph narrowing. The index is local-only and can be refreshed with refresh_index.",
+    description: "Search the local code index after graph narrowing. Before searching, the selected modules are checked for source changes and changed file chunks are incrementally refreshed.",
     inputSchema: jsonSchema({
       query: { type: "string", minLength: 1 },
       modules: { type: "array", items: { type: "string" }, default: [] },
@@ -36,7 +36,7 @@ const TOOLS = Object.freeze([
   },
   {
     name: "context_pack",
-    description: "Build a bounded task-specific context pack for the primary coordinator, a module worker, or a reviewer. Use this instead of repository-wide reads when possible.",
+    description: "Build a bounded task-specific context pack for the primary coordinator, a module worker, or a reviewer. Code retrieval automatically refreshes changed chunks in the selected modules.",
     inputSchema: jsonSchema({
       query: { type: "string", minLength: 1 },
       audience: { type: "string", enum: ["primary", "worker", "reviewer"], default: "primary" },
@@ -47,7 +47,7 @@ const TOOLS = Object.freeze([
   },
   {
     name: "impact",
-    description: "Analyze changed files/modules against the Totem dependency graph to identify affected sibling modules, contracts, risks, and review needs.",
+    description: "Analyze changed files/modules against the Totem dependency graph and proactively refresh code-index chunks for directly touched modules before review/validation.",
     inputSchema: jsonSchema({
       changed_files: { type: "array", items: { type: "string" }, default: [] },
       changed_modules: { type: "array", items: { type: "string" }, default: [] }
@@ -69,8 +69,11 @@ const TOOLS = Object.freeze([
   },
   {
     name: "refresh_index",
-    description: "Rebuild the local .totem-index code chunks from sibling Totem repositories. Use after substantial source changes or when search reports a missing/stale index.",
-    inputSchema: jsonSchema({})
+    description: "Incrementally refresh selected modules in the local code index, or force a complete rebuild. Normal search/context_pack/impact flows already refresh automatically.",
+    inputSchema: jsonSchema({
+      modules: { type: "array", items: { type: "string" }, default: [] },
+      force_full: { type: "boolean", default: false }
+    })
   },
   {
     name: "summary",
@@ -93,6 +96,26 @@ function toolError(error) {
   return { content: [{ type: "text", text: message }], isError: true };
 }
 
+function safeRefresh(knowledge, modules) {
+  try {
+    return refreshCodeIndex({
+      knowledge,
+      reposRoot: defaultReposRoot(knowledge.root),
+      modules
+    }).freshness;
+  } catch (error) {
+    return {
+      mode: "error",
+      reason: "refresh-failed",
+      checkedModules: modules,
+      refreshedModules: [],
+      changedFiles: [],
+      removedFiles: [],
+      message: error instanceof Error ? error.message : String(error)
+    };
+  }
+}
+
 function callTool(name, args = {}) {
   const knowledge = load();
   switch (name) {
@@ -110,15 +133,43 @@ function callTool(name, args = {}) {
         maxTokens: args.max_tokens ?? 8000,
         includeCode: args.include_code !== false
       });
-    case "impact":
-      return impactAnalysis({ changedFiles: args.changed_files ?? [], changedModules: args.changed_modules ?? [] }, knowledge);
+    case "impact": {
+      const impact = impactAnalysis({ changedFiles: args.changed_files ?? [], changedModules: args.changed_modules ?? [] }, knowledge);
+      const indexRefresh = safeRefresh(knowledge, impact.touchedModules);
+      return { ...impact, indexRefresh };
+    }
     case "test_plan":
       return testPlan({ query: args.query ?? "", changedModules: args.changed_modules ?? [], changedFiles: args.changed_files ?? [] }, knowledge);
     case "workspace_status":
       return workspaceStatus({ knowledge, reposRoot: defaultReposRoot(knowledge.root) });
     case "refresh_index": {
-      const index = buildCodeIndex({ knowledge, reposRoot: defaultReposRoot(knowledge.root) });
-      return { generatedAt: index.generatedAt, chunks: index.chunks.length, modules: index.modules };
+      if (args.force_full === true) {
+        const index = buildCodeIndex({ knowledge, reposRoot: defaultReposRoot(knowledge.root) });
+        return {
+          generatedAt: index.generatedAt,
+          chunks: index.chunks.length,
+          modules: index.modules,
+          freshness: {
+            mode: "full",
+            reason: "forced",
+            checkedModules: knowledge.modules.map((module) => module.id),
+            refreshedModules: index.modules.filter((module) => module.present).map((module) => module.id),
+            changedFiles: null,
+            removedFiles: null
+          }
+        };
+      }
+      const refreshed = refreshCodeIndex({
+        knowledge,
+        reposRoot: defaultReposRoot(knowledge.root),
+        modules: args.modules ?? []
+      });
+      return {
+        generatedAt: refreshed.index.generatedAt,
+        chunks: refreshed.index.chunks.length,
+        modules: refreshed.index.modules,
+        freshness: refreshed.freshness
+      };
     }
     case "summary":
       return knowledgeSummary(knowledge);
