@@ -8,7 +8,7 @@ TotemWorkspace 是 11 個現役 Totem 模組的公開協作與文件總表。這
 ｜[Curated HTML](index.html)
 ｜[V2 分層／3D 圖](graph-v2.html)
 
-`index.html` 目前仍是經驗證的 curated 架構來源；`graph-v2.html` 是由相同架構資料加上本機 code index 自動產生的展示層。V2 不建立第三份人工 dependency graph。
+`index.html` 目前仍是經驗證的 curated 架構來源。V2 則拆成純 renderer 與獨立 generated data：`graph-v2.html` 本身不保存任何 module／feature／contract／code-index 資料；資料只存在 `viewer/generated/graph-data.js`，並由同一套 validated knowledge + 本機 code index 產生，因此不建立第三份人工 dependency graph。
 
 ![Totem 模組功能與依賴圖預覽](docs/images/dependency-graph.png)
 
@@ -38,12 +38,22 @@ node scripts/totem-intelligence.mjs context "銅魁儡背包防巢狀" primary
 
 ## 自動 V2 架構圖
 
-V2 把架構與程式碼細節分開：
+V2 把 renderer 與資料完全分離：
+
+```text
+graph-v2.html                 # 純 HTML shell，沒有架構資料
+viewer/graph-v2.css           # 畫面樣式
+viewer/graph-v2-adapter.js    # architecture-only fallback adapter
+viewer/graph-v2.js            # 2D / 3D renderer
+viewer/generated/graph-data.js# 唯一自動更新的資料檔
+```
+
+資料層再分成：
 
 - **Curated 層**：11 modules、58 features、32 contracts，仍由原有驗證過的 Workspace 資料決定。
 - **Generated code-detail 層**：由 `.totem-index` 中實際存在的 file path、test file、symbol 名稱產生；不包含 source body，也不能新增或改寫 dependency contract。
 - **2D 分層模式**：主幹採 left-to-right 排列；必須回指較早層的 Observer／EventBus／runtime 關係會改走 rail，減少線條往回穿過主樹。
-- **3D 預覽模式**：純 Canvas 展示，不載入外部 CDN，也不參與 MCP、RAG、impact、test plan 或 CI correctness。
+- **3D 預覽模式**：純 Canvas 展示，只讀同一份 view model，不載入外部 CDN，也不參與 MCP、RAG、impact、test plan 或 CI correctness。
 
 一般修改完成後的流程：
 
@@ -51,17 +61,19 @@ V2 把架構與程式碼細節分開：
 implementation
   -> impact
       -> incremental RAG refresh
-      -> regenerate graph-v2.html (best effort)
+      -> regenerate viewer/generated/graph-data.js (best effort)
   -> test_plan
   -> reviewer
   -> Gradle / GameTest
 ```
 
-如果 V2 viewer 產生失敗，只會回報 warning；不能讓原本成功的 `impact` 或 code-index refresh 失敗。需要手動重建時：
+正常 code/architecture 資料更新不會改寫 HTML、CSS 或 renderer JS。需要手動重建 generated data 時：
 
 ```sh
 node scripts/totem-intelligence.mjs render-graph
 ```
+
+如果 V2 data generation 失敗，只會回報 warning；不能讓原本成功的 `impact` 或 code-index refresh 失敗。
 
 ## 資料更新原則
 
