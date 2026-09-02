@@ -1,0 +1,6 @@
+interface:
+  display_name: "Totem Workspace Intelligence"
+  short_description: "Graph-first RAG and impact analysis for the Totem Fabric mod suite"
+  default_prompt: "Use TotemWorkspace intelligence to narrow this task before reading or editing multiple Totem repositories."
+policy:
+  allow_implicit_invocation: true
