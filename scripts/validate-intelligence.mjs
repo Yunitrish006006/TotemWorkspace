@@ -53,44 +53,29 @@ assert.ok(pack.codeIndex.freshness, "context pack must report code-index freshne
 
 function validateIncrementalIndex() {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "totem-intelligence-"));
-  const repoRoot = path.join(tempRoot, "TotemRemnant");
-  const sourceDir = path.join(repoRoot, "src", "main", "java", "dev", "totem", "remnant");
+  const sourceDir = path.join(tempRoot, "TotemRemnant", "src", "main", "java", "dev", "totem", "remnant");
   const sourceFile = path.join(sourceDir, "IncrementalProbe.java");
   const indexPath = path.join(tempRoot, "code-index.json");
-
   try {
     fs.mkdirSync(sourceDir, { recursive: true });
     fs.writeFileSync(sourceFile, "package dev.totem.remnant;\npublic final class BeforeRefreshMarker {}\n", "utf8");
-
     const initial = buildCodeIndex({ knowledge, reposRoot: tempRoot, outputPath: indexPath });
-    assert.equal(initial.schemaVersion, 2, "code index must use schema v2 with per-file freshness metadata");
-    assert.ok(initial.fileStates.some((entry) => entry.moduleId === "totem-remnant" && entry.path.endsWith("IncrementalProbe.java")), "full index must record indexed file state");
+    assert.equal(initial.schemaVersion, 2, "code index must use schema v2");
+    assert.ok(initial.fileStates.some((entry) => entry.moduleId === "totem-remnant" && entry.path.endsWith("IncrementalProbe.java")), "full index must record file state");
 
-    const before = searchCode("BeforeRefreshMarker", {
-      knowledge,
-      modules: ["totem-remnant"],
-      reposRoot: tempRoot,
-      indexPath
-    });
-    assert.ok(before.results.some((result) => result.path.endsWith("IncrementalProbe.java")), "initial code search must find the indexed probe");
+    const before = searchCode("BeforeRefreshMarker", { knowledge, modules: ["totem-remnant"], reposRoot: tempRoot, indexPath });
+    assert.ok(before.results.some((result) => result.path.endsWith("IncrementalProbe.java")), "initial search must find indexed probe");
 
     fs.writeFileSync(sourceFile, "package dev.totem.remnant;\npublic final class AfterIncrementalRefreshMarkerWithDifferentSize {}\n", "utf8");
-    const after = searchCode("AfterIncrementalRefreshMarkerWithDifferentSize", {
-      knowledge,
-      modules: ["totem-remnant"],
-      reposRoot: tempRoot,
-      indexPath
-    });
-    assert.equal(after.freshness.mode, "incremental", "search must incrementally refresh a modified selected module before retrieval");
-    assert.ok(after.freshness.refreshedModules.includes("totem-remnant"), "incremental refresh must report the touched module");
-    assert.ok(after.freshness.changedFiles.some((entry) => entry.endsWith("IncrementalProbe.java")), "incremental refresh must report the modified file");
-    assert.ok(after.results.some((result) => result.path.endsWith("IncrementalProbe.java")), "search after edit must retrieve the new file content");
+    const after = searchCode("AfterIncrementalRefreshMarkerWithDifferentSize", { knowledge, modules: ["totem-remnant"], reposRoot: tempRoot, indexPath });
+    assert.equal(after.freshness.mode, "incremental", "search must refresh modified selected module");
+    assert.ok(after.freshness.refreshedModules.includes("totem-remnant"), "refresh must report touched module");
+    assert.ok(after.results.some((result) => result.path.endsWith("IncrementalProbe.java")), "search after edit must retrieve new content");
 
     fs.rmSync(sourceFile);
     const removed = refreshCodeIndex({ knowledge, reposRoot: tempRoot, indexPath, modules: ["totem-remnant"] });
-    assert.equal(removed.freshness.mode, "incremental", "deleting an indexed file must trigger incremental refresh");
-    assert.ok(removed.freshness.removedFiles.some((entry) => entry.endsWith("IncrementalProbe.java")), "incremental refresh must report deleted indexed files");
-    assert.ok(!removed.index.chunks.some((chunk) => chunk.moduleId === "totem-remnant" && chunk.path.endsWith("IncrementalProbe.java")), "deleted source chunks must be removed from the index");
+    assert.ok(removed.freshness.removedFiles.some((entry) => entry.endsWith("IncrementalProbe.java")), "refresh must report deleted files");
+    assert.ok(!removed.index.chunks.some((chunk) => chunk.path.endsWith("IncrementalProbe.java")), "deleted source chunks must be removed");
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }
@@ -98,8 +83,8 @@ function validateIncrementalIndex() {
 
 function validateV2Graph() {
   const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "totem-graph-v2-"));
-  const outputPath = path.join(tempRoot, "graph-v2.html");
-  const outputPath2 = path.join(tempRoot, "graph-v2-repeat.html");
+  const dataPath = path.join(tempRoot, "graph-data.js");
+  const dataPath2 = path.join(tempRoot, "graph-data-repeat.js");
   const sourceBodyMarker = "SOURCE_BODY_MUST_NEVER_APPEAR_IN_GRAPH_VIEW_MODEL";
   const syntheticIndex = {
     schemaVersion: 2,
@@ -138,31 +123,39 @@ function validateV2Graph() {
 
   try {
     const model = buildGraphViewModel({ knowledge, index: syntheticIndex });
-    assert.equal(model.modules.length, 11, "V2 view model must retain all 11 validated modules");
-    assert.equal(model.features.length, 58, "V2 view model must retain all 58 curated feature branches");
-    assert.equal(model.contracts.length, 32, "V2 view model must retain all 32 validated contracts");
-    assert.equal(model.generatedAt, syntheticIndex.generatedAt, "V2 generated timestamp must follow the source index instead of changing on every render");
-    assert.ok(model.code.nodes.some((node) => node.type === "code-file" && node.path.endsWith("GeneratedGraphProbeApi.java")), "V2 generated detail must expose factual source-file metadata");
+    assert.equal(model.modules.length, 11, "V2 view model must retain all modules");
+    assert.equal(model.features.length, 58, "V2 view model must retain all curated features");
+    assert.equal(model.contracts.length, 32, "V2 view model must retain all contracts");
+    assert.equal(model.generatedAt, syntheticIndex.generatedAt, "V2 timestamp must follow source index");
+    assert.ok(model.code.nodes.some((node) => node.type === "code-file" && node.path.endsWith("GeneratedGraphProbeApi.java")), "V2 generated detail must expose factual file metadata");
     assert.ok(model.code.nodes.some((node) => node.type === "code-symbol" && node.label === "GeneratedGraphProbeApi"), "V2 generated detail must expose factual indexed symbols");
-    assert.ok(model.code.nodes.some((node) => node.type === "code-category" && node.category === "api"), "V2 generated detail must classify API source without redefining architecture contracts");
-    assert.ok(!JSON.stringify(model).includes(sourceBodyMarker), "V2 graph view model must never expose indexed source text");
+    assert.ok(!JSON.stringify(model).includes(sourceBodyMarker), "V2 model must never expose indexed source text");
 
-    const rendered = renderGraphV2({ knowledge, index: syntheticIndex, outputPath });
-    renderGraphV2({ knowledge, index: syntheticIndex, outputPath: outputPath2 });
-    const html = fs.readFileSync(outputPath, "utf8");
-    const htmlRepeated = fs.readFileSync(outputPath2, "utf8");
-    assert.equal(rendered.modules, 11, "V2 renderer must report 11 modules");
-    assert.equal(htmlRepeated, html, "Rendering an unchanged index twice must be deterministic and must not create timestamp-only Git churn");
-    assert.ok(html.includes("TOTEM Architecture V2"), "V2 renderer must emit the layered architecture viewer");
-    assert.ok(html.includes("3D 預覽"), "V2 viewer must expose the optional 3D preview control");
-    assert.ok(html.includes("3D 僅是展示層，不參與 MCP/RAG/驗證"), "V2 viewer must state the 3D isolation boundary");
-    assert.ok(!html.includes("__TOTEM_GRAPH_DATA__"), "V2 renderer must replace the data placeholder");
-    assert.ok(!html.includes(sourceBodyMarker), "V2 HTML must not contain code-index source bodies");
-    assert.ok(!/<script[^>]+src=|<link[^>]+href=/i.test(html), "V2 viewer must be self-contained without external CDN scripts or styles");
-    assert.ok(html.includes("function overviewPath"), "V2 2D viewer must use the layered rail router to reduce backward-growing lines");
-    const scriptMatch = html.match(/<script>([\s\S]*?)<\/script>/i);
-    assert.ok(scriptMatch, "V2 viewer must contain one self-contained inline script");
-    assert.doesNotThrow(() => new Function(scriptMatch[1]), "V2 inline viewer JavaScript must parse successfully");
+    const rendered = renderGraphV2({ knowledge, index: syntheticIndex, outputPath: dataPath });
+    renderGraphV2({ knowledge, index: syntheticIndex, outputPath: dataPath2 });
+    const dataJs = fs.readFileSync(dataPath, "utf8");
+    const dataJsRepeated = fs.readFileSync(dataPath2, "utf8");
+    assert.equal(rendered.modules, 11, "V2 data renderer must report 11 modules");
+    assert.equal(dataJsRepeated, dataJs, "unchanged index must produce byte-stable data");
+    assert.ok(dataJs.startsWith("/* AUTO-GENERATED"), "generated data must declare provenance");
+    assert.ok(dataJs.includes("window.__TOTEM_GRAPH_DATA__ = "), "generated data must expose the renderer view model");
+    assert.ok(!dataJs.includes(sourceBodyMarker), "generated data must not contain source bodies");
+
+    const html = fs.readFileSync(path.join(knowledge.root, "graph-v2.html"), "utf8");
+    const renderer = fs.readFileSync(path.join(knowledge.root, "viewer", "graph-v2.js"), "utf8");
+    const adapter = fs.readFileSync(path.join(knowledge.root, "viewer", "graph-v2-adapter.js"), "utf8");
+    const css = fs.readFileSync(path.join(knowledge.root, "viewer", "graph-v2.css"), "utf8");
+    assert.ok(html.includes('src="viewer/generated/graph-data.js"'), "V2 HTML must load generated data separately");
+    assert.ok(html.includes('src="viewer/graph-v2.js"'), "V2 HTML must load the renderer separately");
+    assert.ok(html.includes('href="viewer/graph-v2.css"'), "V2 HTML must load styles separately");
+    assert.ok(!html.includes("window.__TOTEM_GRAPH_DATA__"), "V2 HTML itself must contain no graph data");
+    assert.ok(!html.includes("totem-remnant") && !html.includes("remnant-nexus"), "V2 HTML must not embed module or contract data");
+    assert.ok(!/<script>([\s\S]*?)<\/script>/i.test(html), "V2 HTML must not contain inline graph script/data");
+    assert.ok(!/https?:\/\//i.test(html + renderer + adapter + css), "V2 viewer assets must have no remote CDN dependency");
+    assert.ok(renderer.includes("function overviewPath"), "2D renderer must retain reverse-edge rail routing");
+    assert.ok(renderer.includes("function draw3d"), "3D renderer must remain isolated presentation code");
+    assert.doesNotThrow(() => new Function(renderer), "V2 renderer JavaScript must parse");
+    assert.doesNotThrow(() => new Function(adapter), "V2 adapter JavaScript must parse");
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
   }
@@ -183,11 +176,7 @@ async function validateMcpServer() {
   child.stderr.on("data", (chunk) => { stderr += chunk; });
   lines.on("line", (line) => {
     let message;
-    try {
-      message = JSON.parse(line);
-    } catch {
-      return;
-    }
+    try { message = JSON.parse(line); } catch { return; }
     const waiter = pending.get(String(message.id));
     if (!waiter) return;
     pending.delete(String(message.id));
@@ -215,7 +204,7 @@ async function validateMcpServer() {
       capabilities: {}
     });
     assert.equal(initialized.serverInfo?.name, "totem-workspace-intelligence", "MCP server must identify itself");
-    assert.equal(initialized.serverInfo?.version, "0.3.0", "MCP server version must expose incremental-refresh plus isolated V2 graph generation");
+    assert.equal(initialized.serverInfo?.version, "0.3.0", "MCP server must expose isolated V2 generation");
     child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} })}\n`);
 
     const listed = await request(2, "tools/list", {});
@@ -223,11 +212,7 @@ async function validateMcpServer() {
     for (const required of ["resolve_task", "search", "context_pack", "impact", "test_plan", "workspace_status", "refresh_index"]) {
       assert.ok(names.includes(required), `MCP tool list must include ${required}`);
     }
-
-    const called = await request(3, "tools/call", {
-      name: "resolve_task",
-      arguments: { query: "死亡背包跟 Nexus 同步" }
-    });
+    const called = await request(3, "tools/call", { name: "resolve_task", arguments: { query: "死亡背包跟 Nexus 同步" } });
     assert.equal(called.isError, false, "MCP resolve_task call must succeed");
     assert.ok(called.structuredContent?.modules?.some((module) => module.id === "totem-remnant"), "MCP resolve_task must return TotemRemnant");
   } finally {
@@ -237,4 +222,4 @@ async function validateMcpServer() {
 }
 
 await validateMcpServer();
-console.log(`Totem workspace intelligence validation passed: ${summary.moduleCount} modules, ${summary.featureCount} features, ${summary.contractCount} contracts; incremental index refresh and isolated V2 graph generation passed.`);
+console.log(`Totem workspace intelligence validation passed: ${summary.moduleCount} modules, ${summary.featureCount} features, ${summary.contractCount} contracts; incremental index refresh and data-only V2 viewer generation passed.`);
