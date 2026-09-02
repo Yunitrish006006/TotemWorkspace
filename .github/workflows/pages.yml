@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - main
+  schedule:
+    - cron: "23 * * * *"
   workflow_dispatch:
 
 permissions:
@@ -11,13 +13,13 @@ permissions:
 
 concurrency:
   group: github-pages
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
-      - name: Check out repository
+      - name: Check out TotemWorkspace
         uses: actions/checkout@v6
 
       - name: Set up Node.js
@@ -28,13 +30,48 @@ jobs:
       - name: Validate coordination snapshot
         run: node scripts/validate-workspace.mjs
 
+      - name: Clone latest active Totem repositories
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE' > /tmp/totem-modules.tsv
+          import fs from "node:fs";
+          const data = JSON.parse(fs.readFileSync("data/modules.json", "utf8"));
+          for (const module of data.modules.filter((entry) => entry.active)) {
+            process.stdout.write(`${module.name}\t${module.repository}\t${module.defaultBranch}\n`);
+          }
+          NODE
+
+          while IFS=$'\t' read -r name repository branch; do
+            echo "Cloning ${name} (${branch})"
+            git clone --depth=1 --single-branch --branch "$branch" "$repository" "../$name"
+          done < /tmp/totem-modules.tsv
+
+      - name: Build latest code index and V2 graph data
+        env:
+          TOTEM_WORKSPACE_ROOT: ${{ github.workspace }}
+          TOTEM_REPOS_ROOT: ${{ github.workspace }}/..
+        run: |
+          node scripts/totem-intelligence.mjs build-index
+          node scripts/totem-intelligence.mjs render-graph
+
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Prepare static site
+      - name: Prepare V2 static site
         run: |
-          mkdir -p _site
-          cp index.html _site/index.html
+          rm -rf _site
+          mkdir -p _site/viewer/generated
+
+          # Publish V2 as the site root without changing the repository's curated index.html.
+          cp graph-v2.html _site/index.html
+          cp viewer/graph-v2.css _site/viewer/graph-v2.css
+          cp viewer/graph-v2-adapter.js _site/viewer/graph-v2-adapter.js
+          cp viewer/graph-v2.js _site/viewer/graph-v2.js
+          cp viewer/generated/graph-data.js _site/viewer/generated/graph-data.js
+
+          # Keep the validated curated source available for inspection.
+          cp index.html _site/curated.html
           touch _site/.nojekyll
 
       - name: Upload GitHub Pages artifact
