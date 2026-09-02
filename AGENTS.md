@@ -15,7 +15,24 @@ the 11 active Totem repositories. It is not a Minecraft mod.
   optional subscriber.
 - Never add JARs, build output, credentials, tokens, private endpoints, or local
   machine paths.
-- Run `node scripts/validate-workspace.mjs` before committing.
+- Run both `node scripts/validate-workspace.mjs` and
+  `node scripts/validate-intelligence.mjs` before committing changes that affect
+  workspace knowledge, graph data, aliases, or retrieval behavior.
+
+## Workspace intelligence rules
+
+- The Codex intelligence graph must be derived from the existing validated
+  `index.html` and `data/modules.json`; do not hand-maintain a third independent
+  dependency graph.
+- `data/aliases.json` may add retrieval vocabulary but must not redefine module
+  ownership or dependency direction.
+- `data/test-matrix.json` describes validation categories and risk routing; it
+  must not invent Gradle tasks that are not present in owning repositories.
+- `.totem-index/` is disposable local RAG state. Never commit, document as
+  canonical evidence, or manually edit it as a source of truth.
+- Live sibling-repository source wins for implementation details when it is
+  newer than the recorded snapshot. The workspace snapshot still defines the
+  documented cross-module contract until deliberately refreshed.
 
 ## Observer and visual rules
 
