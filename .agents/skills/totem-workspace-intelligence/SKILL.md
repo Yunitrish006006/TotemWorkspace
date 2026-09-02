@@ -14,9 +14,9 @@ Use the TotemWorkspace knowledge engine as the first narrowing layer for non-tri
    - `primary`: architecture/routing context with a small code slice.
    - `worker`: one module's implementation context plus required contracts.
    - `reviewer`: relevant contracts, diff-adjacent code, and validation obligations.
-3. Search code only inside the modules selected by the graph unless evidence requires expansion.
+3. Search code only inside the modules selected by the graph unless evidence requires expansion. `search` and `context_pack` automatically check those selected modules and incrementally replace chunks for changed/new/deleted files before retrieval.
 4. Use `totemWorkspace.graph` when changing a shared API or when dependency direction is unclear.
-5. If code search reports that the local index is missing or stale, call `totemWorkspace.refresh_index` once, then retry the narrowed search.
+5. Use `totemWorkspace.refresh_index` manually only for diagnostics, explicit maintenance, or a forced complete rebuild; normal narrowed retrieval does not require a manual refresh.
 
 If the MCP server is unavailable, use the deterministic CLI from the TotemWorkspace repository:
 
@@ -24,6 +24,7 @@ If the MCP server is unavailable, use the deterministic CLI from the TotemWorksp
 node scripts/totem-intelligence.mjs resolve "<task>"
 node scripts/totem-intelligence.mjs context "<task>" primary
 node scripts/totem-intelligence.mjs search "<query>" totem-remnant,totem-nexus
+node scripts/totem-intelligence.mjs refresh-index totem-remnant,totem-nexus
 ```
 
 ## Source-of-truth rules
@@ -49,12 +50,12 @@ Give each subagent a bounded context pack and explicit module/file ownership. St
 
 ## After implementation
 
-1. Call `totemWorkspace.impact` with changed files/modules.
+1. Call `totemWorkspace.impact` with changed files/modules. The MCP impact path proactively refreshes the directly touched module chunks before review and validation.
 2. Call `totemWorkspace.test_plan` with the task and touched modules.
-3. Review every impacted consumer returned by the graph.
+3. Review every impacted consumer returned by the graph; reviewer context packs will also freshness-check their selected modules.
 4. Run the repository's actual relevant Gradle/test tasks. The test-plan tool returns categories, not permission to invent nonexistent tasks.
 5. For substantial changes, use an independent reviewer after implementation.
 
 ## Local index policy
 
-`.totem-index/` is disposable local state. Never commit it. Rebuild it from sibling repositories after substantial changes rather than hand-editing index files.
+`.totem-index/` is disposable local state. Never commit it or hand-edit it. A full `build-index` creates schema-v2 per-file metadata; subsequent `search`, `context_pack`, and MCP `impact` flows keep relevant chunks current incrementally. A schema/workspace change automatically triggers a one-time full rebuild.
