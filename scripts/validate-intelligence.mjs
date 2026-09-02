@@ -10,7 +10,10 @@ const summary = knowledgeSummary(knowledge);
 assert.equal(summary.moduleCount, 11, "intelligence graph must contain 11 active Totem modules");
 assert.equal(summary.featureCount, 58, "intelligence graph must derive all 58 feature branches from index.html");
 
-const counts = Object.groupBy(knowledge.contracts, (contract) => contract.type);
+const counts = knowledge.contracts.reduce((groups, contract) => {
+  (groups[contract.type] ??= []).push(contract);
+  return groups;
+}, Object.create(null));
 assert.equal(counts["hard-core"]?.length, 10, "all non-Core modules must have one hard Core dependency edge");
 assert.equal(counts["fabric-suggests"]?.length, 3, "graph must contain 3 Fabric suggests contracts");
 assert.equal(counts["runtime-optional"]?.length, 8, "graph must contain 8 runtime optional contracts");
