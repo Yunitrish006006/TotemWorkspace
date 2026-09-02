@@ -5,9 +5,11 @@ import os from "node:os";
 import path from "node:path";
 import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
+import { buildGraphViewModel } from "../intelligence/code-graph.mjs";
 import { buildCodeIndex, refreshCodeIndex, searchCode } from "../intelligence/code-index.mjs";
 import { buildContextPack } from "../intelligence/context-pack.mjs";
 import { graphForModule, knowledgeSummary, loadKnowledge, resolveTask, testPlan } from "../intelligence/workspace-knowledge.mjs";
+import { renderGraphV2 } from "./render-graph-v2.mjs";
 
 const knowledge = loadKnowledge();
 const summary = knowledgeSummary(knowledge);
@@ -94,7 +96,72 @@ function validateIncrementalIndex() {
   }
 }
 
+function validateV2Graph() {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), "totem-graph-v2-"));
+  const outputPath = path.join(tempRoot, "graph-v2.html");
+  const sourceBodyMarker = "SOURCE_BODY_MUST_NEVER_APPEAR_IN_GRAPH_VIEW_MODEL";
+  const syntheticIndex = {
+    schemaVersion: 2,
+    generatedAt: "2026-09-03T00:00:00.000Z",
+    workspaceSnapshot: knowledge.snapshot,
+    reposRoot: tempRoot,
+    modules: knowledge.modules.map((module) => ({
+      id: module.id,
+      repoName: module.repoName,
+      present: module.id === "totem-remnant",
+      head: null,
+      branch: null,
+      worktreeFingerprint: null,
+      files: module.id === "totem-remnant" ? 1 : 0,
+      chunks: module.id === "totem-remnant" ? 1 : 0
+    })),
+    fileStates: [{
+      moduleId: "totem-remnant",
+      repoName: "TotemRemnant",
+      path: "src/main/java/dev/totem/remnant/api/GeneratedGraphProbeApi.java",
+      size: 123,
+      mtimeMs: 1,
+      sha256: "synthetic"
+    }],
+    chunks: [{
+      id: "synthetic-chunk",
+      moduleId: "totem-remnant",
+      repoName: "TotemRemnant",
+      path: "src/main/java/dev/totem/remnant/api/GeneratedGraphProbeApi.java",
+      startLine: 1,
+      endLine: 20,
+      symbols: ["GeneratedGraphProbeApi", "verifyGraphProbe"],
+      text: sourceBodyMarker
+    }]
+  };
+
+  try {
+    const model = buildGraphViewModel({ knowledge, index: syntheticIndex });
+    assert.equal(model.modules.length, 11, "V2 view model must retain all 11 validated modules");
+    assert.equal(model.features.length, 58, "V2 view model must retain all 58 curated feature branches");
+    assert.equal(model.contracts.length, 32, "V2 view model must retain all 32 validated contracts");
+    assert.ok(model.code.nodes.some((node) => node.type === "code-file" && node.path.endsWith("GeneratedGraphProbeApi.java")), "V2 generated detail must expose factual source-file metadata");
+    assert.ok(model.code.nodes.some((node) => node.type === "code-symbol" && node.label === "GeneratedGraphProbeApi"), "V2 generated detail must expose factual indexed symbols");
+    assert.ok(model.code.nodes.some((node) => node.type === "code-category" && node.category === "api"), "V2 generated detail must classify API source without redefining architecture contracts");
+    assert.ok(!JSON.stringify(model).includes(sourceBodyMarker), "V2 graph view model must never expose indexed source text");
+
+    const rendered = renderGraphV2({ knowledge, index: syntheticIndex, outputPath });
+    const html = fs.readFileSync(outputPath, "utf8");
+    assert.equal(rendered.modules, 11, "V2 renderer must report 11 modules");
+    assert.ok(html.includes("TOTEM Architecture V2"), "V2 renderer must emit the layered architecture viewer");
+    assert.ok(html.includes("3D 預覽"), "V2 viewer must expose the optional 3D preview control");
+    assert.ok(html.includes("3D 僅是展示層，不參與 MCP/RAG/驗證"), "V2 viewer must state the 3D isolation boundary");
+    assert.ok(!html.includes("__TOTEM_GRAPH_DATA__"), "V2 renderer must replace the data placeholder");
+    assert.ok(!html.includes(sourceBodyMarker), "V2 HTML must not contain code-index source bodies");
+    assert.ok(!/<script[^>]+src=|<link[^>]+href=/i.test(html), "V2 viewer must be self-contained without external CDN scripts or styles");
+    assert.ok(html.includes("function monotonicPath"), "V2 2D viewer must use the monotonic/rail edge router to reduce backward-growing lines");
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+}
+
 validateIncrementalIndex();
+validateV2Graph();
 
 async function validateMcpServer() {
   const child = spawn(process.execPath, ["mcp/server.mjs"], {
@@ -140,7 +207,7 @@ async function validateMcpServer() {
       capabilities: {}
     });
     assert.equal(initialized.serverInfo?.name, "totem-workspace-intelligence", "MCP server must identify itself");
-    assert.equal(initialized.serverInfo?.version, "0.2.0", "MCP server version must expose incremental-refresh capability");
+    assert.equal(initialized.serverInfo?.version, "0.3.0", "MCP server version must expose incremental-refresh plus isolated V2 graph generation");
     child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} })}\n`);
 
     const listed = await request(2, "tools/list", {});
@@ -162,4 +229,4 @@ async function validateMcpServer() {
 }
 
 await validateMcpServer();
-console.log(`Totem workspace intelligence validation passed: ${summary.moduleCount} modules, ${summary.featureCount} features, ${summary.contractCount} contracts; incremental index refresh passed.`);
+console.log(`Totem workspace intelligence validation passed: ${summary.moduleCount} modules, ${summary.featureCount} features, ${summary.contractCount} contracts; incremental index refresh and isolated V2 graph generation passed.`);
