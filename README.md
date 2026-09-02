@@ -50,4 +50,4 @@ node scripts/validate-workspace.mjs
 node scripts/validate-intelligence.mjs
 ```
 
-驗證器不需要安裝 npm 套件，使用 Node.js 22 即可。
+驗證器不需要安裝 npm 套件，支援 Node.js 20.19+；GitHub Actions 使用 Node.js 22。
