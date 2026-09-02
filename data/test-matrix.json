@@ -1,0 +1,99 @@
+{
+  "schemaVersion": 1,
+  "defaults": {
+    "validation": ["gradle-build", "existing-unit-or-gametest"]
+  },
+  "riskRules": [
+    {
+      "match": ["observer", "screen", "provider", "protocol", "framebuffer", "游標", "cursor"],
+      "tags": ["observer", "client-server", "privacy"],
+      "validation": ["client-gametest", "observer-provider-compat", "input-packet-suppression", "privacy-redaction", "close-cleanup", "three-jvm-e2e", "production-runtime-probe"]
+    },
+    {
+      "match": ["mixin", "fabric", "mapping", "mappings", "registry", "loader", "minecraft version"],
+      "tags": ["fabric-compat"],
+      "validation": ["configured-version-api-check", "dedicated-server-load-check"]
+    },
+    {
+      "match": ["client", "server", "minecraftclient", "renderer", "screen"],
+      "tags": ["client-server"],
+      "validation": ["dedicated-server-load-check", "client-runtime-check"]
+    },
+    {
+      "match": ["inventory", "背包", "容器", "item", "slot", "死亡背包", "duplication", "巢狀"],
+      "tags": ["inventory", "server-authoritative"],
+      "validation": ["inventory-conservation", "server-authority", "gametest"]
+    },
+    {
+      "match": ["permission", "authorization", "權限", "鎖", "locksmith"],
+      "tags": ["authorization", "server-authoritative"],
+      "validation": ["authorized-path", "unauthorized-path", "fail-closed-path", "gametest"]
+    },
+    {
+      "match": ["network", "packet", "protocol", "同步", "relay", "discord"],
+      "tags": ["networking"],
+      "validation": ["protocol-compat", "disconnect-reconnect-or-fallback", "server-tick-nonblocking"]
+    },
+    {
+      "match": ["persist", "persistence", "持久化", "migration", "nbt", "data component", "存檔"],
+      "tags": ["persistence"],
+      "validation": ["save-reload", "migration-or-backward-compat", "gametest"]
+    },
+    {
+      "match": ["core", "shared api", "共用契約", "eventbus", "world outline"],
+      "tags": ["shared-contract"],
+      "validation": ["consumer-impact-review", "cross-module-build"]
+    },
+    {
+      "match": ["openai", "cloudflare", "external service", "http", "https", "webhook"],
+      "tags": ["external-service"],
+      "validation": ["timeout-fallback", "secret-redaction", "server-tick-nonblocking"]
+    }
+  ],
+  "modules": {
+    "totem-core": {
+      "validation": ["unit-tests", "consumer-impact-review", "cross-module-build"],
+      "notes": "Shared API changes require checking every consumer; Observer changes additionally require client visual/E2E/runtime evidence."
+    },
+    "totem-alchemy": {
+      "validation": ["gametest"],
+      "notes": "Data-driven brewing/material changes should verify datapack reload and recipe/manual behavior when applicable."
+    },
+    "totem-automata": {
+      "validation": ["gametest", "budget-boundedness"],
+      "notes": "Entity AI, scanning, routing, and optional external decisions must remain bounded and non-blocking."
+    },
+    "totem-discord-bridge": {
+      "validation": ["relay-fallback", "secret-redaction", "server-tick-nonblocking"],
+      "notes": "External relay failure must not block server ticks; credentials must never enter logs or repository output."
+    },
+    "totem-enchanting": {
+      "validation": ["gametest"],
+      "notes": "Verify bookshelf power/quality calculations and affected enchantment targets."
+    },
+    "totem-excavation": {
+      "validation": ["gametest", "server-authority"],
+      "notes": "Selection and bounded excavation require server-side revalidation and world-outline semantics."
+    },
+    "totem-locksmith": {
+      "validation": ["gametest", "authorized-path", "unauthorized-path", "fail-closed-path"],
+      "notes": "Declared integration failures must fail closed rather than bypass container-network authorization."
+    },
+    "totem-nexus": {
+      "validation": ["gametest", "server-authority"],
+      "notes": "Teleport, cost, permissions, and death-node lifecycle are server-authoritative."
+    },
+    "totem-remnant": {
+      "validation": ["gametest", "inventory-conservation", "save-reload"],
+      "notes": "Backpack/death-capture changes must cover anti-nesting, inventory conservation, and persistence."
+    },
+    "totem-vanilla-tweaks": {
+      "validation": ["gametest"],
+      "notes": "Observer relay changes require module-absent unsupported-metadata coverage and must not synthesize mirror Screens."
+    },
+    "totem-villagers": {
+      "validation": ["gametest", "inventory-conservation", "server-authority"],
+      "notes": "Economy/work orders must be backed by real inventory/work and server-side validation."
+    }
+  }
+}
