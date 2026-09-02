@@ -7,6 +7,7 @@ TotemWorkspace includes a repository-local Codex skill plus a dependency-aware l
 - Graph retrieval derived from the existing `index.html` feature graph and `data/modules.json` snapshot.
 - Chinese/English aliases for common Totem concepts.
 - Local lexical + symbol-aware code indexing across sibling Totem repositories.
+- Automatic incremental freshness checks for selected modules before code retrieval.
 - Task resolution, dependency neighborhood, impact analysis, test planning, workspace drift checks, and audience-specific context packs.
 - No embeddings, remote vector database, or external service is required.
 
@@ -38,6 +39,8 @@ node scripts/totem-intelligence.mjs build-index
 
 The graph itself does not need an index build; it is derived directly from the validated repository sources. Only code search uses `.totem-index/code-index.json`.
 
+The code index uses schema v2 per-file metadata: file size, modification time, content SHA-256, module repository HEAD/branch, and a Git worktree fingerprint. The first search after upgrading an older index performs a one-time full rebuild. After that, narrowed retrieval checks only the selected modules and replaces chunks only for changed, new, deleted, or hash-mismatched files.
+
 Useful CLI checks:
 
 ```sh
@@ -45,8 +48,12 @@ node scripts/totem-intelligence.mjs summary
 node scripts/totem-intelligence.mjs resolve "死亡背包跟 Nexus 同步有問題"
 node scripts/totem-intelligence.mjs graph totem-remnant 2
 node scripts/totem-intelligence.mjs context "銅魁儡背包防巢狀" primary
+node scripts/totem-intelligence.mjs search "death node snapshot" totem-remnant,totem-nexus
+node scripts/totem-intelligence.mjs refresh-index totem-remnant,totem-nexus
 node scripts/totem-intelligence.mjs status
 ```
+
+`refresh-index` is normally unnecessary because `search` and `context` automatically freshness-check their selected modules. Keep it for explicit diagnostics or maintenance. `build-index` remains the explicit full rebuild command.
 
 ## Register the MCP server with Codex
 
@@ -73,7 +80,7 @@ The server exposes:
 - `refresh_index`
 - `summary`
 
-`refresh_index` writes only to `.totem-index/` and does not modify any module repository.
+`search` and `context_pack` automatically refresh relevant changed chunks before retrieval. `impact` also proactively refreshes the directly touched modules, so the normal implementation flow updates RAG before reviewer context is built. `refresh_index` writes only to `.totem-index/` and does not modify any module repository; it accepts optional module IDs and a forced-full mode.
 
 ## Skill discovery
 
@@ -94,18 +101,31 @@ For a non-trivial Totem development request:
 ```text
 Discord request
   -> resolve_task
-  -> context_pack(primary)
+  -> context_pack(primary)  [freshness-check selected modules]
   -> optional explorer / architect
-  -> context_pack(worker, module)
+  -> context_pack(worker, module)  [freshness-check worker module]
   -> bounded implementation
-  -> impact
+  -> impact  [proactive incremental refresh of touched modules]
   -> test_plan
-  -> reviewer context
+  -> reviewer context  [freshness-check reviewer modules]
   -> Gradle / GameTest validation
   -> Discord result
 ```
 
 The primary model should not begin by searching all 11 repositories. Graph retrieval determines the initial scope, and code retrieval is then restricted to the selected modules unless evidence requires expansion.
+
+## Incremental freshness behavior
+
+The index does not run a filesystem watcher and does not rewrite itself on every keystroke. Instead it uses bounded, deterministic refresh points:
+
+1. `search` and `context_pack` check the selected module repositories immediately before retrieval.
+2. Normal file edits are detected from per-file size/mtime metadata; changed repository identity/worktree state also causes SHA-256 verification of otherwise unchanged-looking files.
+3. Only affected file chunks are removed and rebuilt. Unchanged chunks from that module and every unrelated module stay intact.
+4. Deleted files remove their old chunks; newly created indexable files are added automatically.
+5. After implementation, MCP `impact` refreshes directly touched modules before `test_plan` and reviewer work.
+6. If the index is missing, still uses the old schema, moves to a different repository root, or no longer matches the current 11-module knowledge shape, one full rebuild is performed automatically.
+
+This is lazy/proactive incremental freshness rather than a background daemon: after a source edit, the index is guaranteed to be checked at the next retrieval or normal `impact` step.
 
 ## Snapshot versus live source
 
@@ -117,6 +137,8 @@ Use `workspace_status` to detect this condition:
 - TotemWorkspace remains authoritative for documented cross-module ownership and contracts until the coordination snapshot is deliberately updated;
 - never reset or overwrite a newer local branch merely to match the snapshot.
 
+Incremental index freshness does not change that source-of-truth policy. The index is only a retrieval accelerator; final implementation decisions still use live repository source.
+
 ## Validation
 
 Run both validators before merging changes to the intelligence layer:
@@ -126,4 +148,4 @@ node scripts/validate-workspace.mjs
 node scripts/validate-intelligence.mjs
 ```
 
-The second validator checks that the intelligence graph still derives 11 active modules and all 58 feature branches, preserves dependency classifications, and resolves representative cross-module Chinese queries correctly.
+The second validator checks that the intelligence graph still derives 11 active modules and all 58 feature branches, preserves dependency classifications, resolves representative cross-module Chinese queries correctly, exercises the MCP initialize/tools/list/resolve path, and creates/modifies/deletes a temporary indexed source file to prove automatic incremental refresh.
