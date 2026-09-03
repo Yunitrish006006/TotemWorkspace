@@ -5,6 +5,7 @@ TotemWorkspace 是 11 個現役 Totem 模組的公開協作與文件總表。這
 目前快照日期為 **2026-09-02**。本次整理 11 個現役模組的正式版本，補齊 Totem 物品配方取得進度、Alchemy 可切換的釀造材料自動登錄，以及 Remnant 回聲碎片結晶途徑；curated 互動圖共有 **58 個**可展開功能分支。
 
 [開啟 GitHub Pages 互動式模組圖](https://yunitrish006006.github.io/TotemWorkspace/)
+｜[Flutter Viewer Preview](https://yunitrish006006.github.io/TotemWorkspace/flutter/)
 ｜[Curated HTML](index.html)
 ｜[V2 3D 圖](graph-v2.html)
 ｜[Flutter Viewer Roadmap](docs/flutter-viewer-roadmap.md)
@@ -80,14 +81,16 @@ node scripts/totem-intelligence.mjs render-graph
 
 ## Flutter Viewer Migration
 
-`viewer_flutter/` 是下一代 viewer 的並行 migration prototype；在 feature parity 完成前不取代目前 production JavaScript viewer。
+`viewer_flutter/` 是下一代 viewer 的並行 migration prototype；在 production cutover 前不取代目前 JavaScript viewer。
 
 Flutter 不維護自己的 architecture graph。`scripts/render-flutter-graph.mjs` 直接呼叫同一個 `buildGraphViewModel()`，輸出 `viewer_flutter/assets/graph-data.json`，確保 JS 與 Flutter renderer 使用相同語意來源。
 
-Phase 1 本機執行：
+目前 Flutter 已完成 curated 3D architecture parity 與 Web LIVE LOCAL：feature cluster、relation-aware placement、精確 endpoint、線條篩選、spotlight、桌機／觸控／鍵盤操作，以及 branch / HEAD / dirty / snapshot drift 輪詢與增量 graph refresh。
+
+本機執行：
 
 ```sh
-node scripts/render-flutter-graph.mjs
+node scripts/serve-local-viewer.mjs
 cd viewer_flutter
 flutter pub get
 flutter run -d chrome
@@ -99,7 +102,7 @@ WebAssembly build：
 flutter build web --wasm
 ```
 
-目前 CI 固定 Flutter 3.47.0，驗證 analyze、unit tests 與 Web/Wasm build。完整 migration 階段與 production cutover 條件見 [Flutter Viewer Migration Roadmap](docs/flutter-viewer-roadmap.md)。
+目前 CI 固定 Flutter 3.47.0，驗證 loopback API、analyze、unit tests 與 Pages 路徑的 Web/Wasm build。完整 migration 階段與 production cutover 條件見 [Flutter Viewer Migration Roadmap](docs/flutter-viewer-roadmap.md)。
 
 ## 資料更新原則
 
