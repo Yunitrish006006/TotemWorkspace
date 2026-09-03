@@ -23,6 +23,7 @@ assert.ok(pages.includes("cp viewer/graph-v2-cluster.js _site/viewer/graph-v2-cl
 for (const required of [
   "function hashUnit",
   "function clusterRadius",
+  "function moduleOrbitRadius",
   "function scatter",
   "function drawCluster",
   "clusters.push",
@@ -41,4 +42,13 @@ assert.ok(source.includes("relatedOwners"), "clusters connected to the spotlight
 assert.ok(source.includes("cam.panX"), "cluster view must preserve camera-center panning");
 assert.ok(source.includes("gesture.startZoom"), "cluster view must preserve pinch zoom");
 
-console.log("3D cluster validation passed: deterministic semantic scatter, bubble boundaries, spotlight integration, gestures, and Pages packaging are present.");
+const orbitMatch = source.match(/function moduleOrbitRadius\(count\)\{([^}]*)\}/);
+assert.ok(orbitMatch, "module orbit spacing function must be extractable for regression checks");
+const moduleOrbitRadius = new Function("count", orbitMatch[1]);
+assert.equal(moduleOrbitRadius(0), 330, "collapsed overview should retain the compact module orbit");
+assert.ok(moduleOrbitRadius(1) > moduleOrbitRadius(0), "expanding the first module must spread every module anchor outward");
+assert.ok(moduleOrbitRadius(4) > moduleOrbitRadius(1), "additional expanded clusters should continue increasing module spacing");
+assert.ok(moduleOrbitRadius(11) <= 630, "full expansion spacing must remain bounded");
+assert.ok(source.includes("moduleRadius=moduleOrbitRadius(count)"), "scene layout must use the dynamic module orbit radius");
+
+console.log("3D cluster validation passed: deterministic semantic scatter, expanded-module spacing, bubble boundaries, spotlight integration, gestures, and Pages packaging are present.");
