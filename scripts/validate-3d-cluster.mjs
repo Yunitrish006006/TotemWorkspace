@@ -9,6 +9,7 @@ const html = fs.readFileSync(path.join(root, "graph-v2.html"), "utf8");
 const source = fs.readFileSync(path.join(root, "viewer", "graph-v2-cluster.js"), "utf8");
 const css = fs.readFileSync(path.join(root, "viewer", "graph-v2.css"), "utf8");
 const pages = fs.readFileSync(path.join(root, ".github", "workflows", "pages.yml"), "utf8");
+const audit = JSON.parse(fs.readFileSync(path.join(root, "data", "relationship-audit.json"), "utf8"));
 
 assert.doesNotThrow(() => new Function(source), "cluster renderer must parse");
 assert.ok(html.includes('src="viewer/graph-v2-cluster.js"'), "HTML must load the cluster renderer");
@@ -25,10 +26,12 @@ for (const required of [
   "function clusterRadius",
   "function moduleOrbitRadius",
   "function scatter",
+  "function isRetargetable",
   "function drawCluster",
   "clusters.push",
   "feature-detail",
   "shared-capability",
+  "Core API links",
   "window.__TOTEM_CLUSTER_3D__"
 ]) assert.ok(source.includes(required), `missing cluster behavior: ${required}`);
 
@@ -36,11 +39,19 @@ assert.ok(!source.includes("Math.random"), "cluster positions must remain determ
 assert.ok(source.includes('type==="category"?[.72,.96]'), "generated code must occupy the outer semantic radius band");
 assert.ok(source.includes('type==="capability"?[.56,.78]'), "shared capabilities must occupy the middle semantic radius band");
 assert.ok(source.includes(':[.34,.64]'), "curated features must occupy the inner semantic radius band");
+assert.ok(source.includes('c.type==="hard-core"&&(c.featureIds||[]).length>0'), "audited hard Core contracts with feature endpoints must be retargetable");
 assert.ok(source.includes("c.radius*p.scale"), "cluster boundary must scale with the same 3D projection as its module");
 assert.ok(source.includes("spotOwner"), "spotlight must influence cluster visibility");
 assert.ok(source.includes("relatedOwners"), "clusters connected to the spotlight must remain partially emphasized");
 assert.ok(source.includes("cam.panX"), "cluster view must preserve camera-center panning");
 assert.ok(source.includes("gesture.startZoom"), "cluster view must preserve pinch zoom");
+
+assert.deepEqual(audit.contractOverrides["hard:totem-nexus:totem-core"].featureIds, [
+  "totem-nexus.feature-5", "totem-core.feature-3"
+]);
+assert.deepEqual(audit.contractOverrides["hard:totem-locksmith:totem-core"].featureIds, [
+  "totem-locksmith.feature-2", "totem-core.feature-3"
+]);
 
 const orbitMatch = source.match(/function moduleOrbitRadius\(count\)\{([^}]*)\}/);
 assert.ok(orbitMatch, "module orbit spacing function must be extractable for regression checks");
@@ -51,4 +62,4 @@ assert.ok(moduleOrbitRadius(4) > moduleOrbitRadius(1), "additional expanded clus
 assert.ok(moduleOrbitRadius(11) <= 630, "full expansion spacing must remain bounded");
 assert.ok(source.includes("moduleRadius=moduleOrbitRadius(count)"), "scene layout must use the dynamic module orbit radius");
 
-console.log("3D cluster validation passed: deterministic semantic scatter, expanded-module spacing, bubble boundaries, spotlight integration, gestures, and Pages packaging are present.");
+console.log("3D cluster validation passed: deterministic semantic scatter, expanded-module spacing, audited Core friendship retargeting, bubble boundaries, spotlight integration, gestures, and Pages packaging are present.");
