@@ -31,3 +31,5 @@ jobs:
         run: node scripts/validate-contract-audit.mjs
       - name: Validate two-finger 3D pan
         run: node scripts/validate-3d-pan.mjs
+      - name: Validate deterministic 3D module clusters
+        run: node scripts/validate-3d-cluster.mjs
