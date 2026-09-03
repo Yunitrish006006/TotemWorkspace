@@ -1,0 +1,64 @@
+name: Validate Flutter Viewer
+
+on:
+  push:
+    paths:
+      - "viewer_flutter/**"
+      - "scripts/render-flutter-graph.mjs"
+      - "scripts/serve-local-viewer.mjs"
+      - "scripts/validate-local-viewer.mjs"
+      - ".github/workflows/flutter-viewer.yml"
+      - ".github/workflows/pages.yml"
+  pull_request:
+    paths:
+      - "viewer_flutter/**"
+      - "scripts/render-flutter-graph.mjs"
+      - "scripts/serve-local-viewer.mjs"
+      - "scripts/validate-local-viewer.mjs"
+      - ".github/workflows/flutter-viewer.yml"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  flutter-web:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Generate shared graph asset
+        run: node scripts/render-flutter-graph.mjs
+
+      - name: Validate loopback local API
+        run: node scripts/validate-local-viewer.mjs
+
+      - name: Set up Flutter 3.47.0
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Resolve Flutter dependencies
+        working-directory: viewer_flutter
+        run: flutter pub get
+
+      - name: Analyze Flutter viewer
+        working-directory: viewer_flutter
+        run: flutter analyze
+
+      - name: Test Flutter viewer
+        working-directory: viewer_flutter
+        run: flutter test
+
+      - name: Build Flutter Pages prototype (Wasm)
+        working-directory: viewer_flutter
+        run: flutter build web --wasm --base-href /TotemWorkspace/flutter/
