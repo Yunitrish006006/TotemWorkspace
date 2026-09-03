@@ -497,6 +497,8 @@ function isClientUiSurface(record) {
   if (pathHas(record, "client")
       && /(?:ClientController|Editor|PanelLayout|UiState|ScreenLifecycle|ScreenSession)$/.test(record.label)) return true;
   return /\bextends\s+[A-Za-z_$][\w$]*Screen\b/.test(record.text)
+    || /\bimplements\s+ObserverScreenProvider\b/.test(record.text)
+    || /\bMenuScreens\b[\s\S]{0,500}?(?:ScreenConstructor|getDeclaredMethod\s*\(\s*["']register["']|\.register\s*\()/.test(record.text)
     || /\b(?:implements\s+HudRenderCallback|GuiGraphics|DrawContext)\b/.test(record.text)
     || /\b(?:setScreenAndShow|setScreen)\s*\(/.test(record.text)
     || /\bgameRenderer\.displayItemActivation\s*\(/.test(record.text);
