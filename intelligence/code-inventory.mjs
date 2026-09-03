@@ -203,12 +203,13 @@ function isRegistrySurface(record) {
 function isPersistenceSurface(record) {
   if (["persistence", "storage", "state"].some((segment) => pathHas(record, segment))) return true;
   if (/(?:SavedData|PersistentState|Store|Storage|Repository|Codec)$/.test(record.label)) return true;
-  return /\b(?:extends\s+(?:SavedData|PersistentState)|DataComponents?\.|ComponentType\.<|Codec\s*<|NbtCompound|CompoundTag)\b/.test(record.text);
+  return /\b(?:extends\s+(?:SavedData|PersistentState)|DataComponents?\.|ComponentType\.<|Codec\s*<|NbtCompound|CompoundTag|ValueInput|ValueOutput|saveAdditional\s*\(|loadAdditional\s*\()/.test(record.text);
 }
 
 function isClientUiSurface(record) {
   if (/(?:Screen|HandledScreen|ScreenHandler|Menu|Renderer|Hud|Overlay|Tooltip|ColorProvider)$/.test(record.label)) return true;
-  return /\b(?:extends\s+(?:Screen|HandledScreen)|implements\s+HudRenderCallback|GuiGraphics|DrawContext)\b/.test(record.text);
+  return /\b(?:extends\s+(?:Screen|HandledScreen)|implements\s+HudRenderCallback|GuiGraphics|DrawContext)\b/.test(record.text)
+    || /\bgameRenderer\.displayItemActivation\s*\(/.test(record.text);
 }
 
 function isMixinSurface(record) {
