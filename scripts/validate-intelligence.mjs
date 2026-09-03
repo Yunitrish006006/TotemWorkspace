@@ -79,8 +79,12 @@ function validateV2Graph() {
     generatedAt: "2026-09-03T00:00:00.000Z",
     workspaceSnapshot: knowledge.snapshot,
     reposRoot: root,
-    modules: knowledge.modules.map((m) => ({ id: m.id, repoName: m.repoName, present: m.id === "totem-remnant", head: null, branch: null, worktreeFingerprint: null, files: m.id === "totem-remnant" ? 1 : 0, chunks: m.id === "totem-remnant" ? 1 : 0 })),
-    fileStates: [{ moduleId: "totem-remnant", repoName: "TotemRemnant", path: "src/main/java/dev/totem/remnant/api/GeneratedGraphProbeApi.java", size: 123, mtimeMs: 1, sha256: "synthetic" }],
+    modules: knowledge.modules.map((m) => ({ id: m.id, repoName: m.repoName, present: ["totem-remnant", "totem-automata"].includes(m.id), head: null, branch: null, worktreeFingerprint: null, files: m.id === "totem-remnant" ? 1 : m.id === "totem-automata" ? 1 : 0, chunks: m.id === "totem-remnant" ? 1 : 0 })),
+    fileStates: [
+      { moduleId: "totem-remnant", repoName: "TotemRemnant", path: "src/main/java/dev/totem/remnant/api/GeneratedGraphProbeApi.java", size: 123, mtimeMs: 1, sha256: "synthetic" },
+      { moduleId: "totem-automata", repoName: "TotemAutomata", path: "src/main/java/dev/totem/automata/manual/AutomataManual.java", size: 321, mtimeMs: 2, sha256: "manual-synthetic" },
+      { moduleId: "totem-remnant", repoName: "TotemRemnant", path: "src/gametest/java/dev/totem/remnant/ManualGameTest.java", size: 111, mtimeMs: 3, sha256: "test-manual-synthetic" }
+    ],
     chunks: [{ id: "probe", moduleId: "totem-remnant", repoName: "TotemRemnant", path: "src/main/java/dev/totem/remnant/api/GeneratedGraphProbeApi.java", startLine: 1, endLine: 20, symbols: ["GeneratedGraphProbeApi", "verifyGraphProbe"], text: marker }]
   };
   try {
@@ -88,6 +92,8 @@ function validateV2Graph() {
     assert.deepEqual([model.modules.length, model.features.length, model.contracts.length], [11, 58, 32]);
     assert.ok(model.code.nodes.some((n) => n.type === "code-file" && n.path.endsWith("GeneratedGraphProbeApi.java")));
     assert.ok(model.code.nodes.some((n) => n.type === "code-symbol" && n.label === "GeneratedGraphProbeApi"));
+    assert.ok(model.sharedCapabilities.some((c) => c.id === "shared:manual:totem-automata" && c.providerModuleId === "totem-core"));
+    assert.ok(!model.sharedCapabilities.some((c) => c.id === "shared:manual:totem-remnant"));
     assert.ok(!JSON.stringify(model).includes(marker));
 
     renderGraphV2({ knowledge, index, outputPath: one });
@@ -96,6 +102,7 @@ function validateV2Graph() {
     assert.equal(data, fs.readFileSync(two, "utf8"));
     assert.ok(data.startsWith("/* AUTO-GENERATED"));
     assert.ok(data.includes("window.__TOTEM_GRAPH_DATA__ = "));
+    assert.ok(data.includes("shared:manual:totem-automata"));
     assert.ok(!data.includes(marker));
 
     const html = fs.readFileSync(path.join(knowledge.root, "graph-v2.html"), "utf8");
@@ -105,13 +112,18 @@ function validateV2Graph() {
     assert.ok(html.includes('src="viewer/generated/graph-data.js"'));
     assert.ok(html.includes('src="viewer/graph-v2.js"'));
     assert.ok(html.includes('href="viewer/graph-v2.css"'));
+    assert.ok(html.includes('id="expandAll3d"'));
     assert.ok(!html.includes("window.__TOTEM_GRAPH_DATA__"));
     assert.ok(!html.includes("totem-remnant") && !html.includes("remnant-nexus"));
     assert.ok(!/<script>([\s\S]*?)<\/script>/i.test(html));
     assert.ok(!/<(?:script|link)[^>]+(?:src|href)=["']https?:\/\//i.test(html));
     assert.ok(!/@import\s+["']?https?:\/\/|url\(\s*["']?https?:\/\//i.test(css));
+    assert.ok(css.includes("touch-action:none"));
     assert.ok(renderer.includes("function overviewPath"));
     assert.ok(renderer.includes("function draw3d"));
+    assert.ok(renderer.includes("function pointerDistance"));
+    assert.ok(renderer.includes("spotlightId"));
+    assert.ok(renderer.includes("addCapabilityEdges3d"));
     assert.doesNotThrow(() => new Function(renderer));
     assert.doesNotThrow(() => new Function(adapter));
   } finally {
@@ -159,4 +171,4 @@ async function validateMcpServer() {
 validateIncrementalIndex();
 validateV2Graph();
 await validateMcpServer();
-console.log(`Totem workspace intelligence validation passed: ${summary.moduleCount} modules, ${summary.featureCount} features, ${summary.contractCount} contracts; incremental index refresh and data-only V2 viewer generation passed.`);
+console.log(`Totem workspace intelligence validation passed: ${summary.moduleCount} modules, ${summary.featureCount} features, ${summary.contractCount} contracts; incremental index refresh, shared capability evidence, and data-only V2 viewer generation passed.`);
