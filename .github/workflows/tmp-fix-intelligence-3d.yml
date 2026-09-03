@@ -1,4 +1,4 @@
-name: Fix 3D Intelligence Validation
+name: Fix 3D Validation Assumptions
 
 on:
   push:
@@ -10,7 +10,7 @@ permissions:
 
 jobs:
   patch:
-    if: ${{ !contains(github.event.head_commit.message, '[3d-intelligence-patch]') }}
+    if: ${{ !contains(github.event.head_commit.message, '[3d-validator-patch]') }}
     runs-on: ubuntu-latest
     steps:
       - name: Check out branch
@@ -19,11 +19,12 @@ jobs:
           ref: feat/3d-only-parity
           fetch-depth: 0
 
-      - name: Patch intelligence validator
+      - name: Patch legacy V2 validator assumptions
         shell: bash
         run: |
           python - <<'PY'
           from pathlib import Path
+
           p = Path('scripts/validate-intelligence.mjs')
           s = p.read_text()
           old = '''    const html = fs.readFileSync(path.join(knowledge.root, "graph-v2.html"), "utf8");
@@ -76,6 +77,22 @@ jobs:
           if old not in s:
               raise SystemExit('standalone renderer validation block marker not found')
           p.write_text(s.replace(old, new))
+
+          p = Path('scripts/validate-contract-audit.mjs')
+          s = p.read_text()
+          old = '''assert.ok(html.includes('src="viewer/generated/graph-data.js"'));
+          assert.ok(html.includes('src="viewer/graph-v2-adapter.js"'));
+          assert.ok(html.includes('src="viewer/graph-v2.js"'));
+          assert.ok(!html.includes("graph-v2-contract-audit.js"));'''.replace('          ', '')
+          new = '''assert.ok(html.includes('src="viewer/generated/graph-data.js"'));
+          assert.ok(html.includes('src="viewer/graph-v2-adapter.js"'));
+          assert.ok(html.includes('src="viewer/graph-v2-cluster-v2.js"'));
+          assert.ok(!html.includes('src="viewer/graph-v2.js"'));
+          assert.ok(!html.includes('id="mode2d"') && !html.includes('id="pane2d"'));
+          assert.ok(!html.includes("graph-v2-contract-audit.js"));'''.replace('          ', '')
+          if old not in s:
+              raise SystemExit('contract audit renderer assertion marker not found')
+          p.write_text(s.replace(old, new))
           PY
 
       - name: Validate full workspace
@@ -87,7 +104,7 @@ jobs:
           node scripts/validate-3d-cluster.mjs
           node scripts/validate-3d-only-parity.mjs
 
-      - name: Commit patch
+      - name: Commit validator migration
         shell: bash
         run: |
           set -euo pipefail
@@ -97,6 +114,6 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add scripts/validate-intelligence.mjs
-          git commit -m "[3d-intelligence-patch] test: validate standalone 3D renderer"
+          git add scripts/validate-intelligence.mjs scripts/validate-contract-audit.mjs
+          git commit -m "[3d-validator-patch] test: validate standalone 3D renderer"
           git push origin HEAD:feat/3d-only-parity
