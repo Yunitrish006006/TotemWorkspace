@@ -292,6 +292,10 @@ function featureAreaAssignments(records, module, ownRoot) {
       assignments.set(record.path, baseArea);
       continue;
     }
+    if (isEntrypoint(record) || /(?:Composition)$/.test(record.label)) {
+      assignments.set(record.path, baseArea);
+      continue;
+    }
 
     const labelWords = semanticLabelWords(record.label, module);
     const symbolWords = semanticSymbolWords(record, module);
@@ -380,7 +384,7 @@ function isNetworkingSurface(record) {
   if (pathHas(record, "network") || pathHas(record, "networking")) return true;
   const concreteNetworkingEvidence =
     /\b(?:ServerPlayNetworking|ClientPlayNetworking|PayloadTypeRegistry)\s*\./.test(record.text)
-    || /\b(?:CustomPacketPayload|StreamCodec|PacketCodec)\b/.test(record.text);
+    || /\bCustomPacketPayload\b/.test(record.text);
   if (concreteNetworkingEvidence) return true;
   if (pathHas(record, "domain")) return false;
   return /(?:Payload|Packet|Networking|Network|Sender|Receiver|Transport|Sync|Channel|Codec)$/.test(record.label);
