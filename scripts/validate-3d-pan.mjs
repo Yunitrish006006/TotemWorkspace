@@ -7,49 +7,32 @@ import { fileURLToPath } from "node:url";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const html = fs.readFileSync(path.join(root, "graph-v2.html"), "utf8");
-const source = fs.readFileSync(path.join(root, "viewer", "graph-v2-pan.js"), "utf8");
+const rendererPath = path.join(root, "viewer", "graph-v2.js");
+const obsoleteHelperPath = path.join(root, "viewer", "graph-v2-pan.js");
+const source = fs.readFileSync(rendererPath, "utf8");
 
-assert.ok(html.includes('src="viewer/graph-v2-pan.js"'));
-assert.ok(html.indexOf('src="viewer/graph-v2.js"') < html.indexOf('src="viewer/graph-v2-pan.js"'));
-assert.ok(html.includes("兩指縮放＋平移觀看位置"));
+assert.ok(html.includes("兩指縮放＋平移視角中心"));
+assert.ok(!html.includes('src="viewer/graph-v2-pan.js"'));
+assert.ok(!fs.existsSync(obsoleteHelperPath), "obsolete CSS-transform pan helper must be removed");
+assert.ok(source.includes("panX:0,panY:0"));
+assert.ok(source.includes("function pointerCentroid"));
+assert.ok(source.includes("cam.panX=clamp"));
+assert.ok(source.includes("cam.panY=clamp"));
+assert.ok(source.includes("w/2+cam.panX+x*scale"));
+assert.ok(source.includes("h/2+cam.panY+y*scale"));
+assert.ok(!source.includes("canvas.style.transform"));
+assert.ok(!source.includes("translate3d("));
 assert.doesNotThrow(() => new Function(source));
 
-const listeners = new Map();
-const canvas = {
-  clientWidth: 1000,
-  clientHeight: 700,
-  style: {},
-  addEventListener(type, handler) {
-    listeners.set(type, handler);
-  }
-};
-const context = vm.createContext({
-  window: {},
-  document: {
-    getElementById(id) {
-      return id === "graph3d" ? canvas : null;
-    }
-  },
-  Map,
-  Math
-});
-new vm.Script(source, { filename: "graph-v2-pan.js" }).runInContext(context);
+const projectMatch = source.match(/function project\(p,w,h\)\{[^\n]+\}/);
+assert.ok(projectMatch, "project() must remain available for camera projection validation");
+const context = vm.createContext({ Math, cam: { yaw: 0, pitch: 0, zoom: 1, panX: 0, panY: 0 } });
+new vm.Script(`${projectMatch[0]};this.project=project;`).runInContext(context);
+const base = context.project({ x: 0, y: 0, z: 0 }, 1000, 700);
+context.cam.panX = 120;
+context.cam.panY = -45;
+const shifted = context.project({ x: 0, y: 0, z: 0 }, 1000, 700);
+assert.equal(shifted.x - base.x, 120, "camera panX must shift the projected world center, not the canvas element");
+assert.equal(shifted.y - base.y, -45, "camera panY must shift the projected world center, not the canvas element");
 
-function event(pointerId, clientX, clientY) {
-  return { pointerId, pointerType: "touch", clientX, clientY, preventDefault() {} };
-}
-
-listeners.get("pointerdown")(event(1, 100, 100));
-listeners.get("pointermove")(event(1, 130, 120));
-assert.equal(canvas.style.transform, undefined, "one-finger movement must not pan the viewport");
-
-listeners.get("pointerdown")(event(2, 200, 100));
-listeners.get("pointermove")(event(1, 150, 130));
-listeners.get("pointermove")(event(2, 220, 110));
-assert.equal(canvas.style.transform, "translate3d(20.0px,10.0px,0)", "two-finger centroid movement pans the 3D viewport");
-
-listeners.get("pointerup")(event(2, 220, 110));
-listeners.get("pointermove")(event(1, 190, 170));
-assert.equal(canvas.style.transform, "translate3d(20.0px,10.0px,0)", "pan stops when fewer than two pointers remain");
-
-console.log("3D gesture pan validation passed: one-finger rotation path remains untouched and two-finger centroid movement pans the viewport.");
+console.log("3D camera pan validation passed: two-finger pan changes projection center, canvas stays fixed, and the obsolete CSS transform helper is absent.");
