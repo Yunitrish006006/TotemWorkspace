@@ -155,7 +155,9 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
                                 : 'CLEAN';
                     final head = module.head == null
                         ? '—'
-                        : module.head!.substring(0, module.head!.length.clamp(0, 10));
+                        : module.head!.length > 10
+                            ? module.head!.substring(0, 10)
+                            : module.head!;
                     return Container(
                       padding: const EdgeInsets.all(11),
                       decoration: BoxDecoration(
