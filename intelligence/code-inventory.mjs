@@ -123,11 +123,8 @@ function semanticLabelWords(label, module) {
   ));
 }
 
-function semanticRecordWords(record, module) {
-  return unique([
-    ...semanticLabelWords(record.label, module),
-    ...record.symbols.flatMap((symbol) => semanticLabelWords(symbol, module))
-  ]);
+function semanticSymbolWords(record, module) {
+  return unique(record.symbols.flatMap((symbol) => semanticLabelWords(symbol, module)));
 }
 
 function fallbackPackageRoot(records) {
@@ -206,12 +203,14 @@ function featureArea(record, module, ownRoot) {
 function featureAreaAssignments(records, module, ownRoot) {
   const explicit = new Map(records.map((record) => [record.path, featureArea(record, module, ownRoot)]));
   const knownAreas = unique([...explicit.values()].filter((area) => area !== "module-root" && area !== "adapter"));
-  const vocabularies = new Map(knownAreas.map((area) => [area, new Set([area])]));
+  const labelVocabularies = new Map(knownAreas.map((area) => [area, new Set([area])]));
+  const symbolVocabularies = new Map(knownAreas.map((area) => [area, new Set([area])]));
 
   for (const record of records) {
     const area = explicit.get(record.path);
-    if (!vocabularies.has(area)) continue;
-    for (const word of semanticRecordWords(record, module)) vocabularies.get(area).add(word);
+    if (!labelVocabularies.has(area)) continue;
+    for (const word of semanticLabelWords(record.label, module)) labelVocabularies.get(area).add(word);
+    for (const word of semanticSymbolWords(record, module)) symbolVocabularies.get(area).add(word);
   }
 
   const assignments = new Map();
@@ -222,12 +221,19 @@ function featureAreaAssignments(records, module, ownRoot) {
       continue;
     }
 
-    const words = semanticRecordWords(record, module);
+    const labelWords = semanticLabelWords(record.label, module);
+    const symbolWords = semanticSymbolWords(record, module);
     const scored = knownAreas.map((area) => {
-      const vocabulary = vocabularies.get(area);
-      const overlap = words.filter((word) => vocabulary.has(word)).length;
-      const areaBonus = words.includes(area) ? 3 : 0;
-      return { area, score: overlap + areaBonus };
+      const labelVocabulary = labelVocabularies.get(area);
+      const symbolVocabulary = symbolVocabularies.get(area);
+      const labelOverlap = labelWords.filter((word) => labelVocabulary.has(word)).length;
+      const symbolOverlap = symbolWords.filter((word) => symbolVocabulary.has(word)).length;
+      const labelAreaBonus = labelWords.includes(area) ? 4 : 0;
+      const symbolAreaBonus = symbolWords.includes(area) ? 2 : 0;
+      return {
+        area,
+        score: labelOverlap * 3 + symbolOverlap + labelAreaBonus + symbolAreaBonus
+      };
     }).filter((entry) => entry.score > 0)
       .sort((a, b) => b.score - a.score || a.area.localeCompare(b.area));
 
