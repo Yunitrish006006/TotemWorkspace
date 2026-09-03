@@ -310,7 +310,7 @@ class _Toolbar extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('TOTEM Architecture · Flutter Phase 2',
+                  Text('TOTEM Architecture · Flutter Phase 3',
                       style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
                   Text('feature clusters · relation-aware endpoints · shared graph model',
                       style: TextStyle(color: Color(0xFF8FA5BD), fontSize: 11)),
