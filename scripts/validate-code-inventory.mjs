@@ -8,7 +8,9 @@ const knowledge = {
     { id: "totem-a", name: "TotemA", repoName: "TotemA" },
     { id: "totem-b", name: "TotemB", repoName: "TotemB" },
     { id: "totem-core", name: "TotemCore", repoName: "TotemCore" },
-    { id: "totem-alchemy", name: "TotemAlchemy", repoName: "TotemAlchemy" }
+    { id: "totem-alchemy", name: "TotemAlchemy", repoName: "TotemAlchemy" },
+    { id: "totem-copperworks", name: "TotemCopperworks", repoName: "TotemCopperworks" },
+    { id: "totem-observerdemo", name: "TotemObserverDemo", repoName: "TotemObserverDemo" }
   ]
 };
 
@@ -307,6 +309,127 @@ public interface AlchemyApi { }
   ]
 };
 
+const syntheticChunk = (path, packageName, className, symbols = [className]) => ({
+  moduleId: "totem-copperworks",
+  repoName: "TotemCopperworks",
+  path,
+  startLine: 1,
+  symbols,
+  text: `package ${packageName};
+public final class ${className} { }
+`
+});
+
+index.chunks.push(
+  ...Array.from({ length: 10 }, (_, index) => syntheticChunk(
+    `src/main/java/dev/example/copperworks/copper/GatheringWork${index}.java`,
+    "dev.example.copperworks.copper",
+    `GatheringWork${index}`
+  )),
+  ...Array.from({ length: 8 }, (_, index) => syntheticChunk(
+    `src/main/java/dev/example/copperworks/copper/SortingWork${index}.java`,
+    "dev.example.copperworks.copper",
+    `SortingWork${index}`
+  )),
+  ...Array.from({ length: 5 }, (_, index) => syntheticChunk(
+    `src/main/java/dev/example/copperworks/copper/CopperWrenchWork${index}.java`,
+    "dev.example.copperworks.copper",
+    `CopperWrenchWork${index}`
+  )),
+  ...Array.from({ length: 5 }, (_, index) => syntheticChunk(
+    `src/main/java/dev/example/copperworks/copper/LlmWorker${index}.java`,
+    "dev.example.copperworks.copper",
+    `LlmWorker${index}`
+  )),
+  ...Array.from({ length: 3 }, (_, index) => syntheticChunk(
+    `src/main/java/dev/example/copperworks/copper/CopperGolemCore${index}.java`,
+    "dev.example.copperworks.copper",
+    `CopperGolemCore${index}`
+  )),
+  syntheticChunk(
+    "src/main/java/dev/example/copperworks/client/CopperGolemMenuPanelLayout.java",
+    "dev.example.copperworks.client",
+    "CopperGolemMenuPanelLayout"
+  ),
+  syntheticChunk(
+    "src/main/java/dev/example/copperworks/client/CopperGolemMenuEditor.java",
+    "dev.example.copperworks.client",
+    "CopperGolemMenuEditor"
+  ),
+  syntheticChunk(
+    "src/client/java/dev/example/copperworks/client/CopperGolemMenuUiState.java",
+    "dev.example.copperworks.client",
+    "CopperGolemMenuUiState"
+  ),
+  syntheticChunk(
+    "src/client/java/dev/example/copperworks/client/CopperGolemMenuScreenSession.java",
+    "dev.example.copperworks.client",
+    "CopperGolemMenuScreenSession",
+    [
+      "CopperGolemMenuScreenSession",
+      "CopperGolemData",
+      "CopperGolemController",
+      "CopperGolemActivity",
+      "CopperGolemBinding",
+      "CopperGolemMode",
+      "CopperGolemFuelService"
+    ]
+  ),
+  syntheticChunk(
+    "src/client/java/dev/example/copperworks/client/CopperGolemClientPayloadRegistration.java",
+    "dev.example.copperworks.client",
+    "CopperGolemClientPayloadRegistration"
+  ),
+  syntheticChunk(
+    "src/client/java/dev/example/copperworks/client/CopperGolemMenuPayloadBridge.java",
+    "dev.example.copperworks.client",
+    "CopperGolemMenuPayloadBridge"
+  ),
+  syntheticChunk(
+    "src/main/java/dev/example/copperworks/menu/CopperGolemMenu.java",
+    "dev.example.copperworks.menu",
+    "CopperGolemMenu"
+  ),
+  {
+    moduleId: "totem-copperworks",
+    repoName: "TotemCopperworks",
+    path: "src/main/java/dev/example/copperworks/TotemCopperworks.java",
+    startLine: 1,
+    symbols: ["TotemCopperworks", "onInitialize"],
+    text: `package dev.example.copperworks;
+public final class TotemCopperworks implements ModInitializer {
+  public void onInitialize() { }
+}
+`
+  }
+);
+
+const observerChunk = (className) => ({
+  moduleId: "totem-observerdemo",
+  repoName: "TotemObserverDemo",
+  path: `src/main/java/dev/example/observerdemo/observer/${className}.java`,
+  startLine: 1,
+  symbols: [className],
+  text: `package dev.example.observerdemo.observer;
+public final class ${className} { }
+`
+});
+index.chunks.push(
+  ...Array.from({ length: 10 }, (_, index) => observerChunk(`ObserverRelay${index}`)),
+  ...Array.from({ length: 10 }, (_, index) => observerChunk(`ObserverSession${index}`)),
+  ...Array.from({ length: 10 }, (_, index) => observerChunk(`ObserverPriority${index}`)),
+  {
+    moduleId: "totem-observerdemo",
+    repoName: "TotemObserverDemo",
+    path: "src/client/java/dev/example/observerdemo/client/ObserverBeaconScreenAccessor.java",
+    startLine: 1,
+    symbols: ["ObserverBeaconScreenAccessor"],
+    text: `package dev.example.observerdemo.client;
+public interface ObserverBeaconScreenAccessor { }
+`
+  }
+);
+
 assert.equal(isProductionCode("src/main/java/a/A.java"), true);
 assert.equal(isProductionCode("src/client/java/a/A.kt"), true);
 assert.equal(isProductionCode("src/test/java/a/A.java"), false);
@@ -314,7 +437,7 @@ assert.equal(isProductionCode("README.md"), false);
 
 const inventory = buildCodeInventory({ knowledge, index });
 assert.equal(inventory.sourceScope, "production-code-only");
-assert.equal(inventory.modules.length, 4);
+assert.equal(inventory.modules.length, 6);
 
 const moduleA = inventory.modules.find((entry) => entry.moduleId === "totem-a");
 assert.ok(moduleA);
@@ -381,5 +504,45 @@ assert.ok(moduleAlchemy);
 assert.equal(moduleB.productionFileCount, 1);
 assert.equal(moduleCore.productionFileCount, 1);
 assert.equal(moduleAlchemy.productionFileCount, 1);
+
+const moduleC = inventory.modules.find((entry) => entry.moduleId === "totem-copperworks");
+assert.ok(moduleC);
+assert.equal(moduleC.productionFileCount, 39);
+const gatheringArea = moduleC.featureAreas.find((entry) => entry.key === "gathering");
+const sortingArea = moduleC.featureAreas.find((entry) => entry.key === "sorting");
+const wrenchArea = moduleC.featureAreas.find((entry) => entry.key === "wrench");
+const llmArea = moduleC.featureAreas.find((entry) => entry.key === "llm");
+assert.ok(gatheringArea);
+assert.ok(sortingArea);
+assert.ok(wrenchArea);
+assert.ok(llmArea);
+assert.equal(gatheringArea.fileCount, 10);
+assert.equal(sortingArea.fileCount, 8);
+assert.equal(wrenchArea.fileCount, 5);
+assert.equal(llmArea.fileCount, 5);
+const menuAreaC = moduleC.featureAreas.find((entry) => entry.key === "menu");
+const rootAreaC = moduleC.featureAreas.find((entry) => entry.key === "module-root");
+assert.ok(menuAreaC);
+assert.ok(rootAreaC);
+assert.ok(menuAreaC.representativePaths.some((path) => path.endsWith("CopperGolemMenuScreenSession.java")));
+assert.ok(menuAreaC.representativePaths.some((path) => path.endsWith("CopperGolemMenuPayloadBridge.java")));
+assert.ok(rootAreaC.representativePaths.some((path) => path.endsWith("TotemCopperworks.java")));
+for (const label of [
+  "CopperGolemMenuPanelLayout",
+  "CopperGolemMenuEditor",
+  "CopperGolemMenuUiState",
+  "CopperGolemMenuScreenSession"
+]) {
+  assert.ok(moduleC.surfaces.clientUi.some((entry) => entry.label === label), `${label} should be Client / UI evidence`);
+}
+assert.ok(!moduleC.surfaces.clientUi.some((entry) => entry.label === "CopperGolemClientPayloadRegistration"));
+assert.ok(!moduleC.surfaces.clientUi.some((entry) => entry.label === "CopperGolemMenuPayloadBridge"));
+
+const moduleD = inventory.modules.find((entry) => entry.moduleId === "totem-observerdemo");
+assert.ok(moduleD);
+assert.equal(moduleD.productionFileCount, 31);
+assert.ok(moduleD.featureAreas.some((entry) => entry.key === "observer"));
+assert.ok(!moduleD.featureAreas.some((entry) => ["relay", "session", "priority"].includes(entry.key)));
+assert.ok(!moduleD.surfaces.clientUi.some((entry) => entry.label === "ObserverBeaconScreenAccessor"));
 
 console.log("Code-first inventory validation passed.");

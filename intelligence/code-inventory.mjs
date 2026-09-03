@@ -15,6 +15,10 @@ const GENERIC_LABEL_WORDS = new Set([
   "state", "data", "implementation", "impl", "event", "events", "hook", "hooks", "codec",
   "item", "items", "inventory", "content"
 ]);
+const DOMINANT_AREA_MODIFIER_WORDS = new Set([
+  "abstract", "default", "cached", "classifying", "persisted", "persisting", "portable", "simple",
+  "operation", "operations", "helper", "sink", "native", "remote", "owned", "structured"
+]);
 
 const SURFACE_LABELS = Object.freeze({
   entrypoints: "Entrypoints",
@@ -200,6 +204,74 @@ function featureArea(record, module, ownRoot) {
   return insideRoot ? "module-root" : "adapter";
 }
 
+function refineDominantFeatureAreas(records, assignments, module) {
+  const byArea = new Map();
+  for (const record of records) {
+    const area = assignments.get(record.path);
+    if (!area || area === "module-root" || area === "adapter") continue;
+    if (!byArea.has(area)) byArea.set(area, []);
+    byArea.get(area).push(record);
+  }
+  const knownAreas = new Set(byArea.keys());
+
+  for (const [area, areaRecords] of byArea) {
+    if (areaRecords.length < 24 || areaRecords.length < Math.ceil(records.length * 0.45)) continue;
+
+    const areaNamedRecords = areaRecords.filter((record) =>
+      semanticLabelWords(record.label, module)
+        .filter((word) => !DOMINANT_AREA_MODIFIER_WORDS.has(word))
+        .includes(area));
+    if (areaNamedRecords.length >= Math.ceil(areaRecords.length * 0.55)) continue;
+
+    const refinableRecords = [];
+    const wordsByPath = new Map();
+    for (const record of areaRecords) {
+      const words = semanticLabelWords(record.label, module)
+        .filter((word) => !DOMINANT_AREA_MODIFIER_WORDS.has(word));
+      wordsByPath.set(record.path, words);
+      const explicitLeafAreas = words.filter((word) => word !== area && knownAreas.has(word));
+      if (explicitLeafAreas.length > 0) {
+        assignments.set(record.path, explicitLeafAreas[explicitLeafAreas.length - 1]);
+      } else {
+        refinableRecords.push(record);
+      }
+    }
+    if (refinableRecords.length < 24) continue;
+
+    const support = new Map();
+    for (const record of refinableRecords) {
+      for (const word of unique((wordsByPath.get(record.path) ?? []).filter((word) => word !== area))) {
+        support.set(word, (support.get(word) ?? 0) + 1);
+      }
+    }
+
+    const minSupport = Math.max(5, Math.ceil(refinableRecords.length * 0.08));
+    const candidates = new Set([...support.entries()]
+      .filter(([, count]) => count >= minSupport && count <= Math.floor(refinableRecords.length * 0.55))
+      .map(([word]) => word));
+    if (candidates.size < 3) continue;
+
+    const tentative = new Map();
+    const assignedCounts = new Map();
+    for (const record of refinableRecords) {
+      const chosen = (wordsByPath.get(record.path) ?? []).find((word) => candidates.has(word));
+      if (!chosen) continue;
+      tentative.set(record.path, chosen);
+      assignedCounts.set(chosen, (assignedCounts.get(chosen) ?? 0) + 1);
+    }
+
+    const minAssigned = Math.max(4, Math.ceil(minSupport * 0.4));
+    const viable = new Set([...assignedCounts.entries()]
+      .filter(([, count]) => count >= minAssigned)
+      .map(([word]) => word));
+    if (viable.size < 3) continue;
+
+    for (const [recordPath, chosen] of tentative) {
+      if (viable.has(chosen)) assignments.set(recordPath, chosen);
+    }
+  }
+}
+
 function featureAreaAssignments(records, module, ownRoot) {
   const explicit = new Map(records.map((record) => [record.path, featureArea(record, module, ownRoot)]));
   const knownAreas = unique([...explicit.values()].filter((area) => area !== "module-root" && area !== "adapter"));
@@ -244,6 +316,8 @@ function featureAreaAssignments(records, module, ownRoot) {
     }
   }
 
+  refineDominantFeatureAreas(records, assignments, module);
+
   const pathByQualifiedName = new Map(records
     .filter((record) => record.packageName)
     .map((record) => [`${record.packageName}.${record.label}`, record.path]));
@@ -268,6 +342,17 @@ function featureAreaAssignments(records, module, ownRoot) {
       changed = true;
     }
     if (!changed) break;
+  }
+
+  const refinedAreas = new Set([...assignments.values()]
+    .filter((area) => area && area !== "module-root" && area !== "adapter"));
+  for (const record of records) {
+    if (assignments.get(record.path) !== "module-root") continue;
+    const directAreas = semanticLabelWords(record.label, module)
+      .filter((word) => refinedAreas.has(word));
+    if (directAreas.length > 0) {
+      assignments.set(record.path, directAreas[directAreas.length - 1]);
+    }
   }
 
   return assignments;
@@ -322,6 +407,8 @@ function isPersistenceSurface(record) {
 
 function isClientUiSurface(record) {
   if (/(?:Screen|ScreenClient|UiClient|HandledScreen|ScreenHandler|Menu|Renderer|Hud|Overlay|Tooltip|ColorProvider)$/.test(record.label)) return true;
+  if (pathHas(record, "client")
+      && /(?:ClientController|Editor|PanelLayout|UiState|ScreenLifecycle|ScreenSession)$/.test(record.label)) return true;
   return /\bextends\s+[A-Za-z_$][\w$]*Screen\b/.test(record.text)
     || /\b(?:implements\s+HudRenderCallback|GuiGraphics|DrawContext)\b/.test(record.text)
     || /\b(?:setScreenAndShow|setScreen)\s*\(/.test(record.text)
