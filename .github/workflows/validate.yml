@@ -27,3 +27,5 @@ jobs:
         run: node scripts/validate-workspace.mjs
       - name: Validate workspace intelligence
         run: node scripts/validate-intelligence.mjs
+      - name: Validate audited V2 contract endpoints
+        run: node scripts/validate-contract-audit.mjs
