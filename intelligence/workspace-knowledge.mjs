@@ -90,6 +90,78 @@ function normalizeNodeId(value) {
   return `external:${String(value)}`;
 }
 
+function applyRelationshipModuleOverrides(modulesData, relationshipAudit) {
+  const overrides = relationshipAudit?.moduleOverrides ?? {};
+  return {
+    ...modulesData,
+    modules: (modulesData.modules ?? []).map((module) => {
+      const override = overrides[module.id];
+      if (!override) return module;
+      return {
+        ...module,
+        ...override,
+        observerProviders: override.observerProviders ?? module.observerProviders ?? []
+      };
+    })
+  };
+}
+
+function relationshipField(channel) {
+  if (channel === "soft") return "softContractIds";
+  if (channel === "service") return "serviceContractIds";
+  if (channel === "event") return "eventContractIds";
+  return null;
+}
+
+function applyRelationshipFeatureOverrides(features, relationshipAudit) {
+  const entries = Object.entries(relationshipAudit?.contractOverrides ?? {})
+    .map(([id, override]) => ({ id, ...override, field: relationshipField(override.channel) }))
+    .filter((entry) => entry.field);
+  const auditedIdsByField = new Map();
+  for (const entry of entries) {
+    if (!auditedIdsByField.has(entry.field)) auditedIdsByField.set(entry.field, new Set());
+    auditedIdsByField.get(entry.field).add(entry.id);
+  }
+
+  return Object.freeze(features.map((feature) => {
+    const next = {
+      ...feature,
+      softContractIds: [...feature.softContractIds],
+      serviceContractIds: [...feature.serviceContractIds],
+      eventContractIds: [...feature.eventContractIds]
+    };
+    for (const [field, auditedIds] of auditedIdsByField) {
+      next[field] = next[field].filter((id) => !auditedIds.has(id));
+    }
+    for (const entry of entries) {
+      if ((entry.featureIds ?? []).includes(feature.id)) next[entry.field].push(entry.id);
+    }
+    next.softContractIds = Object.freeze([...new Set(next.softContractIds)]);
+    next.serviceContractIds = Object.freeze([...new Set(next.serviceContractIds)]);
+    next.eventContractIds = Object.freeze([...new Set(next.eventContractIds)]);
+    return Object.freeze(next);
+  }));
+}
+
+function applyRelationshipContractOverrides(contracts, relationshipAudit) {
+  const overrides = relationshipAudit?.contractOverrides ?? {};
+  const seen = new Set();
+  const result = contracts.map((contract) => {
+    const override = overrides[contract.id];
+    if (!override) return contract;
+    seen.add(contract.id);
+    const { channel, ...patch } = override;
+    return Object.freeze({
+      ...contract,
+      ...patch,
+      featureIds: Object.freeze([...(patch.featureIds ?? contract.featureIds ?? [])])
+    });
+  });
+  const missing = Object.keys(overrides).filter((id) => !seen.has(id));
+  if (missing.length) throw new Error(`relationship audit references unknown contracts: ${missing.join(", ")}`);
+  return Object.freeze(result);
+}
+
 function buildFeatureRecords({ modules, moduleDetails, activeModuleIds, featureBranchRules }) {
   const moduleById = new Map(modules.map((module) => [module.id, module]));
   const features = [];
@@ -254,16 +326,20 @@ export function defaultReposRoot(workspaceRoot = defaultWorkspaceRoot()) {
 export function loadKnowledge(workspaceRoot = defaultWorkspaceRoot()) {
   const root = path.resolve(workspaceRoot);
   const modulesData = readJson(path.join(root, "data", "modules.json"));
+  const relationshipAudit = readJson(path.join(root, "data", "relationship-audit.json"));
+  const auditedModulesData = applyRelationshipModuleOverrides(modulesData, relationshipAudit);
   const aliasesData = readJson(path.join(root, "data", "aliases.json"));
   const testMatrix = readJson(path.join(root, "data", "test-matrix.json"));
   const htmlData = parseHtmlKnowledge(root);
-  const modules = Object.freeze((modulesData.modules ?? []).map((module) => Object.freeze({
+  const modules = Object.freeze((auditedModulesData.modules ?? []).map((module) => Object.freeze({
     ...module,
     repoName: repoName(module),
     graphKey: ID_TO_MODULE_KEY[module.id] ?? null
   })));
-  const features = buildFeatureRecords({ modules, ...htmlData });
-  const contracts = buildContractRecords({ modulesData, features, ...htmlData });
+  const rawFeatures = buildFeatureRecords({ modules, ...htmlData });
+  const features = applyRelationshipFeatureOverrides(rawFeatures, relationshipAudit);
+  const rawContracts = buildContractRecords({ modulesData: auditedModulesData, features, ...htmlData });
+  const contracts = applyRelationshipContractOverrides(rawContracts, relationshipAudit);
   const moduleById = new Map(modules.map((module) => [module.id, module]));
   const featureById = new Map(features.map((feature) => [feature.id, feature]));
   const contractById = new Map(contracts.map((contract) => [contract.id, contract]));
@@ -271,6 +347,7 @@ export function loadKnowledge(workspaceRoot = defaultWorkspaceRoot()) {
   return Object.freeze({
     root,
     snapshot: Object.freeze({ ...(modulesData.snapshot ?? {}) }),
+    relationshipAudit: Object.freeze({ ...relationshipAudit }),
     modules,
     features,
     contracts,
@@ -329,6 +406,9 @@ function contractSearchScore(contract, query, tokens) {
     contract.fallback,
     contract.evidence,
     contract.family,
+    contract.implementationStatus,
+    contract.auditStatus,
+    contract.auditNote,
     ...(contract.featureIds ?? [])
   ], { exact: 14, token: 3 });
 }
