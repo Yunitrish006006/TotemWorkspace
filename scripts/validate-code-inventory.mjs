@@ -123,6 +123,18 @@ public final class AlchemyBlockEntity {
     {
       moduleId: "totem-a",
       repoName: "TotemA",
+      path: "src/main/java/dev/example/totema/item/CustomDataStore.java",
+      startLine: 1,
+      symbols: ["CustomDataStore", "read"],
+      text: `package dev.example.totema.item;
+public final class CustomDataStore {
+  Object read(ItemStack stack) { return stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY); }
+}
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
       path: "src/client/java/dev/example/totema/client/ConfigScreen.java",
       startLine: 1,
       symbols: ["ConfigScreen"],
@@ -160,6 +172,30 @@ public final class MixtureColorProvider { void register() { BlockColorRegistry.r
 public final class ItemActivationFeedback {
   void show(Client context, ItemStack stack) { context.gameRenderer.displayItemActivation(stack); }
 }
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
+      path: "src/client/java/dev/example/totema/client/ObserverBeaconScreenClient.java",
+      startLine: 1,
+      symbols: ["ObserverBeaconScreenClient", "show", "ObserverBeaconScreen"],
+      text: `package dev.example.totema.client;
+public final class ObserverBeaconScreenClient {
+  Object transientBanner(ItemStack stack) { return stack.getOrDefault(DataComponents.BANNER_PATTERNS, BannerPatternLayers.EMPTY); }
+  void show(Minecraft client) { client.setScreenAndShow(new ObserverBeaconScreen()); }
+  static final class ObserverBeaconScreen extends BeaconScreen { }
+}
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
+      path: "src/client/java/dev/example/totema/client/ObserverUiClient.java",
+      startLine: 1,
+      symbols: ["ObserverUiClient"],
+      text: `package dev.example.totema.client;
+public final class ObserverUiClient { }
 `
     },
     {
@@ -222,7 +258,7 @@ assert.equal(inventory.modules.length, 4);
 
 const moduleA = inventory.modules.find((entry) => entry.moduleId === "totem-a");
 assert.ok(moduleA);
-assert.equal(moduleA.productionFileCount, 11);
+assert.equal(moduleA.productionFileCount, 14);
 assert.ok(moduleA.surfaces.api.some((entry) => entry.label === "AService"));
 assert.ok(moduleA.surfaces.networking.some((entry) => entry.label === "ASyncPacket"));
 assert.ok(moduleA.surfaces.commands.some((entry) => entry.label === "RuntimeHooks"));
@@ -231,10 +267,14 @@ assert.ok(moduleA.surfaces.events.some((entry) => entry.label === "RuntimeHooks"
 assert.ok(moduleA.surfaces.events.some((entry) => entry.label === "ConnectionSync"));
 assert.ok(moduleA.surfaces.persistence.some((entry) => entry.label === "MixtureState"));
 assert.ok(moduleA.surfaces.persistence.some((entry) => entry.label === "AlchemyBlockEntity"));
+assert.ok(moduleA.surfaces.persistence.some((entry) => entry.label === "CustomDataStore"));
+assert.ok(!moduleA.surfaces.persistence.some((entry) => entry.label === "ObserverBeaconScreenClient"));
 assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "ConfigScreen"));
 assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "EffectTooltip"));
 assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "MixtureColorProvider"));
 assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "ItemActivationFeedback"));
+assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "ObserverBeaconScreenClient"));
+assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "ObserverUiClient"));
 assert.ok(moduleA.surfaces.integrations.some((entry) => entry.label === "JadeCompat"));
 assert.ok(!moduleA.surfaces.integrations.some((entry) => entry.label === "RuntimeHooks"));
 assert.ok(moduleA.integrations.some((entry) => entry.packageRoot === "com.google.gson"));
