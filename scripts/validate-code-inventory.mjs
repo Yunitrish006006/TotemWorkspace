@@ -437,10 +437,11 @@ index.chunks.push(
     repoName: "TotemBridgeDemo",
     path: "src/main/java/dev/example/bridgedemo/TotemBridgeDemo.java",
     startLine: 1,
-    symbols: ["TotemBridgeDemo", "onInitialize"],
+    symbols: ["TotemBridgeDemo", "onInitialize", "installTransportFacade"],
     text: `package dev.example.bridgedemo;
 public final class TotemBridgeDemo implements ModInitializer {
-  public void onInitialize() { }
+  public void onInitialize() { installTransportFacade(); }
+  void installTransportFacade() { }
 }
 `
   },
