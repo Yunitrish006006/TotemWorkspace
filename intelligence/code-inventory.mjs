@@ -292,6 +292,10 @@ function featureAreaAssignments(records, module, ownRoot) {
       assignments.set(record.path, baseArea);
       continue;
     }
+    if (isEntrypoint(record) || /(?:Composition)$/.test(record.label)) {
+      assignments.set(record.path, baseArea);
+      continue;
+    }
 
     const labelWords = semanticLabelWords(record.label, module);
     const symbolWords = semanticSymbolWords(record, module);
@@ -321,6 +325,7 @@ function featureAreaAssignments(records, module, ownRoot) {
   const pathByQualifiedName = new Map(records
     .filter((record) => record.packageName)
     .map((record) => [`${record.packageName}.${record.label}`, record.path]));
+  const recordByPath = new Map(records.map((record) => [record.path, record]));
 
   for (let pass = 0; pass < 3; pass += 1) {
     const incomingAreas = new Map();
@@ -330,6 +335,8 @@ function featureAreaAssignments(records, module, ownRoot) {
       for (const importName of source.imports) {
         const targetPath = pathByQualifiedName.get(importName);
         if (!targetPath || assignments.get(targetPath) !== "module-root") continue;
+        const targetRecord = recordByPath.get(targetPath);
+        if (targetRecord && (isEntrypoint(targetRecord) || /(?:Composition)$/.test(targetRecord.label))) continue;
         if (!incomingAreas.has(targetPath)) incomingAreas.set(targetPath, new Set());
         incomingAreas.get(targetPath).add(sourceArea);
       }
@@ -348,6 +355,7 @@ function featureAreaAssignments(records, module, ownRoot) {
     .filter((area) => area && area !== "module-root" && area !== "adapter"));
   for (const record of records) {
     if (assignments.get(record.path) !== "module-root") continue;
+    if (isEntrypoint(record) || /(?:Composition)$/.test(record.label)) continue;
     const directAreas = semanticLabelWords(record.label, module)
       .filter((word) => refinedAreas.has(word));
     if (directAreas.length > 0) {
@@ -374,8 +382,12 @@ function isApiSurface(record) {
 
 function isNetworkingSurface(record) {
   if (pathHas(record, "network") || pathHas(record, "networking")) return true;
-  if (/(?:Payload|Packet|Networking|Network|Sender|Receiver|Transport|Sync|Channel|Codec)$/.test(record.label)) return true;
-  return /\b(?:ServerPlayNetworking|ClientPlayNetworking|PayloadTypeRegistry)\s*\./.test(record.text);
+  const concreteNetworkingEvidence =
+    /\b(?:ServerPlayNetworking|ClientPlayNetworking|PayloadTypeRegistry)\s*\./.test(record.text)
+    || /\bCustomPacketPayload\b/.test(record.text);
+  if (concreteNetworkingEvidence) return true;
+  if (pathHas(record, "domain")) return false;
+  return /(?:Payload|Packet|Networking|Network|Sender|Receiver|Transport|Sync|Channel|Codec)$/.test(record.label);
 }
 
 function isEventSurface(record) {
@@ -401,6 +413,8 @@ function isPersistenceSurface(record) {
   if (["persistence", "storage", "state"].some((segment) => pathHas(record, segment))) return true;
   if (/(?:SavedData|PersistentState|Store|Storage|Repository|Codec)$/.test(record.label)) return true;
   if (/\b(?:extends\s+(?:SavedData|PersistentState)|DataComponents?\.CUSTOM_DATA\b|ComponentType\.<|Codec\s*<|NbtCompound|CompoundTag|ValueInput|ValueOutput|saveAdditional\s*\(|loadAdditional\s*\()/.test(record.text)) return true;
+  if (/\bFiles\.(?:write|writeString|newBufferedWriter|copy|move)\s*\(/.test(record.text)
+      || /\b(?:FileOutputStream|FileWriter|BufferedWriter|ObjectOutputStream)\b/.test(record.text)) return true;
   return /\bString\s+encode\s*\(\s*\)/.test(record.text)
     && /\bstatic\s+[A-Za-z_$][\w$<>?.]*\s+decode\s*\(\s*String\b/.test(record.text);
 }
