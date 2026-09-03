@@ -1,0 +1,70 @@
+name: Validate Code-first Inventory
+
+on:
+  pull_request:
+    paths:
+      - "intelligence/**"
+      - "scripts/report-code-inventory.mjs"
+      - "scripts/validate-code-inventory.mjs"
+      - "viewer_flutter/**"
+      - ".github/workflows/code-inventory.yml"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  code-inventory:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out TotemWorkspace
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+
+      - name: Clone latest active Totem repositories
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE' > /tmp/totem-modules.tsv
+          import fs from "node:fs";
+          const data = JSON.parse(fs.readFileSync("data/modules.json", "utf8"));
+          for (const module of data.modules.filter((entry) => entry.active)) {
+            process.stdout.write(`${module.name}\t${module.repository}\t${module.defaultBranch}\n`);
+          }
+          NODE
+
+          while IFS=$'\t' read -r name repository branch; do
+            echo "Cloning ${name} (${branch})"
+            git clone --depth=1 --single-branch --branch "$branch" "$repository" "../$name"
+          done < /tmp/totem-modules.tsv
+
+      - name: Build code index
+        env:
+          TOTEM_WORKSPACE_ROOT: ${{ github.workspace }}
+          TOTEM_REPOS_ROOT: ${{ github.workspace }}/..
+        run: node scripts/totem-intelligence.mjs build-index
+
+      - name: Build production-code-only inventory report
+        env:
+          TOTEM_WORKSPACE_ROOT: ${{ github.workspace }}
+          TOTEM_REPOS_ROOT: ${{ github.workspace }}/..
+        run: node scripts/report-code-inventory.mjs --strict
+
+      - name: Render Flutter graph with code inventory
+        env:
+          TOTEM_WORKSPACE_ROOT: ${{ github.workspace }}
+          TOTEM_REPOS_ROOT: ${{ github.workspace }}/..
+        run: node scripts/render-flutter-graph.mjs
+
+      - name: Upload code inventory report
+        uses: actions/upload-artifact@v4
+        with:
+          name: totem-code-inventory
+          path: |
+            .totem-index/code-inventory.json
+            .totem-index/code-inventory.md
