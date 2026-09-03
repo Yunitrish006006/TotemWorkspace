@@ -123,6 +123,68 @@ public final class AlchemyBlockEntity {
     {
       moduleId: "totem-a",
       repoName: "TotemA",
+      path: "src/main/java/dev/example/totema/item/CustomDataStore.java",
+      startLine: 1,
+      symbols: ["CustomDataStore", "read"],
+      text: `package dev.example.totema.item;
+public final class CustomDataStore {
+  Object read(ItemStack stack) { return stack.getOrDefault(DataComponents.CUSTOM_DATA, CustomData.EMPTY); }
+}
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
+      path: "src/main/java/dev/example/totema/observer/ObserverSessionManager.java",
+      startLine: 1,
+      symbols: ["ObserverSessionManager"],
+      text: `package dev.example.totema.observer;
+public final class ObserverSessionManager { }
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
+      path: "src/main/java/dev/example/totema/inventory/ContainerSortService.java",
+      startLine: 1,
+      symbols: ["ContainerSortService"],
+      text: `package dev.example.totema.inventory;
+public final class ContainerSortService { }
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
+      path: "src/main/java/dev/example/totema/bookshelf/BookshelfInventoryRule.java",
+      startLine: 1,
+      symbols: ["BookshelfInventoryRule"],
+      text: `package dev.example.totema.bookshelf;
+public final class BookshelfInventoryRule { }
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
+      path: "src/main/java/dev/example/totema/mixin/RecipeManagerMixin.java",
+      startLine: 1,
+      symbols: ["RecipeManagerMixin", "removeVanillaBookshelfRecipe"],
+      text: `package dev.example.totema.mixin;
+public final class RecipeManagerMixin { void removeVanillaBookshelfRecipe() {} }
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
+      path: "src/main/java/dev/example/totema/mixin/StructureTemplateMixin.java",
+      startLine: 1,
+      symbols: ["StructureTemplateMixin", "filledBookshelfState"],
+      text: `package dev.example.totema.mixin;
+public final class StructureTemplateMixin { void filledBookshelfState() {} }
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
       path: "src/client/java/dev/example/totema/client/ConfigScreen.java",
       startLine: 1,
       symbols: ["ConfigScreen"],
@@ -160,6 +222,40 @@ public final class MixtureColorProvider { void register() { BlockColorRegistry.r
 public final class ItemActivationFeedback {
   void show(Client context, ItemStack stack) { context.gameRenderer.displayItemActivation(stack); }
 }
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
+      path: "src/client/java/dev/example/totema/client/ObserverBeaconScreenClient.java",
+      startLine: 1,
+      symbols: ["ObserverBeaconScreenClient", "show", "ObserverBeaconScreen"],
+      text: `package dev.example.totema.client;
+public final class ObserverBeaconScreenClient {
+  Object transientBanner(ItemStack stack) { return stack.getOrDefault(DataComponents.BANNER_PATTERNS, BannerPatternLayers.EMPTY); }
+  void show(Minecraft client) { client.setScreenAndShow(new ObserverBeaconScreen()); }
+  static final class ObserverBeaconScreen extends BeaconScreen { }
+}
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
+      path: "src/client/java/dev/example/totema/client/ObserverUiClient.java",
+      startLine: 1,
+      symbols: ["ObserverUiClient"],
+      text: `package dev.example.totema.client;
+public final class ObserverUiClient { }
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
+      path: "src/client/java/dev/example/totema/client/ContainerSortClient.java",
+      startLine: 1,
+      symbols: ["ContainerSortClient"],
+      text: `package dev.example.totema.client;
+public final class ContainerSortClient { }
 `
     },
     {
@@ -222,7 +318,7 @@ assert.equal(inventory.modules.length, 4);
 
 const moduleA = inventory.modules.find((entry) => entry.moduleId === "totem-a");
 assert.ok(moduleA);
-assert.equal(moduleA.productionFileCount, 11);
+assert.equal(moduleA.productionFileCount, 20);
 assert.ok(moduleA.surfaces.api.some((entry) => entry.label === "AService"));
 assert.ok(moduleA.surfaces.networking.some((entry) => entry.label === "ASyncPacket"));
 assert.ok(moduleA.surfaces.commands.some((entry) => entry.label === "RuntimeHooks"));
@@ -231,13 +327,35 @@ assert.ok(moduleA.surfaces.events.some((entry) => entry.label === "RuntimeHooks"
 assert.ok(moduleA.surfaces.events.some((entry) => entry.label === "ConnectionSync"));
 assert.ok(moduleA.surfaces.persistence.some((entry) => entry.label === "MixtureState"));
 assert.ok(moduleA.surfaces.persistence.some((entry) => entry.label === "AlchemyBlockEntity"));
+assert.ok(moduleA.surfaces.persistence.some((entry) => entry.label === "CustomDataStore"));
+assert.ok(!moduleA.surfaces.persistence.some((entry) => entry.label === "ObserverBeaconScreenClient"));
 assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "ConfigScreen"));
 assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "EffectTooltip"));
 assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "MixtureColorProvider"));
 assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "ItemActivationFeedback"));
+assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "ObserverBeaconScreenClient"));
+assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "ObserverUiClient"));
 assert.ok(moduleA.surfaces.integrations.some((entry) => entry.label === "JadeCompat"));
 assert.ok(!moduleA.surfaces.integrations.some((entry) => entry.label === "RuntimeHooks"));
 assert.ok(moduleA.integrations.some((entry) => entry.packageRoot === "com.google.gson"));
+
+const observerArea = moduleA.featureAreas.find((entry) => entry.key === "observer");
+const inventoryArea = moduleA.featureAreas.find((entry) => entry.key === "inventory");
+const itemArea = moduleA.featureAreas.find((entry) => entry.key === "item");
+const bookshelfArea = moduleA.featureAreas.find((entry) => entry.key === "bookshelf");
+assert.ok(observerArea);
+assert.ok(inventoryArea);
+assert.ok(itemArea);
+assert.ok(bookshelfArea);
+assert.equal(observerArea.fileCount, 3);
+assert.ok(observerArea.representativePaths.some((path) => path.endsWith("ObserverBeaconScreenClient.java")));
+assert.ok(observerArea.representativePaths.some((path) => path.endsWith("ObserverUiClient.java")));
+assert.equal(inventoryArea.fileCount, 2);
+assert.ok(inventoryArea.representativePaths.some((path) => path.endsWith("ContainerSortClient.java")));
+assert.equal(itemArea.fileCount, 1);
+assert.equal(bookshelfArea.fileCount, 3);
+assert.ok(bookshelfArea.representativePaths.some((path) => path.endsWith("RecipeManagerMixin.java")));
+assert.ok(bookshelfArea.representativePaths.some((path) => path.endsWith("StructureTemplateMixin.java")));
 
 const crossB = moduleA.crossModuleImports.find((entry) => entry.targetModuleId === "totem-b");
 const crossCore = moduleA.crossModuleImports.find((entry) => entry.targetModuleId === "totem-core");

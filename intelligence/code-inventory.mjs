@@ -9,6 +9,12 @@ const TECHNICAL_AREA_SEGMENTS = new Set([
   "api", "v1", "v2", "client", "server", "mixin", "mixins", "network", "networking", "registry",
   "config", "bootstrap", "command", "commands", "integration", "integrations", "impl", "internal"
 ]);
+const GENERIC_LABEL_WORDS = new Set([
+  "client", "server", "screen", "screens", "payload", "payloads", "mixin", "mixins", "accessor",
+  "manager", "service", "handler", "registry", "registration", "provider", "adapter", "support", "policy",
+  "state", "data", "implementation", "impl", "event", "events", "hook", "hooks", "codec",
+  "item", "items", "inventory", "content"
+]);
 
 const SURFACE_LABELS = Object.freeze({
   entrypoints: "Entrypoints",
@@ -40,6 +46,15 @@ function fileLabel(filePath) {
 
 function unique(values) {
   return [...new Set(values.filter(Boolean))];
+}
+
+function identifierWords(value) {
+  return String(value ?? "")
+    .replace(/([a-z0-9])([A-Z])/g, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/g, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean);
 }
 
 function fileRecords(index) {
@@ -86,6 +101,30 @@ function moduleNamespaceTokens(module) {
   const suffix = String(module.id ?? "").toLowerCase().replace(/^totem-/, "");
   const parts = suffix.split("-").map((part) => part.replace(/[^a-z0-9]/g, "")).filter((part) => part.length >= 4);
   return unique([...parts, suffix.replace(/[^a-z0-9]/g, "")]);
+}
+
+function moduleLabelWords(module) {
+  return new Set(unique([
+    ...moduleTokens(module),
+    ...identifierWords(module.id),
+    ...identifierWords(module.repoName),
+    ...identifierWords(module.name)
+  ]));
+}
+
+function semanticLabelWords(label, module) {
+  const moduleWords = moduleLabelWords(module);
+  return unique(identifierWords(label).filter((word) =>
+    word.length >= 3
+    && !moduleWords.has(word)
+    && !GENERIC_PACKAGE_SEGMENTS.has(word)
+    && !TECHNICAL_AREA_SEGMENTS.has(word)
+    && !GENERIC_LABEL_WORDS.has(word)
+  ));
+}
+
+function semanticSymbolWords(record, module) {
+  return unique(record.symbols.flatMap((symbol) => semanticLabelWords(symbol, module)));
 }
 
 function fallbackPackageRoot(records) {
@@ -161,6 +200,79 @@ function featureArea(record, module, ownRoot) {
   return insideRoot ? "module-root" : "adapter";
 }
 
+function featureAreaAssignments(records, module, ownRoot) {
+  const explicit = new Map(records.map((record) => [record.path, featureArea(record, module, ownRoot)]));
+  const knownAreas = unique([...explicit.values()].filter((area) => area !== "module-root" && area !== "adapter"));
+  const labelVocabularies = new Map(knownAreas.map((area) => [area, new Set([area])]));
+  const symbolVocabularies = new Map(knownAreas.map((area) => [area, new Set([area])]));
+
+  for (const record of records) {
+    const area = explicit.get(record.path);
+    if (!labelVocabularies.has(area)) continue;
+    for (const word of semanticLabelWords(record.label, module)) labelVocabularies.get(area).add(word);
+    for (const word of semanticSymbolWords(record, module)) symbolVocabularies.get(area).add(word);
+  }
+
+  const assignments = new Map();
+  for (const record of records) {
+    const baseArea = explicit.get(record.path);
+    if (baseArea !== "module-root" || knownAreas.length === 0) {
+      assignments.set(record.path, baseArea);
+      continue;
+    }
+
+    const labelWords = semanticLabelWords(record.label, module);
+    const symbolWords = semanticSymbolWords(record, module);
+    const scored = knownAreas.map((area) => {
+      const labelVocabulary = labelVocabularies.get(area);
+      const symbolVocabulary = symbolVocabularies.get(area);
+      const labelOverlap = labelWords.filter((word) => labelVocabulary.has(word)).length;
+      const symbolOverlap = symbolWords.filter((word) => symbolVocabulary.has(word)).length;
+      const labelAreaBonus = labelWords.includes(area) ? 4 : 0;
+      const symbolAreaBonus = symbolWords.includes(area) ? 2 : 0;
+      return {
+        area,
+        score: labelOverlap * 3 + symbolOverlap + labelAreaBonus + symbolAreaBonus
+      };
+    }).filter((entry) => entry.score > 0)
+      .sort((a, b) => b.score - a.score || a.area.localeCompare(b.area));
+
+    if (scored.length > 0 && (scored.length === 1 || scored[0].score > scored[1].score)) {
+      assignments.set(record.path, scored[0].area);
+    } else {
+      assignments.set(record.path, baseArea);
+    }
+  }
+
+  const pathByQualifiedName = new Map(records
+    .filter((record) => record.packageName)
+    .map((record) => [`${record.packageName}.${record.label}`, record.path]));
+
+  for (let pass = 0; pass < 3; pass += 1) {
+    const incomingAreas = new Map();
+    for (const source of records) {
+      const sourceArea = assignments.get(source.path);
+      if (!sourceArea || sourceArea === "module-root" || sourceArea === "adapter") continue;
+      for (const importName of source.imports) {
+        const targetPath = pathByQualifiedName.get(importName);
+        if (!targetPath || assignments.get(targetPath) !== "module-root") continue;
+        if (!incomingAreas.has(targetPath)) incomingAreas.set(targetPath, new Set());
+        incomingAreas.get(targetPath).add(sourceArea);
+      }
+    }
+
+    let changed = false;
+    for (const [targetPath, areas] of incomingAreas) {
+      if (areas.size !== 1) continue;
+      assignments.set(targetPath, [...areas][0]);
+      changed = true;
+    }
+    if (!changed) break;
+  }
+
+  return assignments;
+}
+
 function pathHas(record, segment) {
   return normalize(record.path).toLowerCase().includes(`/${segment.toLowerCase()}/`);
 }
@@ -203,14 +315,16 @@ function isRegistrySurface(record) {
 function isPersistenceSurface(record) {
   if (["persistence", "storage", "state"].some((segment) => pathHas(record, segment))) return true;
   if (/(?:SavedData|PersistentState|Store|Storage|Repository|Codec)$/.test(record.label)) return true;
-  if (/\b(?:extends\s+(?:SavedData|PersistentState)|DataComponents?\.|ComponentType\.<|Codec\s*<|NbtCompound|CompoundTag|ValueInput|ValueOutput|saveAdditional\s*\(|loadAdditional\s*\()/.test(record.text)) return true;
+  if (/\b(?:extends\s+(?:SavedData|PersistentState)|DataComponents?\.CUSTOM_DATA\b|ComponentType\.<|Codec\s*<|NbtCompound|CompoundTag|ValueInput|ValueOutput|saveAdditional\s*\(|loadAdditional\s*\()/.test(record.text)) return true;
   return /\bString\s+encode\s*\(\s*\)/.test(record.text)
     && /\bstatic\s+[A-Za-z_$][\w$<>?.]*\s+decode\s*\(\s*String\b/.test(record.text);
 }
 
 function isClientUiSurface(record) {
-  if (/(?:Screen|HandledScreen|ScreenHandler|Menu|Renderer|Hud|Overlay|Tooltip|ColorProvider)$/.test(record.label)) return true;
-  return /\b(?:extends\s+(?:Screen|HandledScreen)|implements\s+HudRenderCallback|GuiGraphics|DrawContext)\b/.test(record.text)
+  if (/(?:Screen|ScreenClient|UiClient|HandledScreen|ScreenHandler|Menu|Renderer|Hud|Overlay|Tooltip|ColorProvider)$/.test(record.label)) return true;
+  return /\bextends\s+[A-Za-z_$][\w$]*Screen\b/.test(record.text)
+    || /\b(?:implements\s+HudRenderCallback|GuiGraphics|DrawContext)\b/.test(record.text)
+    || /\b(?:setScreenAndShow|setScreen)\s*\(/.test(record.text)
     || /\bgameRenderer\.displayItemActivation\s*\(/.test(record.text);
 }
 
@@ -272,13 +386,14 @@ function targetModuleForImport(importName, modulePackageRoots, sourceModuleId) {
 
 function moduleInventory(module, records, modulePackageRoots) {
   const ownRoot = modulePackageRoots.get(module.id) ?? packageRoot(records, module);
+  const areaAssignments = featureAreaAssignments(records, module, ownRoot);
   const surfaces = Object.fromEntries(Object.keys(SURFACE_LABELS).map((key) => [key, []]));
   const areas = new Map();
   const integrations = new Map();
   const crossImports = new Map();
 
   for (const record of records) {
-    const areaKey = featureArea(record, module, ownRoot);
+    const areaKey = areaAssignments.get(record.path) ?? featureArea(record, module, ownRoot);
     if (!areas.has(areaKey)) areas.set(areaKey, { key: areaKey, files: [], symbols: [] });
     const area = areas.get(areaKey);
     area.files.push(record.path);
