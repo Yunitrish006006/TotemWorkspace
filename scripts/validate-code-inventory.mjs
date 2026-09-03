@@ -381,6 +381,11 @@ index.chunks.push(
     "CopperGolemClientPayloadRegistration"
   ),
   syntheticChunk(
+    "src/client/java/dev/example/totemc/client/CopperGolemMenuPayloadBridge.java",
+    "dev.example.totemc.client",
+    "CopperGolemMenuPayloadBridge"
+  ),
+  syntheticChunk(
     "src/main/java/dev/example/totemc/menu/CopperGolemMenu.java",
     "dev.example.totemc.menu",
     "CopperGolemMenu"
@@ -502,7 +507,7 @@ assert.equal(moduleAlchemy.productionFileCount, 1);
 
 const moduleC = inventory.modules.find((entry) => entry.moduleId === "totem-c");
 assert.ok(moduleC);
-assert.equal(moduleC.productionFileCount, 38);
+assert.equal(moduleC.productionFileCount, 39);
 const gatheringArea = moduleC.featureAreas.find((entry) => entry.key === "gathering");
 const sortingArea = moduleC.featureAreas.find((entry) => entry.key === "sorting");
 const wrenchArea = moduleC.featureAreas.find((entry) => entry.key === "wrench");
@@ -520,6 +525,7 @@ const rootAreaC = moduleC.featureAreas.find((entry) => entry.key === "module-roo
 assert.ok(menuAreaC);
 assert.ok(rootAreaC);
 assert.ok(menuAreaC.representativePaths.some((path) => path.endsWith("CopperGolemMenuScreenSession.java")));
+assert.ok(menuAreaC.representativePaths.some((path) => path.endsWith("CopperGolemMenuPayloadBridge.java")));
 assert.ok(rootAreaC.representativePaths.some((path) => path.endsWith("TotemC.java")));
 for (const label of [
   "CopperGolemMenuPanelLayout",
@@ -530,6 +536,7 @@ for (const label of [
   assert.ok(moduleC.surfaces.clientUi.some((entry) => entry.label === label), `${label} should be Client / UI evidence`);
 }
 assert.ok(!moduleC.surfaces.clientUi.some((entry) => entry.label === "CopperGolemClientPayloadRegistration"));
+assert.ok(!moduleC.surfaces.clientUi.some((entry) => entry.label === "CopperGolemMenuPayloadBridge"));
 
 const moduleD = inventory.modules.find((entry) => entry.moduleId === "totem-d");
 assert.ok(moduleD);
