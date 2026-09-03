@@ -68,7 +68,7 @@ jobs:
           cp viewer/graph-v2.css _site/viewer/graph-v2.css
           cp viewer/graph-v2-adapter.js _site/viewer/graph-v2-adapter.js
           cp viewer/graph-v2.js _site/viewer/graph-v2.js
-          cp viewer/graph-v2-cluster.js _site/viewer/graph-v2-cluster.js
+          cp viewer/graph-v2-cluster-v2.js _site/viewer/graph-v2-cluster-v2.js
           cp viewer/generated/graph-data.js _site/viewer/generated/graph-data.js
 
           # Keep the validated curated source available for inspection.
