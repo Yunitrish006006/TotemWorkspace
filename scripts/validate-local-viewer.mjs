@@ -18,6 +18,8 @@ assert.ok(serverSource.includes('pathname === "/api/refresh"'), "refresh endpoin
 assert.ok(serverSource.includes("workspaceStatus({ knowledge, reposRoot })"), "status endpoint must reuse workspaceStatus");
 assert.ok(serverSource.includes("refreshCodeIndex({"), "refresh endpoint must reuse incremental code-index refresh");
 assert.ok(serverSource.includes("renderGraphV2({ knowledge, index: refreshed.index })"), "refresh endpoint must regenerate graph data");
+assert.ok(serverSource.includes("prepareApiCors(req, res)"), "Flutter dev access must pass through loopback-only CORS validation");
+assert.ok(serverSource.includes("cross-origin access is restricted to loopback clients"), "non-loopback browser origins must be rejected");
 assert.ok(!serverSource.includes('const DEFAULT_HOST = "0.0.0.0"'), "local viewer must not expose LAN by default");
 
 assert.ok(html.includes('id="liveLocal"'), "viewer must expose LIVE LOCAL badge");
@@ -44,6 +46,28 @@ try {
   assert.equal(health.status, 200);
   assert.deepEqual(await health.json(), { status: "ok", mode: "local" });
 
+  const flutterHealth = await fetch(`${base}/api/health`, {
+    headers: { Origin: "http://localhost:54321" }
+  });
+  assert.equal(flutterHealth.status, 200);
+  assert.equal(flutterHealth.headers.get("access-control-allow-origin"), "http://localhost:54321");
+  assert.match(flutterHealth.headers.get("access-control-allow-methods") ?? "", /POST/);
+
+  const preflight = await fetch(`${base}/api/refresh`, {
+    method: "OPTIONS",
+    headers: {
+      Origin: "http://127.0.0.1:54321",
+      "Access-Control-Request-Method": "POST"
+    }
+  });
+  assert.equal(preflight.status, 204);
+  assert.equal(preflight.headers.get("access-control-allow-origin"), "http://127.0.0.1:54321");
+
+  const blocked = await fetch(`${base}/api/health`, {
+    headers: { Origin: "https://example.com" }
+  });
+  assert.equal(blocked.status, 403);
+
   const status = await fetch(`${base}/api/workspace-status`);
   assert.equal(status.status, 200);
   const payload = await status.json();
@@ -58,4 +82,4 @@ try {
   await new Promise((resolve) => server.close(resolve));
 }
 
-console.log("Local live viewer validation passed: loopback-only server, live repo status polling, static viewer serving, and refresh wiring are present.");
+console.log("Local live viewer validation passed: loopback-only server, restricted Flutter dev CORS, live repo status polling, static viewer serving, and refresh wiring are present.");
