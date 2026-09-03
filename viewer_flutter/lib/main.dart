@@ -4,7 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import 'model/graph_data.dart';
-import 'widgets/graph_view.dart';
+import 'widgets/workspace_graph_host.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -31,6 +31,6 @@ class TotemWorkspaceApp extends StatelessWidget {
           scaffoldBackgroundColor: const Color(0xFF050B14),
           fontFamily: 'system-ui',
         ),
-        home: GraphView(data: data),
+        home: WorkspaceGraphHost(initialData: data),
       );
 }
