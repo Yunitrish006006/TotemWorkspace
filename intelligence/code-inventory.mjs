@@ -1,6 +1,12 @@
 import path from "node:path";
 
 const CODE_FILE = /\.(?:java|kt)$/i;
+const RESOURCE_JSON_FILE = /\.json$/i;
+const RESOURCE_FAMILY_KEYS = new Set([
+  "advancement", "advancements", "recipe", "recipes", "tags", "loot_table", "loot_tables",
+  "worldgen", "function", "functions", "predicate", "predicates", "item_modifier", "item_modifiers",
+  "dimension", "dimension_type", "damage_type", "enchantment", "enchantments"
+]);
 const GENERIC_PACKAGE_SEGMENTS = new Set([
   "com", "org", "net", "io", "dev", "me", "github", "minecraft", "fabric", "fabricmc", "totem",
   "impl", "internal", "common", "main", "java", "kotlin"
@@ -42,6 +48,36 @@ function isProductionCode(filePath) {
   if (!CODE_FILE.test(value)) return false;
   if (!(value.startsWith("src/main/") || value.startsWith("src/client/"))) return false;
   return !value.includes("/test/") && !value.includes("/gametest/") && !value.includes("/generated/");
+}
+
+function isProductionResource(filePath) {
+  const value = normalize(filePath).toLowerCase();
+  if (!RESOURCE_JSON_FILE.test(value)) return false;
+  const underResources = value.startsWith("src/main/resources/") || value.startsWith("src/client/resources/");
+  if (!underResources) return false;
+  if (value.includes("/generated/") || value.includes("/test/") || value.includes("/gametest/")) return false;
+  if (value.includes("/resources/data/")) return true;
+  return value.includes("/resources/assets/") && value.includes("/lang/");
+}
+
+function productionResourceFamily(filePath) {
+  const value = normalize(filePath).toLowerCase();
+  if (value.includes("/resources/assets/") && value.includes("/lang/")) return "localization";
+  const marker = "/resources/data/";
+  const offset = value.indexOf(marker);
+  if (offset < 0) return "resource";
+  const rest = value.slice(offset + marker.length).split("/").filter(Boolean);
+  if (rest.length <= 1) return "data";
+  const body = rest.slice(1);
+  for (let index = 0; index < body.length - 1; index += 1) {
+    const segment = body[index];
+    if (!RESOURCE_FAMILY_KEYS.has(segment)) continue;
+    if (segment === "tags" && body[index + 1] && !body[index + 1].endsWith(".json")) {
+      return `tags/${body[index + 1]}`;
+    }
+    return segment;
+  }
+  return body.length >= 2 ? body[body.length - 2] : "data";
 }
 
 function fileLabel(filePath) {
@@ -88,6 +124,43 @@ function fileRecords(index) {
       symbols: Object.freeze(symbols),
       text
     });
+  });
+}
+
+function resourceRecords(index) {
+  if (!index?.chunks) return [];
+  const byFile = new Map();
+  for (const chunk of index.chunks) {
+    if (!isProductionResource(chunk.path)) continue;
+    const key = `${chunk.moduleId}\0${normalize(chunk.path)}`;
+    if (!byFile.has(key)) byFile.set(key, chunk);
+  }
+  return [...byFile.values()].map((chunk) => Object.freeze({
+    moduleId: chunk.moduleId,
+    repoName: chunk.repoName,
+    path: normalize(chunk.path),
+    label: path.posix.basename(normalize(chunk.path)),
+    family: productionResourceFamily(chunk.path)
+  }));
+}
+
+function resourceEvidence(records) {
+  const families = new Map();
+  for (const record of records) {
+    if (!families.has(record.family)) families.set(record.family, []);
+    families.get(record.family).push(record.path);
+  }
+  return Object.freeze({
+    sourceScope: "production-resource-evidence",
+    fileCount: records.length,
+    families: Object.freeze([...families.entries()]
+      .map(([key, paths]) => Object.freeze({
+        key,
+        label: key,
+        fileCount: unique(paths).length,
+        representativePaths: Object.freeze(unique(paths).sort().slice(0, 8))
+      }))
+      .sort((a, b) => b.fileCount - a.fileCount || a.key.localeCompare(b.key)))
   });
 }
 
@@ -485,7 +558,7 @@ function targetModuleForImport(importName, modulePackageRoots, sourceModuleId) {
   return best?.moduleId ?? null;
 }
 
-function moduleInventory(module, records, modulePackageRoots) {
+function moduleInventory(module, records, modulePackageRoots, resources = []) {
   const ownRoot = modulePackageRoots.get(module.id) ?? packageRoot(records, module);
   const areaAssignments = featureAreaAssignments(records, module, ownRoot);
   const surfaces = Object.fromEntries(Object.keys(SURFACE_LABELS).map((key) => [key, []]));
@@ -539,6 +612,7 @@ function moduleInventory(module, records, modulePackageRoots) {
     sourceScope: "production-code-only",
     packageRoot: ownRoot || null,
     productionFileCount: records.length,
+    resourceEvidence: resourceEvidence(resources),
     featureAreas: Object.freeze(featureAreas),
     surfaces: Object.freeze(normalizedSurfaces),
     integrations: Object.freeze([...integrations.values()].map((entry) => Object.freeze({
@@ -569,7 +643,13 @@ function moduleInventory(module, records, modulePackageRoots) {
 export function buildCodeInventory({ knowledge, index } = {}) {
   const modules = knowledge?.modules ?? [];
   const records = fileRecords(index);
+  const resources = resourceRecords(index);
   const byModule = new Map();
+  const resourcesByModule = new Map();
+  for (const resource of resources) {
+    if (!resourcesByModule.has(resource.moduleId)) resourcesByModule.set(resource.moduleId, []);
+    resourcesByModule.get(resource.moduleId).push(resource);
+  }
   for (const record of records) {
     if (!byModule.has(record.moduleId)) byModule.set(record.moduleId, []);
     byModule.get(record.moduleId).push(record);
@@ -580,14 +660,15 @@ export function buildCodeInventory({ knowledge, index } = {}) {
   ]));
 
   return Object.freeze({
-    schemaVersion: 3,
+    schemaVersion: 4,
     generatedAt: index?.generatedAt ?? knowledge?.snapshot?.date ?? null,
     sourceScope: "production-code-only",
     description: "Derived only from indexed production Java/Kotlin source. Curated feature descriptions and README text are not evidence for this inventory. Explicit integration surfaces are separated from ordinary third-party dependency imports.",
     modules: Object.freeze(modules.map((module) => moduleInventory(
       module,
       byModule.get(module.id) ?? [],
-      modulePackageRoots
+      modulePackageRoots,
+      resourcesByModule.get(module.id) ?? []
     )))
   });
 }
