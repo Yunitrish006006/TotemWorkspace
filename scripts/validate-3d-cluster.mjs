@@ -27,6 +27,8 @@ for (const required of [
   "function moduleOrbitRadius",
   "function modulePosition",
   "function scatter",
+  "function featureRelations",
+  "function relationAwareScatter",
   "function isRetargetable",
   "function manualFeatureFor",
   "function capabilityConsumerEndpoint",
@@ -94,4 +96,17 @@ assert.ok(moduleOrbitRadius(4) > moduleOrbitRadius(1), "additional expanded clus
 assert.ok(moduleOrbitRadius(11) <= 630, "full expansion spacing must remain bounded");
 assert.ok(source.includes("var moduleRadius = moduleOrbitRadius(expandedCount)"), "scene layout must use the dynamic module orbit radius");
 
-console.log("3D cluster v2 validation passed: standalone 3D parity, Core-centered topology, deterministic clusters, dynamic spacing, audited Core friendship retargeting, symmetric Shared Manual endpoints, directed edges, keyboard navigation, gestures, spotlight integration, and Pages packaging are present.");
+
+// Relation-aware layout regression: topology degree drives deterministic junction placement without inventing graph semantics.
+assert.ok(source.includes("weightedCentroid"), "relation-aware feature placement must target a weighted geometric junction");
+assert.ok(source.includes("Math.log2(degree + 1)"), "higher relationship degree must increase topology influence");
+assert.ok(source.includes("slotStrength = 0.22 / Math.sqrt"), "high-degree nodes sharing a junction must receive deterministic angular slotting");
+assert.ok(source.includes('relation.targetId === "totem-core"'), "inward placement must distinguish real Core targets from accidental center crossings");
+assert.ok(source.includes("inwardness < -0.18"), "peripheral nodes without Core relations must avoid unexplained inward folds");
+assert.ok(source.includes("featureContractIds"), "relation discovery must include curated feature contract memberships");
+assert.ok(source.includes("capability.providerFeatureId === featureId"), "Core shared-capability providers must participate in junction placement");
+assert.ok(source.includes("relationAwareScatter(parent, feature.id"), "curated feature placement must use relation-aware scatter");
+assert.ok(source.includes("featureRelations: featureRelations"), "relation topology must be exposed for deterministic regression inspection");
+assert.ok(source.includes("relationAwareScatter: relationAwareScatter"), "relation-aware placement must be exposed for deterministic regression inspection");
+
+console.log("3D cluster v2 validation passed: standalone 3D parity, Core-centered topology, deterministic relation-aware clusters, dynamic spacing, audited Core friendship retargeting, symmetric Shared Manual endpoints, directed edges, keyboard navigation, gestures, spotlight integration, and Pages packaging are present.");

@@ -148,6 +148,173 @@
     };
   }
 
+  function vecLength(v) {
+    return Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+  }
+
+  function normalizeVec(v) {
+    var length = vecLength(v);
+    if (length < 0.000001) return { x: 0, y: 0, z: 0 };
+    return { x: v.x / length, y: v.y / length, z: v.z / length };
+  }
+
+  function dotVec(a, b) {
+    return a.x * b.x + a.y * b.y + a.z * b.z;
+  }
+
+  function crossVec(a, b) {
+    return {
+      x: a.y * b.z - a.z * b.y,
+      y: a.z * b.x - a.x * b.z,
+      z: a.x * b.y - a.y * b.x
+    };
+  }
+
+  function featureContractIds(feature) {
+    if (!feature) return [];
+    var ids = [];
+    Object.keys(feature).forEach(function (key) {
+      if (!/ContractIds$/.test(key) || !Array.isArray(feature[key])) return;
+      feature[key].forEach(function (id) {
+        if (!ids.includes(id)) ids.push(id);
+      });
+    });
+    return ids;
+  }
+
+  function relationWeight(type) {
+    if (type === "hard-core") return 1.7;
+    if (type === "shared-capability") return 1.55;
+    if (type === "fabric-suggests") return 1.4;
+    if (type === "runtime-optional") return 1.3;
+    if (type === "external-service") return 1.25;
+    if (type === "eventbus" || type === "observer-provider") return 1.2;
+    return 1;
+  }
+
+  function featureRelations(ownerId, featureId) {
+    var feature = featureMap.get(featureId);
+    var declaredContractIds = new Set(featureContractIds(feature));
+    var merged = new Map();
+
+    function add(targetId, weight, kind) {
+      if (!targetId || targetId === ownerId) return;
+      var current = merged.get(targetId) || { targetId: targetId, weight: 0, kinds: [] };
+      current.weight += weight;
+      if (!current.kinds.includes(kind)) current.kinds.push(kind);
+      merged.set(targetId, current);
+    }
+
+    contracts.forEach(function (contract) {
+      var featureBound = (contract.featureIds || []).includes(featureId) || declaredContractIds.has(contract.id);
+      if (!featureBound) return;
+      if (contract.from === ownerId) add(contract.to, relationWeight(contract.type), contract.type);
+      else if (contract.to === ownerId) add(contract.from, relationWeight(contract.type), contract.type);
+    });
+
+    capabilities.forEach(function (capability) {
+      var consumerFeature = capability.consumerFeatureId && featureMap.get(capability.consumerFeatureId);
+      consumerFeature = consumerFeature || manualFeatureFor(capability.consumerModuleId);
+      if (capability.providerFeatureId === featureId && capability.providerModuleId === ownerId) {
+        add(capability.consumerModuleId, relationWeight("shared-capability"), "shared-capability");
+      }
+      if (consumerFeature && consumerFeature.id === featureId && capability.consumerModuleId === ownerId) {
+        add(capability.providerModuleId, relationWeight("shared-capability"), "shared-capability");
+      }
+    });
+
+    return Array.from(merged.values()).sort(function (a, b) {
+      return a.targetId.localeCompare(b.targetId);
+    });
+  }
+
+  function relationAwareScatter(parent, id, type, radius, ownerId, sceneNodes, explicitRelations) {
+    var base = scatter(parent, id, type, radius);
+    var offset = { x: base.x - parent.x, y: base.y - parent.y, z: base.z - parent.z };
+    var radialDistance = vecLength(offset);
+    var baseDirection = normalizeVec(offset);
+    var relations = explicitRelations == null ? featureRelations(ownerId, id) : explicitRelations;
+    var outward = ownerId === "totem-core" ? null : normalizeVec({ x: parent.x, y: parent.y, z: parent.z });
+
+    if (!relations.length) {
+      if (!outward) return base;
+      var ordinaryDirection = normalizeVec({
+        x: baseDirection.x * 0.72 + outward.x * 0.28,
+        y: baseDirection.y * 0.72 + outward.y * 0.28,
+        z: baseDirection.z * 0.72 + outward.z * 0.28
+      });
+      return {
+        x: parent.x + ordinaryDirection.x * radialDistance,
+        y: parent.y + ordinaryDirection.y * radialDistance,
+        z: parent.z + ordinaryDirection.z * radialDistance
+      };
+    }
+
+    var byId = new Map(sceneNodes.map(function (node) { return [node.id, node]; }));
+    var weightedCentroid = { x: 0, y: 0, z: 0 };
+    var totalWeight = 0;
+    var resolved = [];
+    relations.forEach(function (relation) {
+      var target = byId.get(relation.targetId);
+      if (!target) return;
+      var weight = Number(relation.weight || 1);
+      weightedCentroid.x += target.x * weight;
+      weightedCentroid.y += target.y * weight;
+      weightedCentroid.z += target.z * weight;
+      totalWeight += weight;
+      resolved.push(relation);
+    });
+    if (!resolved.length || totalWeight <= 0) return base;
+
+    weightedCentroid.x /= totalWeight;
+    weightedCentroid.y /= totalWeight;
+    weightedCentroid.z /= totalWeight;
+    var junctionDirection = normalizeVec({
+      x: weightedCentroid.x - parent.x,
+      y: weightedCentroid.y - parent.y,
+      z: weightedCentroid.z - parent.z
+    });
+    if (vecLength(junctionDirection) < 0.000001) junctionDirection = baseDirection;
+
+    var hasCoreTarget = resolved.some(function (relation) { return relation.targetId === "totem-core"; });
+    if (outward && !hasCoreTarget) {
+      var inwardness = dotVec(junctionDirection, outward);
+      if (inwardness < -0.18) {
+        var correction = 0.42 + Math.abs(inwardness) * 0.45;
+        junctionDirection = normalizeVec({
+          x: junctionDirection.x + outward.x * correction,
+          y: junctionDirection.y + outward.y * correction,
+          z: junctionDirection.z + outward.z * correction
+        });
+      }
+    }
+
+    var degree = resolved.length;
+    var influence = Math.min(0.9, 0.38 + Math.log2(degree + 1) * 0.17 + Math.min(0.18, totalWeight * 0.035));
+    var direction = normalizeVec({
+      x: baseDirection.x * (1 - influence) + junctionDirection.x * influence,
+      y: baseDirection.y * (1 - influence) + junctionDirection.y * influence,
+      z: baseDirection.z * (1 - influence) + junctionDirection.z * influence
+    });
+
+    var axis = Math.abs(direction.y) < 0.86 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 };
+    var tangentA = normalizeVec(crossVec(direction, axis));
+    var tangentB = normalizeVec(crossVec(direction, tangentA));
+    var phase = hashUnit(id, 131) * Math.PI * 2;
+    var slotStrength = 0.22 / Math.sqrt(Math.max(1, degree));
+    direction = normalizeVec({
+      x: direction.x + (tangentA.x * Math.cos(phase) + tangentB.x * Math.sin(phase)) * slotStrength,
+      y: direction.y + (tangentA.y * Math.cos(phase) + tangentB.y * Math.sin(phase)) * slotStrength,
+      z: direction.z + (tangentA.z * Math.cos(phase) + tangentB.z * Math.sin(phase)) * slotStrength
+    });
+
+    return {
+      x: parent.x + direction.x * radialDistance,
+      y: parent.y + direction.y * radialDistance,
+      z: parent.z + direction.z * radialDistance
+    };
+  }
+
   function modulePosition(module, peripheralIndex, peripheralCount, radius) {
     if (module.id === "totem-core") return { x: 0, y: 0, z: 0 };
     return fib(peripheralIndex, peripheralCount, radius);
@@ -292,7 +459,7 @@
       });
 
       moduleFeatures.forEach(function (feature) {
-        var position = scatter(parent, feature.id, "feature", radius);
+        var position = relationAwareScatter(parent, feature.id, "feature", radius, moduleId, nodes, null);
         nodes.push({
           id: feature.id,
           label: moduleShort(moduleId) + " · " + feature.title,
@@ -314,7 +481,7 @@
 
       syntheticCaps.forEach(function (capability) {
         var id = "capability-node:" + capability.id;
-        var position = scatter(parent, id, "capability", radius);
+        var position = relationAwareScatter(parent, id, "capability", radius, moduleId, nodes, [{ targetId: capability.providerModuleId, weight: relationWeight("shared-capability"), kinds: ["shared-capability"] }]);
         nodes.push({
           id: id,
           label: moduleShort(moduleId) + " · SHARED MANUAL",
@@ -335,7 +502,7 @@
       });
 
       categories.forEach(function (category) {
-        var position = scatter(parent, category.id, "category", radius);
+        var position = relationAwareScatter(parent, category.id, "category", radius, moduleId, nodes, []);
         nodes.push({
           id: category.id,
           label: moduleShort(moduleId) + " · CODE · " + category.label,
@@ -1073,6 +1240,8 @@
     moduleOrbitRadius: moduleOrbitRadius,
     modulePosition: modulePosition,
     scatter: scatter,
+    featureRelations: featureRelations,
+    relationAwareScatter: relationAwareScatter,
     manualFeatureFor: manualFeatureFor,
     capabilityConsumerEndpoint: capabilityConsumerEndpoint,
     panBy: panBy,
