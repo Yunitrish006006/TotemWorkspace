@@ -86,6 +86,26 @@ public final class ConfigScreen extends Screen { }
     {
       moduleId: "totem-a",
       repoName: "TotemA",
+      path: "src/client/java/dev/example/totema/client/EffectTooltip.java",
+      startLine: 1,
+      symbols: ["EffectTooltip", "register"],
+      text: `package dev.example.totema.client;
+public final class EffectTooltip { void register() { ItemTooltipCallback.EVENT.register((stack, context, type, lines) -> {}); } }
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
+      path: "src/client/java/dev/example/totema/client/MixtureColorProvider.java",
+      startLine: 1,
+      symbols: ["MixtureColorProvider", "register"],
+      text: `package dev.example.totema.client;
+public final class MixtureColorProvider { void register() { BlockColorRegistry.register(null, null); } }
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
       path: "src/test/java/dev/example/totema/FakeFeatureTest.java",
       startLine: 1,
       symbols: ["FakeFeatureTest"],
@@ -113,13 +133,15 @@ assert.equal(inventory.modules.length, 2);
 
 const moduleA = inventory.modules.find((entry) => entry.moduleId === "totem-a");
 assert.ok(moduleA);
-assert.equal(moduleA.productionFileCount, 5);
+assert.equal(moduleA.productionFileCount, 7);
 assert.ok(moduleA.surfaces.api.some((entry) => entry.label === "AService"));
 assert.ok(moduleA.surfaces.networking.some((entry) => entry.label === "ASyncPacket"));
 assert.ok(moduleA.surfaces.commands.some((entry) => entry.label === "RuntimeHooks"));
 assert.ok(moduleA.surfaces.registries.some((entry) => entry.label === "RuntimeHooks"));
 assert.ok(moduleA.surfaces.events.some((entry) => entry.label === "RuntimeHooks"));
 assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "ConfigScreen"));
+assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "EffectTooltip"));
+assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "MixtureColorProvider"));
 assert.ok(moduleA.surfaces.integrations.some((entry) => entry.label === "JadeCompat"));
 assert.ok(!moduleA.surfaces.integrations.some((entry) => entry.label === "RuntimeHooks"));
 assert.ok(moduleA.integrations.some((entry) => entry.packageRoot === "com.google.gson"));
