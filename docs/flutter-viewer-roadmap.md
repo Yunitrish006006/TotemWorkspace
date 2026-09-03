@@ -34,10 +34,23 @@ Phase 2 intentionally covers curated architecture nodes first. Generated code-de
 
 ## Phase 3 — local live source
 
-- consume the existing loopback local workspace API on Flutter Web
-- native desktop source for Git HEAD/branch/dirty/drift
-- incremental index refresh without browser reload where possible
-- keep absolute repository paths out of browser-facing status payloads
+### Flutter Web ✅
+
+- consumes the existing loopback local workspace API
+- auto-discovers `127.0.0.1:8765` when Flutter itself is running on loopback
+- five-second Git HEAD / branch / dirty / snapshot-drift polling
+- 11-module LIVE LOCAL status surface
+- incremental index refresh through the existing `/api/refresh`
+- re-fetches `/api/graph-data` in place after refresh without browser reload
+- keeps absolute repository paths out of browser-facing status payloads
+- local server accepts browser CORS only from `localhost`, `127.0.0.1`, or `::1`
+- published Pages builds remain static and never probe localhost
+
+### Native desktop source — remaining
+
+- add desktop runner targets when the migration reaches desktop packaging
+- direct native Git/filesystem source for HEAD / branch / dirty / drift
+- reuse the same `WorkspaceLiveStatus` model so Web and desktop UI remain identical
 
 ## Phase 4 — developer console
 
@@ -49,4 +62,4 @@ Phase 2 intentionally covers curated architecture nodes first. Generated code-de
 
 ## Phase 5 — production cutover
 
-Before cutover, Flutter must also cover generated code-detail browsing and the existing local-live workflow. Flutter Web replaces the JavaScript Pages viewer only after parity validation. The legacy renderer is removed in a separate, explicit change.
+Before cutover, Flutter must also cover generated code-detail browsing and desktop packaging/live access. Flutter Web replaces the JavaScript Pages viewer only after parity validation. The legacy renderer is removed in a separate, explicit change.
