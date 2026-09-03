@@ -150,6 +150,11 @@
     };
   }
 
+  function modulePosition(module, peripheralIndex, peripheralCount, radius) {
+    if (module.id === "totem-core") return { x: 0, y: 0, z: 0 };
+    return fib(peripheralIndex, peripheralCount, radius);
+  }
+
   function isRetargetable(contract) {
     return Boolean(contract && (
       contract.type === "fabric-suggests" ||
@@ -215,11 +220,28 @@
     var moduleRadius = moduleOrbitRadius(expandedCount);
     var externalRadius = moduleRadius + 280;
 
-    var sortedModules = modules.slice().sort(function (a, b) {
+    var coreModule = modules.find(function (module) { return module.id === "totem-core"; });
+    var peripheralModules = modules.filter(function (module) { return module.id !== "totem-core"; }).sort(function (a, b) {
       return (a.name || a.id).localeCompare(b.name || b.id);
     });
-    sortedModules.forEach(function (module, index) {
-      var position = fib(index, sortedModules.length, moduleRadius);
+
+    if (coreModule) {
+      var corePosition = modulePosition(coreModule, 0, peripheralModules.length, moduleRadius);
+      nodes.push({
+        id: coreModule.id,
+        label: coreModule.name || coreModule.id,
+        type: "module",
+        rank: rankOf(coreModule),
+        ownerId: coreModule.id,
+        x: corePosition.x,
+        y: corePosition.y,
+        z: corePosition.z,
+        source: coreModule
+      });
+    }
+
+    peripheralModules.forEach(function (module, index) {
+      var position = modulePosition(module, index, peripheralModules.length, moduleRadius);
       nodes.push({
         id: module.id,
         label: module.name || module.id,
@@ -915,6 +937,7 @@
     scene: scene,
     clusterRadius: clusterRadius,
     moduleOrbitRadius: moduleOrbitRadius,
+    modulePosition: modulePosition,
     scatter: scatter,
     manualFeatureFor: manualFeatureFor,
     capabilityConsumerEndpoint: capabilityConsumerEndpoint,

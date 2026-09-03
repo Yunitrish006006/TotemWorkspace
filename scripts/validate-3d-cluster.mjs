@@ -27,6 +27,7 @@ for (const required of [
   "function hashUnit",
   "function clusterRadius",
   "function moduleOrbitRadius",
+  "function modulePosition",
   "function scatter",
   "function isRetargetable",
   "function manualFeatureFor",
@@ -66,6 +67,13 @@ assert.ok(source.includes("return inferred.id"), "expanded consumer must retarge
 assert.ok(source.includes("syntheticCaps"), "modules without a curated manual feature must still retain a synthetic capability point");
 assert.ok(source.includes("capability.providerFeatureId"), "provider-side Core Manual feature retargeting must remain intact");
 
+// Core topology regression: TotemCore is the fixed world-space center and only non-Core modules use the orbit.
+assert.ok(source.includes('if (module.id === "totem-core") return { x: 0, y: 0, z: 0 };'), "TotemCore must be anchored to the 3D world origin");
+assert.ok(source.includes('var coreModule = modules.find(function (module) { return module.id === "totem-core"; });'), "scene must resolve Core separately from the peripheral orbit");
+assert.ok(source.includes('module.id !== "totem-core"'), "peripheral module orbit must exclude TotemCore");
+assert.ok(source.includes("modulePosition(coreModule, 0, peripheralModules.length, moduleRadius)"), "scene must place Core through the center-aware position helper");
+assert.ok(source.includes("modulePosition: modulePosition"), "Core-centered module positioning must remain exposed for renderer regression inspection");
+
 assert.deepEqual(audit.contractOverrides["hard:totem-nexus:totem-core"].featureIds, [
   "totem-nexus.feature-5", "totem-core.feature-3"
 ]);
@@ -82,4 +90,4 @@ assert.ok(moduleOrbitRadius(4) > moduleOrbitRadius(1), "additional expanded clus
 assert.ok(moduleOrbitRadius(11) <= 630, "full expansion spacing must remain bounded");
 assert.ok(source.includes("var moduleRadius = moduleOrbitRadius(expandedCount)"), "scene layout must use the dynamic module orbit radius");
 
-console.log("3D cluster v2 validation passed: deterministic clusters, dynamic spacing, audited Core friendship retargeting, symmetric Shared Manual endpoints, desktop right-drag camera pan, touch gestures, spotlight integration, and Pages packaging are present.");
+console.log("3D cluster v2 validation passed: Core-centered topology, deterministic clusters, dynamic spacing, audited Core friendship retargeting, symmetric Shared Manual endpoints, desktop right-drag camera pan, touch gestures, spotlight integration, and Pages packaging are present.");
