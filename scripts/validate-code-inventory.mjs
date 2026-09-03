@@ -9,7 +9,7 @@ const knowledge = {
     { id: "totem-b", name: "TotemB", repoName: "TotemB" },
     { id: "totem-core", name: "TotemCore", repoName: "TotemCore" },
     { id: "totem-alchemy", name: "TotemAlchemy", repoName: "TotemAlchemy" },
-    { id: "totem-c", name: "TotemC", repoName: "TotemC" },
+    { id: "totem-copperworks", name: "TotemCopperworks", repoName: "TotemCopperworks" },
     { id: "totem-d", name: "TotemD", repoName: "TotemD" }
   ]
 };
@@ -310,8 +310,8 @@ public interface AlchemyApi { }
 };
 
 const syntheticChunk = (path, packageName, className, symbols = [className]) => ({
-  moduleId: "totem-c",
-  repoName: "TotemC",
+  moduleId: "totem-copperworks",
+  repoName: "TotemCopperworks",
   path,
   startLine: 1,
   symbols,
@@ -322,48 +322,48 @@ public final class ${className} { }
 
 index.chunks.push(
   ...Array.from({ length: 10 }, (_, index) => syntheticChunk(
-    `src/main/java/dev/example/totemc/copper/GatheringWork${index}.java`,
-    "dev.example.totemc.copper",
+    `src/main/java/dev/example/copperworks/copper/GatheringWork${index}.java`,
+    "dev.example.copperworks.copper",
     `GatheringWork${index}`
   )),
   ...Array.from({ length: 8 }, (_, index) => syntheticChunk(
-    `src/main/java/dev/example/totemc/copper/SortingWork${index}.java`,
-    "dev.example.totemc.copper",
+    `src/main/java/dev/example/copperworks/copper/SortingWork${index}.java`,
+    "dev.example.copperworks.copper",
     `SortingWork${index}`
   )),
   ...Array.from({ length: 5 }, (_, index) => syntheticChunk(
-    `src/main/java/dev/example/totemc/copper/CopperWrenchWork${index}.java`,
-    "dev.example.totemc.copper",
+    `src/main/java/dev/example/copperworks/copper/CopperWrenchWork${index}.java`,
+    "dev.example.copperworks.copper",
     `CopperWrenchWork${index}`
   )),
   ...Array.from({ length: 5 }, (_, index) => syntheticChunk(
-    `src/main/java/dev/example/totemc/copper/LlmWorker${index}.java`,
-    "dev.example.totemc.copper",
+    `src/main/java/dev/example/copperworks/copper/LlmWorker${index}.java`,
+    "dev.example.copperworks.copper",
     `LlmWorker${index}`
   )),
   ...Array.from({ length: 3 }, (_, index) => syntheticChunk(
-    `src/main/java/dev/example/totemc/copper/CopperGolemCore${index}.java`,
-    "dev.example.totemc.copper",
+    `src/main/java/dev/example/copperworks/copper/CopperGolemCore${index}.java`,
+    "dev.example.copperworks.copper",
     `CopperGolemCore${index}`
   )),
   syntheticChunk(
-    "src/main/java/dev/example/totemc/client/CopperGolemMenuPanelLayout.java",
-    "dev.example.totemc.client",
+    "src/main/java/dev/example/copperworks/client/CopperGolemMenuPanelLayout.java",
+    "dev.example.copperworks.client",
     "CopperGolemMenuPanelLayout"
   ),
   syntheticChunk(
-    "src/main/java/dev/example/totemc/client/CopperGolemMenuEditor.java",
-    "dev.example.totemc.client",
+    "src/main/java/dev/example/copperworks/client/CopperGolemMenuEditor.java",
+    "dev.example.copperworks.client",
     "CopperGolemMenuEditor"
   ),
   syntheticChunk(
-    "src/client/java/dev/example/totemc/client/CopperGolemMenuUiState.java",
-    "dev.example.totemc.client",
+    "src/client/java/dev/example/copperworks/client/CopperGolemMenuUiState.java",
+    "dev.example.copperworks.client",
     "CopperGolemMenuUiState"
   ),
   syntheticChunk(
-    "src/client/java/dev/example/totemc/client/CopperGolemMenuScreenSession.java",
-    "dev.example.totemc.client",
+    "src/client/java/dev/example/copperworks/client/CopperGolemMenuScreenSession.java",
+    "dev.example.copperworks.client",
     "CopperGolemMenuScreenSession",
     [
       "CopperGolemMenuScreenSession",
@@ -376,28 +376,28 @@ index.chunks.push(
     ]
   ),
   syntheticChunk(
-    "src/client/java/dev/example/totemc/client/CopperGolemClientPayloadRegistration.java",
-    "dev.example.totemc.client",
+    "src/client/java/dev/example/copperworks/client/CopperGolemClientPayloadRegistration.java",
+    "dev.example.copperworks.client",
     "CopperGolemClientPayloadRegistration"
   ),
   syntheticChunk(
-    "src/client/java/dev/example/totemc/client/CopperGolemMenuPayloadBridge.java",
-    "dev.example.totemc.client",
+    "src/client/java/dev/example/copperworks/client/CopperGolemMenuPayloadBridge.java",
+    "dev.example.copperworks.client",
     "CopperGolemMenuPayloadBridge"
   ),
   syntheticChunk(
-    "src/main/java/dev/example/totemc/menu/CopperGolemMenu.java",
-    "dev.example.totemc.menu",
+    "src/main/java/dev/example/copperworks/menu/CopperGolemMenu.java",
+    "dev.example.copperworks.menu",
     "CopperGolemMenu"
   ),
   {
-    moduleId: "totem-c",
-    repoName: "TotemC",
-    path: "src/main/java/dev/example/totemc/TotemC.java",
+    moduleId: "totem-copperworks",
+    repoName: "TotemCopperworks",
+    path: "src/main/java/dev/example/copperworks/TotemCopperworks.java",
     startLine: 1,
-    symbols: ["TotemC", "onInitialize"],
-    text: `package dev.example.totemc;
-public final class TotemC implements ModInitializer {
+    symbols: ["TotemCopperworks", "onInitialize"],
+    text: `package dev.example.copperworks;
+public final class TotemCopperworks implements ModInitializer {
   public void onInitialize() { }
 }
 `
@@ -505,7 +505,7 @@ assert.equal(moduleB.productionFileCount, 1);
 assert.equal(moduleCore.productionFileCount, 1);
 assert.equal(moduleAlchemy.productionFileCount, 1);
 
-const moduleC = inventory.modules.find((entry) => entry.moduleId === "totem-c");
+const moduleC = inventory.modules.find((entry) => entry.moduleId === "totem-copperworks");
 assert.ok(moduleC);
 assert.equal(moduleC.productionFileCount, 39);
 const gatheringArea = moduleC.featureAreas.find((entry) => entry.key === "gathering");
@@ -526,7 +526,7 @@ assert.ok(menuAreaC);
 assert.ok(rootAreaC);
 assert.ok(menuAreaC.representativePaths.some((path) => path.endsWith("CopperGolemMenuScreenSession.java")));
 assert.ok(menuAreaC.representativePaths.some((path) => path.endsWith("CopperGolemMenuPayloadBridge.java")));
-assert.ok(rootAreaC.representativePaths.some((path) => path.endsWith("TotemC.java")));
+assert.ok(rootAreaC.representativePaths.some((path) => path.endsWith("TotemCopperworks.java")));
 for (const label of [
   "CopperGolemMenuPanelLayout",
   "CopperGolemMenuEditor",
