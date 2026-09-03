@@ -76,6 +76,21 @@ public final class JadeCompat {
     {
       moduleId: "totem-a",
       repoName: "TotemA",
+      path: "src/main/java/dev/example/totema/block/AlchemyBlockEntity.java",
+      startLine: 1,
+      symbols: ["AlchemyBlockEntity", "saveAdditional", "loadAdditional"],
+      text: `package dev.example.totema.block;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
+public final class AlchemyBlockEntity {
+  protected void saveAdditional(ValueOutput output) { output.putInt("Value", 1); }
+  protected void loadAdditional(ValueInput input) { input.getIntOr("Value", 0); }
+}
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
       path: "src/client/java/dev/example/totema/client/ConfigScreen.java",
       startLine: 1,
       symbols: ["ConfigScreen"],
@@ -101,6 +116,18 @@ public final class EffectTooltip { void register() { ItemTooltipCallback.EVENT.r
       symbols: ["MixtureColorProvider", "register"],
       text: `package dev.example.totema.client;
 public final class MixtureColorProvider { void register() { BlockColorRegistry.register(null, null); } }
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
+      path: "src/client/java/dev/example/totema/client/ItemActivationFeedback.java",
+      startLine: 1,
+      symbols: ["ItemActivationFeedback", "show"],
+      text: `package dev.example.totema.client;
+public final class ItemActivationFeedback {
+  void show(Client context, ItemStack stack) { context.gameRenderer.displayItemActivation(stack); }
+}
 `
     },
     {
@@ -133,15 +160,17 @@ assert.equal(inventory.modules.length, 2);
 
 const moduleA = inventory.modules.find((entry) => entry.moduleId === "totem-a");
 assert.ok(moduleA);
-assert.equal(moduleA.productionFileCount, 7);
+assert.equal(moduleA.productionFileCount, 9);
 assert.ok(moduleA.surfaces.api.some((entry) => entry.label === "AService"));
 assert.ok(moduleA.surfaces.networking.some((entry) => entry.label === "ASyncPacket"));
 assert.ok(moduleA.surfaces.commands.some((entry) => entry.label === "RuntimeHooks"));
 assert.ok(moduleA.surfaces.registries.some((entry) => entry.label === "RuntimeHooks"));
 assert.ok(moduleA.surfaces.events.some((entry) => entry.label === "RuntimeHooks"));
+assert.ok(moduleA.surfaces.persistence.some((entry) => entry.label === "AlchemyBlockEntity"));
 assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "ConfigScreen"));
 assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "EffectTooltip"));
 assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "MixtureColorProvider"));
+assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "ItemActivationFeedback"));
 assert.ok(moduleA.surfaces.integrations.some((entry) => entry.label === "JadeCompat"));
 assert.ok(!moduleA.surfaces.integrations.some((entry) => entry.label === "RuntimeHooks"));
 assert.ok(moduleA.integrations.some((entry) => entry.packageRoot === "com.google.gson"));
