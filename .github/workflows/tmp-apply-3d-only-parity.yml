@@ -22,6 +22,18 @@ jobs:
       - name: Apply 3D-only parity migration
         run: node scripts/apply-3d-only-parity.mjs
 
+      - name: Repair generated parity validator quoting
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('scripts/validate-3d-only-parity.mjs')
+          s = p.read_text()
+          s = s.replace('source.includes("document.getElementById("snapshot").textContent")', 'source.includes(\'document.getElementById("snapshot").textContent\')')
+          s = s.replace('source.includes("document.getElementById("stats").textContent")', 'source.includes(\'document.getElementById("stats").textContent\')')
+          p.write_text(s)
+          PY
+
       - name: Validate patched site
         run: |
           node --check viewer/graph-v2-cluster-v2.js
