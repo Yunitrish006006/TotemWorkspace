@@ -13,9 +13,11 @@ const GENERIC_LABEL_WORDS = new Set([
   "client", "server", "screen", "screens", "payload", "payloads", "mixin", "mixins", "accessor",
   "manager", "service", "handler", "registry", "registration", "provider", "adapter", "support", "policy",
   "state", "data", "implementation", "impl", "event", "events", "hook", "hooks", "codec",
-  "item", "items", "inventory", "content", "abstract", "default", "cached", "classifying",
-  "persisted", "persisting", "portable", "simple", "operation", "operations", "helper", "sink",
-  "native", "remote", "owned", "structured"
+  "item", "items", "inventory", "content"
+]);
+const DOMINANT_AREA_MODIFIER_WORDS = new Set([
+  "abstract", "default", "cached", "classifying", "persisted", "persisting", "portable", "simple",
+  "operation", "operations", "helper", "sink", "native", "remote", "owned", "structured"
 ]);
 
 const SURFACE_LABELS = Object.freeze({
@@ -216,13 +218,16 @@ function refineDominantFeatureAreas(records, assignments, module) {
     if (areaRecords.length < 24 || areaRecords.length < Math.ceil(records.length * 0.45)) continue;
 
     const areaNamedRecords = areaRecords.filter((record) =>
-      semanticLabelWords(record.label, module).includes(area));
+      semanticLabelWords(record.label, module)
+        .filter((word) => !DOMINANT_AREA_MODIFIER_WORDS.has(word))
+        .includes(area));
     if (areaNamedRecords.length >= Math.ceil(areaRecords.length * 0.55)) continue;
 
     const refinableRecords = [];
     const wordsByPath = new Map();
     for (const record of areaRecords) {
-      const words = semanticLabelWords(record.label, module);
+      const words = semanticLabelWords(record.label, module)
+        .filter((word) => !DOMINANT_AREA_MODIFIER_WORDS.has(word));
       wordsByPath.set(record.path, words);
       const explicitLeafAreas = words.filter((word) => word !== area && knownAreas.has(word));
       if (explicitLeafAreas.length > 0) {
@@ -337,6 +342,17 @@ function featureAreaAssignments(records, module, ownRoot) {
       changed = true;
     }
     if (!changed) break;
+  }
+
+  const refinedAreas = new Set([...assignments.values()]
+    .filter((area) => area && area !== "module-root" && area !== "adapter"));
+  for (const record of records) {
+    if (assignments.get(record.path) !== "module-root") continue;
+    const directAreas = semanticLabelWords(record.label, module)
+      .filter((word) => refinedAreas.has(word));
+    if (directAreas.length > 0) {
+      assignments.set(record.path, directAreas[directAreas.length - 1]);
+    }
   }
 
   return assignments;
