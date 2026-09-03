@@ -19,7 +19,19 @@ jobs:
           fetch-depth: 0
 
       - name: Apply edge filter cleanup
-        run: python scripts/apply-edge-filter-cleanup.py
+        shell: bash
+        run: |
+          python scripts/apply-edge-filter-cleanup.py
+          python - <<'PY'
+          from pathlib import Path
+          p = Path('graph-v2.html')
+          s = p.read_text()
+          s = s.replace(
+              '手機一指旋轉・兩指縮放＋平移｜箭頭表示關係方向',
+              '手機一指旋轉・兩指縮放＋平移｜鍵盤方向鍵選節點・Enter / Space 啟動｜箭頭表示關係方向'
+          )
+          p.write_text(s)
+          PY
 
       - name: Validate renderer and workspace
         run: |
