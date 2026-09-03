@@ -247,6 +247,33 @@ public final class ItemActivationFeedback {
     {
       moduleId: "totem-a",
       repoName: "TotemA",
+      path: "src/client/java/dev/example/totema/client/ObserverOwnedScreenProvider.java",
+      startLine: 1,
+      symbols: ["ObserverOwnedScreenProvider", "create"],
+      text: `package dev.example.totema.client;
+public final class ObserverOwnedScreenProvider implements ObserverScreenProvider {
+  Object create() { return new ConfigScreen(); }
+}
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
+      path: "src/client/java/dev/example/totema/client/ManagementScreenRegistration.java",
+      startLine: 1,
+      symbols: ["ManagementScreenRegistration", "register"],
+      text: `package dev.example.totema.client;
+public final class ManagementScreenRegistration {
+  void register() throws Exception {
+    Class<?> constructorType = Class.forName("net.minecraft.client.gui.screens.MenuScreens$ScreenConstructor");
+    MenuScreens.class.getDeclaredMethod("register", Object.class, constructorType);
+  }
+}
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
       path: "src/client/java/dev/example/totema/client/ObserverBeaconScreenClient.java",
       startLine: 1,
       symbols: ["ObserverBeaconScreenClient", "show", "ObserverBeaconScreen"],
@@ -583,7 +610,7 @@ assert.equal(inventory.modules.length, 7);
 
 const moduleA = inventory.modules.find((entry) => entry.moduleId === "totem-a");
 assert.ok(moduleA);
-assert.equal(moduleA.productionFileCount, 21);
+assert.equal(moduleA.productionFileCount, 23);
 assert.equal(moduleA.resourceEvidence.sourceScope, "production-resource-evidence");
 assert.equal(moduleA.resourceEvidence.fileCount, 3);
 const baneResources = moduleA.resourceEvidence.families.find((entry) => entry.key === "tags/entity_type");
@@ -613,6 +640,8 @@ assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "MixtureColo
 assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "ItemActivationFeedback"));
 assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "ObserverBeaconScreenClient"));
 assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "ObserverUiClient"));
+assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "ObserverOwnedScreenProvider"));
+assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "ManagementScreenRegistration"));
 assert.ok(moduleA.surfaces.integrations.some((entry) => entry.label === "JadeCompat"));
 assert.ok(!moduleA.surfaces.integrations.some((entry) => entry.label === "RuntimeHooks"));
 assert.ok(moduleA.integrations.some((entry) => entry.packageRoot === "com.google.gson"));
