@@ -210,6 +210,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
   Future<void> _showCodeInventory() async {
     if (!mounted) return;
     final inventory = _data.codeInventory;
+    final reviewed = _data.codeCatalog;
     await showDialog<void>(
       context: context,
       builder: (context) => Dialog(
@@ -228,7 +229,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
                           Text('CODE-FIRST · Production source inventory',
                               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                           SizedBox(height: 3),
-                          Text('只以 src/main / src/client 的 Java、Kotlin 程式碼為證據；不使用 README 或人工 feature 描述。',
+                          Text('只以 src/main / src/client 的 Java、Kotlin 程式碼為證據；已審核語義與自動推測分開顯示。',
                               style: TextStyle(color: Color(0xFF9FB4CA), fontSize: 12)),
                         ],
                       ),
@@ -239,12 +240,21 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
               ),
               const Divider(height: 1),
               Expanded(
-                child: inventory.modules.isEmpty
+                child: inventory.modules.isEmpty && reviewed.modules.isEmpty
                     ? const Center(child: Text('尚未建立 production code inventory'))
-                    : ListView.builder(
+                    : ListView(
                         padding: const EdgeInsets.all(12),
-                        itemCount: inventory.modules.length,
-                        itemBuilder: (context, index) => _InventoryModuleTile(module: inventory.modules[index]),
+                        children: [
+                          if (reviewed.modules.isNotEmpty) ...[
+                            const _InventoryTitle('Reviewed semantic catalog'),
+                            for (final module in reviewed.modules) _ReviewedModuleTile(module: module),
+                            const SizedBox(height: 8),
+                          ],
+                          if (inventory.modules.isNotEmpty) ...[
+                            const _InventoryTitle('Automatic production-code inventory'),
+                            for (final module in inventory.modules) _InventoryModuleTile(module: module),
+                          ],
+                        ],
                       ),
               ),
             ],
@@ -273,6 +283,45 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
             onInventory: _showCodeInventory,
           ),
           Expanded(child: GraphView(data: _data)),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReviewedModuleTile extends StatelessWidget {
+  const _ReviewedModuleTile({required this.module});
+
+  final GraphReviewedModule module;
+
+  @override
+  Widget build(BuildContext context) {
+    final shortRef = module.sourceRef.length > 10 ? module.sourceRef.substring(0, 10) : module.sourceRef;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ExpansionTile(
+        initiallyExpanded: module.moduleId == 'totem-core',
+        title: Text('${module.moduleId} · REVIEWED', style: const TextStyle(fontWeight: FontWeight.w800)),
+        subtitle: Text(
+          '${module.semanticGroups.length} semantic groups · $shortRef · ${module.evidencePolicy}',
+          style: const TextStyle(fontSize: 11, color: Color(0xFF86EFAC)),
+        ),
+        childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
+        children: [
+          for (final group in module.semanticGroups) ...[
+            _InventoryLine(
+              group.name,
+              [
+                '${group.kind} · ${group.ownership}',
+                group.summary,
+                if (group.publicSymbols.isNotEmpty) 'Public API: ${group.publicSymbols.join(', ')}',
+                if (group.implementationSymbols.isNotEmpty)
+                  'Implementation: ${group.implementationSymbols.join(', ')}',
+                if (group.notes.isNotEmpty) 'Notes: ${group.notes.join(' | ')}',
+                if (group.evidence.isNotEmpty) 'Evidence: ${group.evidence.map((item) => item.path).join('\n')}',
+              ].join('\n'),
+            ),
+          ],
         ],
       ),
     );

@@ -29,6 +29,8 @@ jobs:
         run: node scripts/validate-intelligence.mjs
       - name: Validate production-code-only inventory
         run: node scripts/validate-code-inventory.mjs
+      - name: Validate reviewed code catalog
+        run: node scripts/validate-code-catalog.mjs
       - name: Validate Flutter production root
         run: node scripts/validate-flutter-root.mjs
       - name: Validate audited V2 contract endpoints

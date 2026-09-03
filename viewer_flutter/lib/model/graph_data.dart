@@ -8,6 +8,7 @@ class GraphData {
     required this.contracts,
     required this.sharedCapabilities,
     required this.codeInventory,
+    this.codeCatalog = const GraphCodeCatalog(schemaVersion: 1, modules: []),
   });
 
   final String generatedAt;
@@ -18,6 +19,7 @@ class GraphData {
   final List<GraphContract> contracts;
   final List<GraphSharedCapability> sharedCapabilities;
   final GraphCodeInventory codeInventory;
+  final GraphCodeCatalog codeCatalog;
 
   factory GraphData.fromJson(Map<String, dynamic> json) {
     final snapshot = json['snapshot'] as Map<String, dynamic>? ?? const {};
@@ -33,6 +35,9 @@ class GraphData {
       codeInventory: GraphCodeInventory.fromJson(
         json['codeInventory'] is Map ? Map<String, dynamic>.from(json['codeInventory'] as Map) : const {},
       ),
+      codeCatalog: GraphCodeCatalog.fromJson(
+        json['codeCatalog'] is Map ? Map<String, dynamic>.from(json['codeCatalog'] as Map) : const {},
+      ),
     );
   }
 
@@ -44,6 +49,8 @@ class GraphData {
   }
 
   GraphModuleInventory? inventoryForModule(String id) => codeInventory.moduleById(id);
+
+  GraphReviewedModule? reviewedForModule(String id) => codeCatalog.moduleById(id);
 
   GraphFeature? featureById(String id) {
     for (final feature in features) {
@@ -219,6 +226,101 @@ class GraphSharedCapability {
         consumerLabel: json['consumerLabel'] as String? ?? '',
         label: json['label'] as String? ?? 'Shared capability',
         evidencePaths: GraphData.strings(json['evidencePaths']),
+      );
+}
+
+class GraphCodeCatalog {
+  const GraphCodeCatalog({required this.schemaVersion, required this.modules});
+
+  final int schemaVersion;
+  final List<GraphReviewedModule> modules;
+
+  factory GraphCodeCatalog.fromJson(Map<String, dynamic> json) => GraphCodeCatalog(
+        schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 1,
+        modules: GraphData._objects(json['modules']).map(GraphReviewedModule.fromJson).toList(growable: false),
+      );
+
+  GraphReviewedModule? moduleById(String id) {
+    for (final module in modules) {
+      if (module.moduleId == id) return module;
+    }
+    return null;
+  }
+}
+
+class GraphReviewedModule {
+  const GraphReviewedModule({
+    required this.moduleId,
+    required this.reviewStatus,
+    required this.sourceRef,
+    required this.evidencePolicy,
+    required this.semanticGroups,
+  });
+
+  final String moduleId;
+  final String reviewStatus;
+  final String sourceRef;
+  final String evidencePolicy;
+  final List<GraphReviewedSemanticGroup> semanticGroups;
+
+  factory GraphReviewedModule.fromJson(Map<String, dynamic> json) {
+    final source = json['source'] is Map ? Map<String, dynamic>.from(json['source'] as Map) : const <String, dynamic>{};
+    return GraphReviewedModule(
+      moduleId: json['moduleId'] as String? ?? '',
+      reviewStatus: json['reviewStatus'] as String? ?? '',
+      sourceRef: source['ref'] as String? ?? '',
+      evidencePolicy: source['evidencePolicy'] as String? ?? '',
+      semanticGroups:
+          GraphData._objects(json['semanticGroups']).map(GraphReviewedSemanticGroup.fromJson).toList(growable: false),
+    );
+  }
+}
+
+class GraphReviewedSemanticGroup {
+  const GraphReviewedSemanticGroup({
+    required this.id,
+    required this.name,
+    required this.kind,
+    required this.ownership,
+    required this.summary,
+    required this.publicSymbols,
+    required this.implementationSymbols,
+    required this.notes,
+    required this.evidence,
+  });
+
+  final String id;
+  final String name;
+  final String kind;
+  final String ownership;
+  final String summary;
+  final List<String> publicSymbols;
+  final List<String> implementationSymbols;
+  final List<String> notes;
+  final List<GraphReviewedEvidence> evidence;
+
+  factory GraphReviewedSemanticGroup.fromJson(Map<String, dynamic> json) => GraphReviewedSemanticGroup(
+        id: json['id'] as String? ?? '',
+        name: json['name'] as String? ?? '',
+        kind: json['kind'] as String? ?? '',
+        ownership: json['ownership'] as String? ?? '',
+        summary: json['summary'] as String? ?? '',
+        publicSymbols: GraphData.strings(json['publicSymbols']),
+        implementationSymbols: GraphData.strings(json['implementationSymbols']),
+        notes: GraphData.strings(json['notes']),
+        evidence: GraphData._objects(json['evidence']).map(GraphReviewedEvidence.fromJson).toList(growable: false),
+      );
+}
+
+class GraphReviewedEvidence {
+  const GraphReviewedEvidence({required this.path, required this.symbols});
+
+  final String path;
+  final List<String> symbols;
+
+  factory GraphReviewedEvidence.fromJson(Map<String, dynamic> json) => GraphReviewedEvidence(
+        path: json['path'] as String? ?? '',
+        symbols: GraphData.strings(json['symbols']),
       );
 }
 

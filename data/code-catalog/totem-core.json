@@ -1,0 +1,231 @@
+{
+  "schemaVersion": 1,
+  "moduleId": "totem-core",
+  "reviewStatus": "reviewed-from-production-code",
+  "source": {
+    "repository": "https://github.com/Yunitrish006006/TotemCore",
+    "ref": "b0b57bc98a98140a1c12a660a33952ea61167278",
+    "productionRoots": ["src/main/java"],
+    "evidencePolicy": "production-code-only"
+  },
+  "semanticGroups": [
+    {
+      "id": "shared-manual-platform",
+      "name": "Shared Manual Platform",
+      "kind": "platform",
+      "ownership": "core-owned-platform",
+      "summary": "全系列共享手冊平台：模組註冊章節，伺服器負責取得、合併、遷移與刷新；實體 written_book 僅保存封面與章節索引，Client 以無原版頁數上限的 virtual pages、雙頁版面、可點擊目錄、頁面 filter 與 overlay 擴充呈現內容。",
+      "publicSymbols": [
+        "TotemManualRegistry",
+        "TotemManualSection",
+        "TotemModuleManualSource",
+        "TotemManualAssembler",
+        "TotemManualLifecycle",
+        "TotemManualPlayerHelper",
+        "TotemManualChapterRecorder",
+        "TotemManualPageFilterRegistry",
+        "TotemManualPageOverlay",
+        "TotemManualPageOverlayRegistry",
+        "TotemManualPageRenderContext"
+      ],
+      "implementationSymbols": [
+        "TotemManualOnboarding",
+        "TotemStarterManualOverlay",
+        "BookViewScreenMixin",
+        "TotemManualPayloadRegistration"
+      ],
+      "notes": [
+        "TotemManualAssembler schema version is 3 and records a SHA-256 content revision.",
+        "splitHeldManual is a deprecated compatibility endpoint; manual splitting is disabled and must not be presented as an active feature.",
+        "Page visibility filters are process-local; canonical server metadata keeps the full page set deterministic."
+      ],
+      "evidence": [
+        {"path": "src/main/java/dev/totem/core/api/v1/manual/TotemManualRegistry.java", "symbols": ["TotemManualRegistry"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/manual/TotemManualSection.java", "symbols": ["TotemManualSection"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/manual/TotemModuleManualSource.java", "symbols": ["TotemModuleManualSource"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/manual/TotemManualAssembler.java", "symbols": ["TotemManualAssembler"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/manual/TotemManualPlayerHelper.java", "symbols": ["TotemManualPlayerHelper"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/manual/TotemManualChapterRecorder.java", "symbols": ["TotemManualChapterRecorder"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/manual/TotemManualPageFilterRegistry.java", "symbols": ["TotemManualPageFilterRegistry"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/client/manual/TotemManualPageOverlayRegistry.java", "symbols": ["TotemManualPageOverlayRegistry"]},
+        {"path": "src/main/java/dev/totem/core/mixin/client/BookViewScreenMixin.java", "symbols": ["BookViewScreenMixin"]}
+      ]
+    },
+    {
+      "id": "versioned-event-contracts",
+      "name": "Versioned Event Bus & Lifecycle Contracts",
+      "kind": "contract-platform",
+      "ownership": "core-contracts-feature-modules-publish",
+      "summary": "Process-local、版本化的可選跨模組事件匯流排。Core 定義 immutable event contracts，subscriber 失敗會被隔離並記錄，不回滾已完成 gameplay；事件只攜帶必要的公開／稽核資料，不讓 Core 接管來源模組狀態。",
+      "publicSymbols": [
+        "TotemEvent",
+        "TotemEventBus",
+        "AdminAuditEvent",
+        "DeathBackpackCreatedEvent",
+        "DeathBackpackRecoveredEvent",
+        "LockedContainerNetworkBrokenEvent",
+        "SpaceUnitPublicUpdateEvent"
+      ],
+      "implementationSymbols": [],
+      "notes": [
+        "Current event records report contractVersion() == 1.",
+        "LockedContainerNetworkBrokenEvent deliberately excludes inventory, ACL, keys and complete topology data."
+      ],
+      "evidence": [
+        {"path": "src/main/java/dev/totem/core/api/v1/event/TotemEvent.java", "symbols": ["TotemEvent"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/event/TotemEventBus.java", "symbols": ["TotemEventBus"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/event/AdminAuditEvent.java", "symbols": ["AdminAuditEvent"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/event/DeathBackpackCreatedEvent.java", "symbols": ["DeathBackpackCreatedEvent"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/event/DeathBackpackRecoveredEvent.java", "symbols": ["DeathBackpackRecoveredEvent"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/event/LockedContainerNetworkBrokenEvent.java", "symbols": ["LockedContainerNetworkBrokenEvent"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/event/SpaceUnitPublicUpdateEvent.java", "symbols": ["SpaceUnitPublicUpdateEvent"]}
+      ]
+    },
+    {
+      "id": "friendship-authority",
+      "name": "Friendship Authority & Persistence",
+      "kind": "authoritative-service",
+      "ownership": "core-owned-state",
+      "summary": "全系列唯一的 server-authoritative 好友資料來源：好友關係為 mutual，邀請在接受前保持 directional；API 提供查詢、邀請／接受與解除關係，持久化同時保存 friendships 與 pending invites。",
+      "publicSymbols": ["TotemFriendshipApi", "FriendActionResult"],
+      "implementationSymbols": ["TotemFriendSavedData"],
+      "notes": [
+        "Persistence identifier intentionally remains deadrecall:space_friends so existing worlds reuse the same data without destructive copy migration.",
+        "Feature modules should consume TotemFriendshipApi rather than mirror social state."
+      ],
+      "evidence": [
+        {"path": "src/main/java/dev/totem/core/api/v1/social/TotemFriendshipApi.java", "symbols": ["TotemFriendshipApi"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/social/FriendActionResult.java", "symbols": ["FriendActionResult"]},
+        {"path": "src/main/java/dev/totem/core/social/TotemFriendSavedData.java", "symbols": ["TotemFriendSavedData"]}
+      ]
+    },
+    {
+      "id": "observer-semantic-screen-spi",
+      "name": "Observer Semantic Screen SPI",
+      "kind": "client-contract-platform",
+      "ownership": "core-contracts-screen-owner-implementation",
+      "summary": "framebuffer-free 的語意化遠端 Screen 契約。畫面擁有模組透過 Fabric entrypoint 提供 family/protocol/variant provider，Coordinator 傳送 bounded semantic snapshot 與 logical cursor，Provider 建立真正 owner Screen 並套用狀態；read-only marker 用於阻止 Observer 畫面再次被轉播。",
+      "publicSymbols": [
+        "ObserverScreenProvider",
+        "ObserverScreenProviders",
+        "ObserverScreenSnapshot",
+        "ObserverScreenContext",
+        "ObserverScreenHandle",
+        "ObserverRemoteCursor",
+        "ObserverReadOnlyScreen"
+      ],
+      "implementationSymbols": [],
+      "notes": [
+        "Provider entrypoint key is totem:observer_screen_provider.",
+        "Snapshot transport caps include 256 slots, 128 data ints, 64 metadata entries, 2048-character text and 64 KiB owner payload.",
+        "ownerPayload stays opaque to the coordinator and is decoded by the Screen-owning module."
+      ],
+      "evidence": [
+        {"path": "src/main/java/dev/totem/core/api/v1/client/observer/ObserverScreenProvider.java", "symbols": ["ObserverScreenProvider"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/client/observer/ObserverScreenProviders.java", "symbols": ["ObserverScreenProviders"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/client/observer/ObserverScreenSnapshot.java", "symbols": ["ObserverScreenSnapshot"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/client/observer/ObserverScreenContext.java", "symbols": ["ObserverScreenContext"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/client/observer/ObserverScreenHandle.java", "symbols": ["ObserverScreenHandle"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/client/observer/ObserverRemoteCursor.java", "symbols": ["ObserverRemoteCursor"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/client/observer/ObserverReadOnlyScreen.java", "symbols": ["ObserverReadOnlyScreen"]}
+      ]
+    },
+    {
+      "id": "world-outline-voxel-wireframe",
+      "name": "World Outline & Voxel Wireframe API",
+      "kind": "client-api",
+      "ownership": "core-owned-stateless-render-api",
+      "summary": "Client-only、無狀態的世界輪廓提交與幾何規劃 API。支援 block、AABB cuboid、任意兩點 line，以及不規則 voxel union 的外部 wireframe；樣式包含 ARGB、線寬與 depth-tested／through-walls occlusion。",
+      "publicSymbols": ["TotemWorldOutlines", "WorldOutlineStyle", "WorldOutlineOcclusion", "VoxelUnionOutline"],
+      "implementationSymbols": [],
+      "notes": [
+        "VoxelUnionOutline removes internal shared edges, coplanar seams and enclosed cavity surfaces, then merges collinear unit edges into deterministic maximal segments.",
+        "A face-connected component whose padded envelope exceeds 1,000,000 cells is rejected as a safety bound."
+      ],
+      "evidence": [
+        {"path": "src/main/java/dev/totem/core/api/v1/client/world/TotemWorldOutlines.java", "symbols": ["TotemWorldOutlines"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/client/world/WorldOutlineStyle.java", "symbols": ["WorldOutlineStyle"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/client/world/WorldOutlineOcclusion.java", "symbols": ["WorldOutlineOcclusion"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/client/world/VoxelUnionOutline.java", "symbols": ["VoxelUnionOutline"]}
+      ]
+    },
+    {
+      "id": "death-integration-contracts",
+      "name": "Death Integration Contracts",
+      "kind": "optional-contracts",
+      "ownership": "core-contracts-feature-module-authority",
+      "summary": "死亡流程的跨模組掛接點，而不是 Core 自己的死亡玩法。DeathBackpackNodeLifecycle 讓外部 authority 建立／綁定／回滾／回收死亡背包節點；DeathRetainedItemPolicy 只授權某物品是否可保留，真正 extraction、persistence 與 exactly-once restore 仍由死亡流程擁有模組負責。",
+      "publicSymbols": ["DeathBackpackNodeLifecycle", "DeathRetainedItemPolicy"],
+      "implementationSymbols": [],
+      "notes": [
+        "DeathBackpackNodeLifecycle.bind exists so reverse links can be persisted without loading chunks to search entities.",
+        "DeathRetainedItemPolicy does not own extraction or restoration."
+      ],
+      "evidence": [
+        {"path": "src/main/java/dev/totem/core/api/v1/death/DeathBackpackNodeLifecycle.java", "symbols": ["DeathBackpackNodeLifecycle"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/death/DeathRetainedItemPolicy.java", "symbols": ["DeathRetainedItemPolicy"]}
+      ]
+    },
+    {
+      "id": "legacy-item-decode-migration",
+      "name": "Legacy Item Decode & Migration",
+      "kind": "compatibility",
+      "ownership": "core-owned-compatibility",
+      "summary": "舊 DeadRecall item namespace 的永久 decode/migration 相容層。Core 先註冊 placeholder aliases 讓舊世界即使缺少原功能模組仍可安全載入，之後在 canonical owner item 可解析時再延遲 transmute；目前內建 14 個 legacy item mappings。",
+      "publicSymbols": ["LegacyItemMigrationRegistry"],
+      "implementationSymbols": ["LegacyAliasBootstrap", "LegacyAliasItem"],
+      "notes": [
+        "Legacy stacks remain intact when their owning feature module is temporarily absent.",
+        "Built-in mappings cover Remnant backpacks/death backpack, Automata copper wrench and multiple Alchemy items."
+      ],
+      "evidence": [
+        {"path": "src/main/java/dev/totem/core/api/v1/migration/LegacyItemMigrationRegistry.java", "symbols": ["LegacyItemMigrationRegistry"]},
+        {"path": "src/main/java/dev/totem/core/migration/LegacyAliasBootstrap.java", "symbols": ["LegacyAliasBootstrap"]},
+        {"path": "src/main/java/dev/totem/core/migration/LegacyAliasItem.java", "symbols": ["LegacyAliasItem"]}
+      ]
+    },
+    {
+      "id": "legacy-exact-version-gate",
+      "name": "Legacy Exact Module Version Gate",
+      "kind": "compatibility-networking",
+      "ownership": "core-owned-compatibility",
+      "summary": "Configuration phase 的 exact client/server module-version handshake。它只在 legacy deadrecall mod 仍載入時啟用；Server 發送固定模組集合的版本，Client 回傳自身集合，任何 missing/version mismatch 都會在進入遊戲前拒絕連線。",
+      "publicSymbols": [],
+      "implementationSymbols": [
+        "ExactModuleVersionGate",
+        "ModuleVersionSet",
+        "ServerModuleVersionsPayload",
+        "ClientModuleVersionsPayload",
+        "ModuleVersionPayloadCodec"
+      ],
+      "notes": [
+        "This is legacy DeadRecall compatibility behavior, not TotemCore API-version negotiation.",
+        "ModuleVersionSet uses a fixed ordered module-id list and represents absent modules as <missing>."
+      ],
+      "evidence": [
+        {"path": "src/main/java/dev/totem/core/network/ExactModuleVersionGate.java", "symbols": ["ExactModuleVersionGate"]},
+        {"path": "src/main/java/dev/totem/core/network/ModuleVersionSet.java", "symbols": ["ModuleVersionSet"]},
+        {"path": "src/main/java/dev/totem/core/client/TotemCoreClient.java", "symbols": ["TotemCoreClient"]}
+      ]
+    },
+    {
+      "id": "shared-api-facilities",
+      "name": "Shared API & Runtime Facilities",
+      "kind": "shared-facilities",
+      "ownership": "core-owned-platform",
+      "summary": "小型但跨模組共用的基礎設施：ApiVersion 提供 major/minor compatibility 判定；TotemGameRuleCategories 註冊共用 totem:rules 分類，讓各 Totem 模組規則集中出現在原版 Game Rules UI。",
+      "publicSymbols": ["ApiVersion", "TotemGameRuleCategories"],
+      "implementationSymbols": ["TotemCore", "TotemCoreClient"],
+      "notes": [
+        "ApiVersion.V1 is 1.0 and supports the same major with an equal-or-newer minor.",
+        "TotemCore initialization also boots manual onboarding, legacy aliases and compatibility networking."
+      ],
+      "evidence": [
+        {"path": "src/main/java/dev/totem/core/api/v1/version/ApiVersion.java", "symbols": ["ApiVersion"]},
+        {"path": "src/main/java/dev/totem/core/api/v1/gamerule/TotemGameRuleCategories.java", "symbols": ["TotemGameRuleCategories"]},
+        {"path": "src/main/java/dev/totem/core/TotemCore.java", "symbols": ["TotemCore"]},
+        {"path": "src/main/java/dev/totem/core/client/TotemCoreClient.java", "symbols": ["TotemCoreClient"]}
+      ]
+    }
+  ]
+}
