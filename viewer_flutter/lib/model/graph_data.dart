@@ -247,6 +247,7 @@ class GraphModuleInventory {
     required this.repoName,
     required this.packageRoot,
     required this.productionFileCount,
+    required this.resourceEvidence,
     required this.featureAreas,
     required this.surfaces,
     required this.integrations,
@@ -257,6 +258,7 @@ class GraphModuleInventory {
   final String repoName;
   final String? packageRoot;
   final int productionFileCount;
+  final GraphResourceEvidence resourceEvidence;
   final List<GraphFeatureArea> featureAreas;
   final Map<String, List<GraphCodeSurfaceItem>> surfaces;
   final List<GraphCodeIntegration> integrations;
@@ -269,6 +271,9 @@ class GraphModuleInventory {
       repoName: json['repoName'] as String? ?? '',
       packageRoot: json['packageRoot'] as String?,
       productionFileCount: (json['productionFileCount'] as num?)?.toInt() ?? 0,
+      resourceEvidence: GraphResourceEvidence.fromJson(
+        json['resourceEvidence'] is Map ? Map<String, dynamic>.from(json['resourceEvidence'] as Map) : const {},
+      ),
       featureAreas: GraphData._objects(json['featureAreas']).map(GraphFeatureArea.fromJson).toList(growable: false),
       surfaces: Map.unmodifiable({
         for (final entry in rawSurfaces.entries)
@@ -281,6 +286,45 @@ class GraphModuleInventory {
   }
 
   List<GraphCodeSurfaceItem> surface(String key) => surfaces[key] ?? const <GraphCodeSurfaceItem>[];
+}
+
+class GraphResourceEvidence {
+  const GraphResourceEvidence({
+    required this.sourceScope,
+    required this.fileCount,
+    required this.families,
+  });
+
+  final String sourceScope;
+  final int fileCount;
+  final List<GraphResourceFamily> families;
+
+  factory GraphResourceEvidence.fromJson(Map<String, dynamic> json) => GraphResourceEvidence(
+        sourceScope: json['sourceScope'] as String? ?? 'production-resource-evidence',
+        fileCount: (json['fileCount'] as num?)?.toInt() ?? 0,
+        families: GraphData._objects(json['families']).map(GraphResourceFamily.fromJson).toList(growable: false),
+      );
+}
+
+class GraphResourceFamily {
+  const GraphResourceFamily({
+    required this.key,
+    required this.label,
+    required this.fileCount,
+    required this.representativePaths,
+  });
+
+  final String key;
+  final String label;
+  final int fileCount;
+  final List<String> representativePaths;
+
+  factory GraphResourceFamily.fromJson(Map<String, dynamic> json) => GraphResourceFamily(
+        key: json['key'] as String? ?? '',
+        label: json['label'] as String? ?? '',
+        fileCount: (json['fileCount'] as num?)?.toInt() ?? 0,
+        representativePaths: GraphData.strings(json['representativePaths']),
+      );
 }
 
 class GraphFeatureArea {

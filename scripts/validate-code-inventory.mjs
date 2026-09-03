@@ -512,6 +512,49 @@ public final class LanguageCacheDownloader {
   }
 );
 
+index.chunks.push(
+  {
+    moduleId: "totem-a",
+    repoName: "TotemA",
+    path: "src/main/resources/data/minecraft/tags/entity_type/sensitive_to_bane_of_arthropods.json",
+    startLine: 1,
+    symbols: [],
+    text: '{ "replace": false, "values": ["minecraft:skeleton"] }'
+  },
+  {
+    moduleId: "totem-a",
+    repoName: "TotemA",
+    path: "src/main/resources/data/totema/advancement/enchanting_root.json",
+    startLine: 1,
+    symbols: [],
+    text: '{ "criteria": { "root": {} } }'
+  },
+  {
+    moduleId: "totem-a",
+    repoName: "TotemA",
+    path: "src/main/resources/assets/totema/lang/zh_tw.json",
+    startLine: 1,
+    symbols: [],
+    text: '{ "manual.totema.enchanting": "附魔" }'
+  },
+  {
+    moduleId: "totem-a",
+    repoName: "TotemA",
+    path: "src/main/resources/assets/totema/models/item/example.json",
+    startLine: 1,
+    symbols: [],
+    text: '{ "parent": "minecraft:item/generated" }'
+  },
+  {
+    moduleId: "totem-a",
+    repoName: "TotemA",
+    path: "src/gametest/resources/data/totema/tags/entity_type/test_only.json",
+    startLine: 1,
+    symbols: [],
+    text: '{ "values": ["minecraft:zombie"] }'
+  }
+);
+
 assert.equal(isProductionCode("src/main/java/a/A.java"), true);
 assert.equal(isProductionCode("src/client/java/a/A.kt"), true);
 assert.equal(isProductionCode("src/test/java/a/A.java"), false);
@@ -524,6 +567,17 @@ assert.equal(inventory.modules.length, 7);
 const moduleA = inventory.modules.find((entry) => entry.moduleId === "totem-a");
 assert.ok(moduleA);
 assert.equal(moduleA.productionFileCount, 20);
+assert.equal(moduleA.resourceEvidence.sourceScope, "production-resource-evidence");
+assert.equal(moduleA.resourceEvidence.fileCount, 3);
+const baneResources = moduleA.resourceEvidence.families.find((entry) => entry.key === "tags/entity_type");
+const advancementResources = moduleA.resourceEvidence.families.find((entry) => entry.key === "advancement");
+const localizationResources = moduleA.resourceEvidence.families.find((entry) => entry.key === "localization");
+assert.ok(baneResources);
+assert.ok(advancementResources);
+assert.ok(localizationResources);
+assert.ok(baneResources.representativePaths.some((entry) => entry.endsWith("sensitive_to_bane_of_arthropods.json")));
+assert.equal(JSON.stringify(moduleA.resourceEvidence).includes("/models/"), false);
+assert.equal(JSON.stringify(moduleA.resourceEvidence).includes("gametest"), false);
 assert.ok(moduleA.surfaces.api.some((entry) => entry.label === "AService"));
 assert.ok(moduleA.surfaces.networking.some((entry) => entry.label === "ASyncPacket"));
 assert.ok(moduleA.surfaces.commands.some((entry) => entry.label === "RuntimeHooks"));
