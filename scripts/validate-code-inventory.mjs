@@ -135,6 +135,26 @@ public final class CustomDataStore {
     {
       moduleId: "totem-a",
       repoName: "TotemA",
+      path: "src/main/java/dev/example/totema/observer/ObserverSessionManager.java",
+      startLine: 1,
+      symbols: ["ObserverSessionManager"],
+      text: `package dev.example.totema.observer;
+public final class ObserverSessionManager { }
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
+      path: "src/main/java/dev/example/totema/inventory/ContainerSortService.java",
+      startLine: 1,
+      symbols: ["ContainerSortService"],
+      text: `package dev.example.totema.inventory;
+public final class ContainerSortService { }
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
       path: "src/client/java/dev/example/totema/client/ConfigScreen.java",
       startLine: 1,
       symbols: ["ConfigScreen"],
@@ -199,6 +219,16 @@ public final class ObserverUiClient { }
 `
     },
     {
+      moduleId: "totem-a",
+      repoName: "TotemA",
+      path: "src/client/java/dev/example/totema/client/ContainerSortClient.java",
+      startLine: 1,
+      symbols: ["ContainerSortClient"],
+      text: `package dev.example.totema.client;
+public final class ContainerSortClient { }
+`
+    },
+    {
       moduleId: "totem-b",
       repoName: "TotemB",
       path: "src/main/java/dev/example/totemb/api/BApi.java",
@@ -258,7 +288,7 @@ assert.equal(inventory.modules.length, 4);
 
 const moduleA = inventory.modules.find((entry) => entry.moduleId === "totem-a");
 assert.ok(moduleA);
-assert.equal(moduleA.productionFileCount, 14);
+assert.equal(moduleA.productionFileCount, 17);
 assert.ok(moduleA.surfaces.api.some((entry) => entry.label === "AService"));
 assert.ok(moduleA.surfaces.networking.some((entry) => entry.label === "ASyncPacket"));
 assert.ok(moduleA.surfaces.commands.some((entry) => entry.label === "RuntimeHooks"));
@@ -278,6 +308,16 @@ assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "ObserverUiC
 assert.ok(moduleA.surfaces.integrations.some((entry) => entry.label === "JadeCompat"));
 assert.ok(!moduleA.surfaces.integrations.some((entry) => entry.label === "RuntimeHooks"));
 assert.ok(moduleA.integrations.some((entry) => entry.packageRoot === "com.google.gson"));
+
+const observerArea = moduleA.featureAreas.find((entry) => entry.key === "observer");
+const inventoryArea = moduleA.featureAreas.find((entry) => entry.key === "inventory");
+assert.ok(observerArea);
+assert.ok(inventoryArea);
+assert.equal(observerArea.fileCount, 3);
+assert.ok(observerArea.representativePaths.some((path) => path.endsWith("ObserverBeaconScreenClient.java")));
+assert.ok(observerArea.representativePaths.some((path) => path.endsWith("ObserverUiClient.java")));
+assert.equal(inventoryArea.fileCount, 2);
+assert.ok(inventoryArea.representativePaths.some((path) => path.endsWith("ContainerSortClient.java")));
 
 const crossB = moduleA.crossModuleImports.find((entry) => entry.targetModuleId === "totem-b");
 const crossCore = moduleA.crossModuleImports.find((entry) => entry.targetModuleId === "totem-core");
