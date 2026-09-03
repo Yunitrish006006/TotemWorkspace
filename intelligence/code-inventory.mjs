@@ -184,7 +184,7 @@ function isNetworkingSurface(record) {
 function isEventSurface(record) {
   if (pathHas(record, "event") || pathHas(record, "events")) return true;
   if (/(?:Event|Events|Callback|Callbacks|Hook|Hooks|Listener|Subscriber)$/.test(record.label)) return true;
-  return /\b(?:ServerTickEvents|ClientTickEvents|ServerLifecycleEvents|UseBlockCallback|AttackBlockCallback|CommandRegistrationCallback)\b[\s\S]*?\.register\s*\(/.test(record.text) ||
+  return /\b(?:ServerTickEvents|ClientTickEvents|ServerLifecycleEvents|ServerPlayConnectionEvents|UseBlockCallback|AttackBlockCallback|CommandRegistrationCallback)\b[\s\S]*?\.register\s*\(/.test(record.text) ||
     /\.EVENT\.register\s*\(/.test(record.text);
 }
 
@@ -203,12 +203,15 @@ function isRegistrySurface(record) {
 function isPersistenceSurface(record) {
   if (["persistence", "storage", "state"].some((segment) => pathHas(record, segment))) return true;
   if (/(?:SavedData|PersistentState|Store|Storage|Repository|Codec)$/.test(record.label)) return true;
-  return /\b(?:extends\s+(?:SavedData|PersistentState)|DataComponents?\.|ComponentType\.<|Codec\s*<|NbtCompound|CompoundTag)\b/.test(record.text);
+  if (/\b(?:extends\s+(?:SavedData|PersistentState)|DataComponents?\.|ComponentType\.<|Codec\s*<|NbtCompound|CompoundTag|ValueInput|ValueOutput|saveAdditional\s*\(|loadAdditional\s*\()/.test(record.text)) return true;
+  return /\bString\s+encode\s*\(\s*\)/.test(record.text)
+    && /\bstatic\s+[A-Za-z_$][\w$<>?.]*\s+decode\s*\(\s*String\b/.test(record.text);
 }
 
 function isClientUiSurface(record) {
-  if (/(?:Screen|HandledScreen|ScreenHandler|Menu|Renderer|Hud|Overlay)$/.test(record.label)) return true;
-  return /\b(?:extends\s+(?:Screen|HandledScreen)|implements\s+HudRenderCallback|GuiGraphics|DrawContext)\b/.test(record.text);
+  if (/(?:Screen|HandledScreen|ScreenHandler|Menu|Renderer|Hud|Overlay|Tooltip|ColorProvider)$/.test(record.label)) return true;
+  return /\b(?:extends\s+(?:Screen|HandledScreen)|implements\s+HudRenderCallback|GuiGraphics|DrawContext)\b/.test(record.text)
+    || /\bgameRenderer\.displayItemActivation\s*\(/.test(record.text);
 }
 
 function isMixinSurface(record) {
@@ -255,21 +258,20 @@ function externalImport(importName, ownPackagePrefix = "") {
   ].some((prefix) => value.startsWith(prefix));
 }
 
-function targetModuleForImport(importName, modules, sourceModuleId) {
-  const compact = importName.toLowerCase().replace(/[^a-z0-9]/g, "");
+function targetModuleForImport(importName, modulePackageRoots, sourceModuleId) {
+  const value = importName.toLowerCase();
   let best = null;
-  for (const module of modules) {
-    if (module.id === sourceModuleId) continue;
-    for (const token of moduleTokens(module)) {
-      if (!compact.includes(token)) continue;
-      if (!best || token.length > best.token.length) best = { moduleId: module.id, token };
-    }
+  for (const [moduleId, packagePrefix] of modulePackageRoots) {
+    if (moduleId === sourceModuleId || !packagePrefix) continue;
+    const root = packagePrefix.toLowerCase();
+    if (value !== root && !value.startsWith(`${root}.`)) continue;
+    if (!best || root.length > best.root.length) best = { moduleId, root };
   }
   return best?.moduleId ?? null;
 }
 
-function moduleInventory(module, records, allModules) {
-  const ownRoot = packageRoot(records, module);
+function moduleInventory(module, records, modulePackageRoots) {
+  const ownRoot = modulePackageRoots.get(module.id) ?? packageRoot(records, module);
   const surfaces = Object.fromEntries(Object.keys(SURFACE_LABELS).map((key) => [key, []]));
   const areas = new Map();
   const integrations = new Map();
@@ -285,7 +287,7 @@ function moduleInventory(module, records, allModules) {
     for (const key of surfaceKeys(record)) surfaces[key].push(surfaceItem(record));
 
     for (const importName of record.imports) {
-      const target = targetModuleForImport(importName, allModules, module.id);
+      const target = targetModuleForImport(importName, modulePackageRoots, module.id);
       if (target) {
         if (!crossImports.has(target)) crossImports.set(target, { targetModuleId: target, imports: [], evidencePaths: [] });
         crossImports.get(target).imports.push(importName);
@@ -356,13 +358,21 @@ export function buildCodeInventory({ knowledge, index } = {}) {
     if (!byModule.has(record.moduleId)) byModule.set(record.moduleId, []);
     byModule.get(record.moduleId).push(record);
   }
+  const modulePackageRoots = new Map(modules.map((module) => [
+    module.id,
+    packageRoot(byModule.get(module.id) ?? [], module)
+  ]));
 
   return Object.freeze({
     schemaVersion: 3,
     generatedAt: index?.generatedAt ?? knowledge?.snapshot?.date ?? null,
     sourceScope: "production-code-only",
     description: "Derived only from indexed production Java/Kotlin source. Curated feature descriptions and README text are not evidence for this inventory. Explicit integration surfaces are separated from ordinary third-party dependency imports.",
-    modules: Object.freeze(modules.map((module) => moduleInventory(module, byModule.get(module.id) ?? [], modules)))
+    modules: Object.freeze(modules.map((module) => moduleInventory(
+      module,
+      byModule.get(module.id) ?? [],
+      modulePackageRoots
+    )))
   });
 }
 

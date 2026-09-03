@@ -6,7 +6,9 @@ const knowledge = {
   snapshot: { date: "2026-09-04" },
   modules: [
     { id: "totem-a", name: "TotemA", repoName: "TotemA" },
-    { id: "totem-b", name: "TotemB", repoName: "TotemB" }
+    { id: "totem-b", name: "TotemB", repoName: "TotemB" },
+    { id: "totem-core", name: "TotemCore", repoName: "TotemCore" },
+    { id: "totem-alchemy", name: "TotemAlchemy", repoName: "TotemAlchemy" }
   ]
 };
 
@@ -21,6 +23,11 @@ const index = {
       symbols: ["AService", "send"],
       text: `package dev.example.totema.api;
 import dev.example.totemb.api.BApi;
+import dev.totem.core.api.CoreApi;
+import dev.totem.alchemy.AlchemyApi;
+import dev.example.totema.adapter.TotemBAdapter;
+import net.minecraft.core.BlockPos;
+import net.minecraft.world.item.alchemy.PotionContents;
 public interface AService {
   void send(Object payload);
 }
@@ -62,6 +69,31 @@ public final class RuntimeHooks {
     {
       moduleId: "totem-a",
       repoName: "TotemA",
+      path: "src/main/java/dev/example/totema/runtime/ConnectionSync.java",
+      startLine: 1,
+      symbols: ["ConnectionSync", "register"],
+      text: `package dev.example.totema.runtime;
+public final class ConnectionSync {
+  void register() { ServerPlayConnectionEvents.JOIN.register((handler, sender, server) -> {}); }
+}
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
+      path: "src/main/java/dev/example/totema/runtime/MixtureState.java",
+      startLine: 1,
+      symbols: ["MixtureState", "encode", "decode"],
+      text: `package dev.example.totema.runtime;
+public final class MixtureState {
+  public String encode() { return "state"; }
+  public static MixtureState decode(String encoded) { return new MixtureState(); }
+}
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
       path: "src/main/java/dev/example/totema/integration/JadeCompat.java",
       startLine: 1,
       symbols: ["JadeCompat"],
@@ -76,11 +108,88 @@ public final class JadeCompat {
     {
       moduleId: "totem-a",
       repoName: "TotemA",
+      path: "src/main/java/dev/example/totema/block/AlchemyBlockEntity.java",
+      startLine: 1,
+      symbols: ["AlchemyBlockEntity", "saveAdditional", "loadAdditional"],
+      text: `package dev.example.totema.block;
+import net.minecraft.world.level.storage.ValueInput;
+import net.minecraft.world.level.storage.ValueOutput;
+public final class AlchemyBlockEntity {
+  protected void saveAdditional(ValueOutput output) { output.putInt("Value", 1); }
+  protected void loadAdditional(ValueInput input) { input.getIntOr("Value", 0); }
+}
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
       path: "src/client/java/dev/example/totema/client/ConfigScreen.java",
       startLine: 1,
       symbols: ["ConfigScreen"],
       text: `package dev.example.totema.client;
 public final class ConfigScreen extends Screen { }
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
+      path: "src/client/java/dev/example/totema/client/EffectTooltip.java",
+      startLine: 1,
+      symbols: ["EffectTooltip", "register"],
+      text: `package dev.example.totema.client;
+public final class EffectTooltip { void register() { ItemTooltipCallback.EVENT.register((stack, context, type, lines) -> {}); } }
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
+      path: "src/client/java/dev/example/totema/client/MixtureColorProvider.java",
+      startLine: 1,
+      symbols: ["MixtureColorProvider", "register"],
+      text: `package dev.example.totema.client;
+public final class MixtureColorProvider { void register() { BlockColorRegistry.register(null, null); } }
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
+      path: "src/client/java/dev/example/totema/client/ItemActivationFeedback.java",
+      startLine: 1,
+      symbols: ["ItemActivationFeedback", "show"],
+      text: `package dev.example.totema.client;
+public final class ItemActivationFeedback {
+  void show(Client context, ItemStack stack) { context.gameRenderer.displayItemActivation(stack); }
+}
+`
+    },
+    {
+      moduleId: "totem-b",
+      repoName: "TotemB",
+      path: "src/main/java/dev/example/totemb/api/BApi.java",
+      startLine: 1,
+      symbols: ["BApi"],
+      text: `package dev.example.totemb.api;
+public interface BApi { }
+`
+    },
+    {
+      moduleId: "totem-core",
+      repoName: "TotemCore",
+      path: "src/main/java/dev/totem/core/api/CoreApi.java",
+      startLine: 1,
+      symbols: ["CoreApi"],
+      text: `package dev.totem.core.api;
+public interface CoreApi { }
+`
+    },
+    {
+      moduleId: "totem-alchemy",
+      repoName: "TotemAlchemy",
+      path: "src/main/java/dev/totem/alchemy/AlchemyApi.java",
+      startLine: 1,
+      symbols: ["AlchemyApi"],
+      text: `package dev.totem.alchemy;
+public interface AlchemyApi { }
 `
     },
     {
@@ -109,26 +218,50 @@ assert.equal(isProductionCode("README.md"), false);
 
 const inventory = buildCodeInventory({ knowledge, index });
 assert.equal(inventory.sourceScope, "production-code-only");
-assert.equal(inventory.modules.length, 2);
+assert.equal(inventory.modules.length, 4);
 
 const moduleA = inventory.modules.find((entry) => entry.moduleId === "totem-a");
 assert.ok(moduleA);
-assert.equal(moduleA.productionFileCount, 5);
+assert.equal(moduleA.productionFileCount, 11);
 assert.ok(moduleA.surfaces.api.some((entry) => entry.label === "AService"));
 assert.ok(moduleA.surfaces.networking.some((entry) => entry.label === "ASyncPacket"));
 assert.ok(moduleA.surfaces.commands.some((entry) => entry.label === "RuntimeHooks"));
 assert.ok(moduleA.surfaces.registries.some((entry) => entry.label === "RuntimeHooks"));
 assert.ok(moduleA.surfaces.events.some((entry) => entry.label === "RuntimeHooks"));
+assert.ok(moduleA.surfaces.events.some((entry) => entry.label === "ConnectionSync"));
+assert.ok(moduleA.surfaces.persistence.some((entry) => entry.label === "MixtureState"));
+assert.ok(moduleA.surfaces.persistence.some((entry) => entry.label === "AlchemyBlockEntity"));
 assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "ConfigScreen"));
+assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "EffectTooltip"));
+assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "MixtureColorProvider"));
+assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "ItemActivationFeedback"));
 assert.ok(moduleA.surfaces.integrations.some((entry) => entry.label === "JadeCompat"));
 assert.ok(!moduleA.surfaces.integrations.some((entry) => entry.label === "RuntimeHooks"));
 assert.ok(moduleA.integrations.some((entry) => entry.packageRoot === "com.google.gson"));
-assert.ok(moduleA.crossModuleImports.some((entry) => entry.targetModuleId === "totem-b"));
+
+const crossB = moduleA.crossModuleImports.find((entry) => entry.targetModuleId === "totem-b");
+const crossCore = moduleA.crossModuleImports.find((entry) => entry.targetModuleId === "totem-core");
+const crossAlchemy = moduleA.crossModuleImports.find((entry) => entry.targetModuleId === "totem-alchemy");
+assert.ok(crossB);
+assert.ok(crossCore);
+assert.ok(crossAlchemy);
+assert.deepEqual(crossB.imports, ["dev.example.totemb.api.BApi"]);
+assert.deepEqual(crossCore.imports, ["dev.totem.core.api.CoreApi"]);
+assert.deepEqual(crossAlchemy.imports, ["dev.totem.alchemy.AlchemyApi"]);
+assert.equal(JSON.stringify(moduleA.crossModuleImports).includes("net.minecraft.core"), false);
+assert.equal(JSON.stringify(moduleA.crossModuleImports).includes("net.minecraft.world.item.alchemy"), false);
+assert.equal(JSON.stringify(moduleA.crossModuleImports).includes("TotemBAdapter"), false);
 assert.equal(JSON.stringify(moduleA).includes("FakeFeatureTest"), false);
 assert.equal(JSON.stringify(moduleA).includes("imaginary README-only"), false);
 
 const moduleB = inventory.modules.find((entry) => entry.moduleId === "totem-b");
+const moduleCore = inventory.modules.find((entry) => entry.moduleId === "totem-core");
+const moduleAlchemy = inventory.modules.find((entry) => entry.moduleId === "totem-alchemy");
 assert.ok(moduleB);
-assert.equal(moduleB.productionFileCount, 0);
+assert.ok(moduleCore);
+assert.ok(moduleAlchemy);
+assert.equal(moduleB.productionFileCount, 1);
+assert.equal(moduleCore.productionFileCount, 1);
+assert.equal(moduleAlchemy.productionFileCount, 1);
 
 console.log("Code-first inventory validation passed.");
