@@ -2,21 +2,12 @@ import path from "node:path";
 
 const CODE_FILE = /\.(?:java|kt)$/i;
 const GENERIC_PACKAGE_SEGMENTS = new Set([
-  "com", "org", "net", "io", "dev", "me", "github", "minecraft", "fabric", "fabricmc",
+  "com", "org", "net", "io", "dev", "me", "github", "minecraft", "fabric", "fabricmc", "totem",
   "impl", "internal", "common", "main", "java", "kotlin"
 ]);
-
-const SURFACE_RULES = Object.freeze([
-  ["entrypoints", /\b(?:ModInitializer|ClientModInitializer|DedicatedServerModInitializer)\b|\bonInitialize(?:Client)?\s*\(/],
-  ["api", /(?:^|\/)api(?:\/|$)|\b(?:Api|API|Contract|Facade|Provider|Service|Lifecycle|Policy)\b/],
-  ["networking", /\b(?:Payload|Packet|PacketCodec|CustomPayload|ServerPlayNetworking|ClientPlayNetworking|PayloadTypeRegistry|Networking)\b/],
-  ["events", /\b(?:Event|Callback|EventBus|ServerTickEvents|ClientTickEvents|UseBlockCallback|AttackBlockCallback|ServerLifecycleEvents)\b/],
-  ["commands", /\b(?:CommandRegistrationCallback|CommandManager|Commands\.literal|literal\s*\(|brigadier)\b/i],
-  ["registries", /\b(?:Registry\.register|Registries\.|RegistryKey|RegistryKeys|RegistryEntry|register\s*\()\b/],
-  ["persistence", /\b(?:SavedData|PersistentState|DataComponent|ComponentType|Codec|PacketCodec|Nbt|NBT|Storage|Store)\b/],
-  ["clientUi", /\b(?:Screen|HandledScreen|ScreenHandler|Menu|HudRenderCallback|Renderer|GuiGraphics|DrawContext)\b/],
-  ["mixins", /(?:^|\/)mixin(?:s)?(?:\/|$)|@Mixin\s*\(/i],
-  ["integrations", /\b(?:Jade|Trinkets|ModMenu|MidnightLib|OpenAI|Discord|Cloudflare|HttpClient|HttpRequest|WebSocket)\b/i]
+const TECHNICAL_AREA_SEGMENTS = new Set([
+  "api", "v1", "v2", "client", "server", "mixin", "mixins", "network", "networking", "registry",
+  "config", "bootstrap", "command", "commands", "integration", "integrations", "impl", "internal"
 ]);
 
 const SURFACE_LABELS = Object.freeze({
@@ -91,27 +82,123 @@ function moduleTokens(module) {
   ].map((value) => String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "")).filter((value) => value.length >= 4));
 }
 
-function featureArea(record, module) {
+function packageRoot(records) {
+  const packages = records
+    .map((record) => record.packageName.split(".").filter(Boolean))
+    .filter((parts) => parts.length >= 2);
+  if (!packages.length) return "";
+
+  const counts = new Map();
+  for (const parts of packages) {
+    for (let length = 2; length <= Math.min(5, parts.length); length += 1) {
+      const prefix = parts.slice(0, length).join(".");
+      counts.set(prefix, (counts.get(prefix) ?? 0) + 1);
+    }
+  }
+
+  const threshold = Math.max(1, Math.ceil(packages.length * 0.65));
+  const eligible = [...counts.entries()]
+    .filter(([, count]) => count >= threshold)
+    .map(([prefix, count]) => ({ prefix, count, depth: prefix.split(".").length }))
+    .sort((a, b) => b.depth - a.depth || b.count - a.count || a.prefix.localeCompare(b.prefix));
+  if (eligible.length) return eligible[0].prefix;
+
+  return [...counts.entries()]
+    .map(([prefix, count]) => ({ prefix, count, depth: prefix.split(".").length }))
+    .sort((a, b) => b.count - a.count || b.depth - a.depth || a.prefix.localeCompare(b.prefix))[0]?.prefix ?? "";
+}
+
+function featureArea(record, module, ownRoot) {
   const moduleWords = new Set(moduleTokens(module));
   const segments = record.packageName.split(".").map((segment) => segment.toLowerCase()).filter(Boolean);
-  for (let index = segments.length - 1; index >= 0; index -= 1) {
-    const segment = segments[index];
+  const rootSegments = ownRoot.split(".").map((segment) => segment.toLowerCase()).filter(Boolean);
+  const insideRoot = rootSegments.length > 0 && rootSegments.every((segment, index) => segments[index] === segment);
+  const candidates = insideRoot ? segments.slice(rootSegments.length) : segments;
+
+  for (const segment of candidates) {
     const compact = segment.replace(/[^a-z0-9]/g, "");
     if (!compact || GENERIC_PACKAGE_SEGMENTS.has(compact) || moduleWords.has(compact)) continue;
-    if (["api", "client", "mixin", "network", "networking", "registry", "config"].includes(compact)) continue;
+    if (TECHNICAL_AREA_SEGMENTS.has(compact)) continue;
     return compact;
   }
 
-  const stripped = record.label
-    .replace(/(?:Manager|Service|Registry|Handler|Controller|Screen|Renderer|Mixin|Payload|Packet|Api|API|Client|Server|Mod|Impl)$/g, "")
-    .replace(/[^A-Za-z0-9]+/g, "")
-    .toLowerCase();
-  return stripped || "core";
+  return insideRoot ? "module-root" : "adapter";
+}
+
+function pathHas(record, segment) {
+  return normalize(record.path).toLowerCase().includes(`/${segment.toLowerCase()}/`);
+}
+
+function isEntrypoint(record) {
+  return /\b(?:ModInitializer|ClientModInitializer|DedicatedServerModInitializer)\b/.test(record.text) &&
+    /\b(?:implements|:)\s+(?:ModInitializer|ClientModInitializer|DedicatedServerModInitializer)\b|\bonInitialize(?:Client)?\s*\(/.test(record.text);
+}
+
+function isApiSurface(record) {
+  if (pathHas(record, "api")) return true;
+  if (/(?:Api|API|Contract|Facade|Provider)$/.test(record.label)) return true;
+  if (/(?:Bridge)$/.test(record.label) && /\bpublic\s+(?:final\s+)?(?:class|interface|record)\b/.test(record.text)) return true;
+  return false;
+}
+
+function isNetworkingSurface(record) {
+  if (pathHas(record, "network") || pathHas(record, "networking")) return true;
+  if (/(?:Payload|Packet|Networking|Network|Sender|Receiver|Transport|Sync|Channel|Codec)$/.test(record.label)) return true;
+  return /\b(?:ServerPlayNetworking|ClientPlayNetworking|PayloadTypeRegistry)\s*\./.test(record.text);
+}
+
+function isEventSurface(record) {
+  if (pathHas(record, "event") || pathHas(record, "events")) return true;
+  if (/(?:Event|Events|Callback|Callbacks|Hook|Hooks|Listener|Subscriber)$/.test(record.label)) return true;
+  return /\b(?:ServerTickEvents|ClientTickEvents|ServerLifecycleEvents|UseBlockCallback|AttackBlockCallback|CommandRegistrationCallback)\b[\s\S]*?\.register\s*\(/.test(record.text) ||
+    /\.EVENT\.register\s*\(/.test(record.text);
+}
+
+function isCommandSurface(record) {
+  if (pathHas(record, "command") || pathHas(record, "commands")) return true;
+  if (/(?:Command|Commands)$/.test(record.label)) return true;
+  return /\bCommandRegistrationCallback\.EVENT\.register\s*\(|\b(?:CommandManager|Commands)\.literal\s*\(/.test(record.text);
+}
+
+function isRegistrySurface(record) {
+  if (pathHas(record, "registry") || pathHas(record, "registries")) return true;
+  if (/(?:Registry|Registries|Registration|Bootstrap)$/.test(record.label)) return true;
+  return /\bRegistry\.register\s*\(/.test(record.text);
+}
+
+function isPersistenceSurface(record) {
+  if (["persistence", "storage", "state"].some((segment) => pathHas(record, segment))) return true;
+  if (/(?:SavedData|PersistentState|Store|Storage|Repository|Codec)$/.test(record.label)) return true;
+  return /\b(?:extends\s+(?:SavedData|PersistentState)|DataComponents?\.|ComponentType\.<|Codec\s*<|NbtCompound|CompoundTag)\b/.test(record.text);
+}
+
+function isClientUiSurface(record) {
+  if (/(?:Screen|HandledScreen|ScreenHandler|Menu|Renderer|Hud|Overlay)$/.test(record.label)) return true;
+  return /\b(?:extends\s+(?:Screen|HandledScreen)|implements\s+HudRenderCallback|GuiGraphics|DrawContext)\b/.test(record.text);
+}
+
+function isMixinSurface(record) {
+  return pathHas(record, "mixin") || pathHas(record, "mixins") || /@Mixin\s*\(/.test(record.text);
+}
+
+function integrationSignal(record) {
+  return /https?:\/\//i.test(record.text) ||
+    /\b(?:openai|cloudflare|trinkets|jade|modmenu|midnightlib)\b/i.test(record.text) ||
+    /isModLoaded\s*\(\s*["'][^"']+["']\s*\)/.test(record.text);
 }
 
 function surfaceKeys(record) {
-  const haystack = `${record.path}\n${record.packageName}\n${record.label}\n${record.text}`;
-  return SURFACE_RULES.filter(([, pattern]) => pattern.test(haystack)).map(([key]) => key);
+  const keys = [];
+  if (isEntrypoint(record)) keys.push("entrypoints");
+  if (isApiSurface(record)) keys.push("api");
+  if (isNetworkingSurface(record)) keys.push("networking");
+  if (isEventSurface(record)) keys.push("events");
+  if (isCommandSurface(record)) keys.push("commands");
+  if (isRegistrySurface(record)) keys.push("registries");
+  if (isPersistenceSurface(record)) keys.push("persistence");
+  if (isClientUiSurface(record)) keys.push("clientUi");
+  if (isMixinSurface(record)) keys.push("mixins");
+  return keys;
 }
 
 function surfaceItem(record) {
@@ -132,20 +219,6 @@ function externalImport(importName, ownPackagePrefix = "") {
   ].some((prefix) => value.startsWith(prefix));
 }
 
-function packageRoot(records) {
-  const counts = new Map();
-  for (const record of records) {
-    const parts = record.packageName.split(".").filter(Boolean);
-    if (parts.length < 2) continue;
-    for (const length of [Math.min(5, parts.length), Math.min(4, parts.length), Math.min(3, parts.length)]) {
-      if (length < 2) continue;
-      const prefix = parts.slice(0, length).join(".");
-      counts.set(prefix, (counts.get(prefix) ?? 0) + 1 + length * 0.01);
-    }
-  }
-  return [...counts.entries()].sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)[0]?.[0] ?? "";
-}
-
 function targetModuleForImport(importName, modules, sourceModuleId) {
   const compact = importName.toLowerCase().replace(/[^a-z0-9]/g, "");
   let best = null;
@@ -164,10 +237,11 @@ function moduleInventory(module, records, allModules) {
   const surfaces = Object.fromEntries(Object.keys(SURFACE_LABELS).map((key) => [key, []]));
   const areas = new Map();
   const integrations = new Map();
+  const integrationFiles = new Set();
   const crossImports = new Map();
 
   for (const record of records) {
-    const areaKey = featureArea(record, module);
+    const areaKey = featureArea(record, module, ownRoot);
     if (!areas.has(areaKey)) areas.set(areaKey, { key: areaKey, files: [], symbols: [] });
     const area = areas.get(areaKey);
     area.files.push(record.path);
@@ -175,18 +249,26 @@ function moduleInventory(module, records, allModules) {
 
     for (const key of surfaceKeys(record)) surfaces[key].push(surfaceItem(record));
 
+    let hasExternalImport = false;
     for (const importName of record.imports) {
       const target = targetModuleForImport(importName, allModules, module.id);
       if (target) {
         if (!crossImports.has(target)) crossImports.set(target, { targetModuleId: target, imports: [], evidencePaths: [] });
         crossImports.get(target).imports.push(importName);
         crossImports.get(target).evidencePaths.push(record.path);
+        continue;
       }
       if (!externalImport(importName, ownRoot)) continue;
+      hasExternalImport = true;
       const root = importName.split(".").slice(0, 3).join(".");
       if (!integrations.has(root)) integrations.set(root, { packageRoot: root, imports: [], evidencePaths: [] });
       integrations.get(root).imports.push(importName);
       integrations.get(root).evidencePaths.push(record.path);
+    }
+
+    if (hasExternalImport || integrationSignal(record) || pathHas(record, "integration") || pathHas(record, "integrations")) {
+      integrationFiles.add(record.path);
+      surfaces.integrations.push(surfaceItem(record));
     }
   }
 
@@ -202,7 +284,7 @@ function moduleInventory(module, records, allModules) {
 
   const normalizedSurfaces = Object.fromEntries(Object.entries(surfaces).map(([key, items]) => [
     key,
-    Object.freeze(items.sort((a, b) => a.path.localeCompare(b.path)))
+    Object.freeze(unique(items.map((item) => item.path)).map((itemPath) => items.find((item) => item.path === itemPath)).sort((a, b) => a.path.localeCompare(b.path)))
   ]));
 
   return Object.freeze({
@@ -233,7 +315,7 @@ function moduleInventory(module, records, allModules) {
       persistence: normalizedSurfaces.persistence.length,
       clientUi: normalizedSurfaces.clientUi.length,
       mixins: normalizedSurfaces.mixins.length,
-      integrations: normalizedSurfaces.integrations.length
+      integrations: integrationFiles.size
     })
   });
 }
@@ -248,7 +330,7 @@ export function buildCodeInventory({ knowledge, index } = {}) {
   }
 
   return Object.freeze({
-    schemaVersion: 1,
+    schemaVersion: 2,
     generatedAt: index?.generatedAt ?? knowledge?.snapshot?.date ?? null,
     sourceScope: "production-code-only",
     description: "Derived only from indexed production Java/Kotlin source. Curated feature descriptions and README text are not evidence for this inventory.",
