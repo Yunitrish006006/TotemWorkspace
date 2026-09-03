@@ -20,7 +20,7 @@ const lines = [
   "",
   `Generated: ${inventory.generatedAt ?? "unknown"}`,
   "",
-  "> Evidence policy: production Java/Kotlin source only (`src/main` / `src/client`). README and curated feature descriptions are excluded.",
+  "> Evidence policy: code areas/surfaces use production Java/Kotlin only. Production data JSON and localization JSON are reported separately as resource evidence. README and curated feature descriptions are excluded.",
   ""
 ];
 
@@ -30,7 +30,8 @@ for (const module of inventory.modules) {
   lines.push("");
   lines.push(`- Module: \`${module.moduleId}\``);
   lines.push(`- Present in scan: ${present ? "yes" : "no"}`);
-  lines.push(`- Production files: ${module.productionFileCount}`);
+  lines.push(`- Production code files: ${module.productionFileCount}`);
+  lines.push(`- Production resource evidence: ${module.resourceEvidence?.fileCount ?? 0}`);
   lines.push(`- Package root: ${module.packageRoot ? `\`${module.packageRoot}\`` : "n/a"}`);
   lines.push(`- Feature areas: ${module.featureAreas.length}`);
   lines.push(`- API / contract files: ${module.surfaces.api.length}`);
@@ -43,6 +44,15 @@ for (const module of inventory.modules) {
   lines.push(`- Mixins: ${module.surfaces.mixins.length}`);
   lines.push(`- Integration-signalling files: ${module.surfaces.integrations.length}`);
   lines.push("");
+
+  if (module.resourceEvidence?.families?.length) {
+    lines.push("### Production resource evidence");
+    lines.push("");
+    for (const family of module.resourceEvidence.families.slice(0, 16)) {
+      lines.push(`- **${family.label}** — ${family.fileCount} files — ${family.representativePaths.slice(0, 4).map((entry) => `\`${entry}\``).join(", ")}`);
+    }
+    lines.push("");
+  }
 
   if (module.featureAreas.length) {
     lines.push("### Feature areas");
@@ -98,11 +108,13 @@ const totals = inventory.modules.reduce((sum, module) => ({
   areas: sum.areas + module.featureAreas.length,
   api: sum.api + module.surfaces.api.length,
   networking: sum.networking + module.surfaces.networking.length,
-  events: sum.events + module.surfaces.events.length
-}), { files: 0, areas: 0, api: 0, networking: 0, events: 0 });
+  events: sum.events + module.surfaces.events.length,
+  resources: sum.resources + (module.resourceEvidence?.fileCount ?? 0)
+}), { files: 0, areas: 0, api: 0, networking: 0, events: 0, resources: 0 });
 
 process.stdout.write(`${JSON.stringify({
   sourceScope: inventory.sourceScope,
+  resourceScope: inventory.resourceScope,
   modules: inventory.modules.length,
   ...totals,
   json: path.join(outputDir, "code-inventory.json"),
