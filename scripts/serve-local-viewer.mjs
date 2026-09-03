@@ -38,6 +38,21 @@ function json(res, status, value) {
   res.end(body);
 }
 
+function isLoopbackOrigin(origin) {
+  return /^https?:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)?$/i.test(String(origin ?? ""));
+}
+
+function prepareApiCors(req, res) {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  if (!isLoopbackOrigin(origin)) return false;
+  res.setHeader("access-control-allow-origin", origin);
+  res.setHeader("access-control-allow-methods", "GET, POST, OPTIONS");
+  res.setHeader("access-control-allow-headers", "content-type");
+  res.setHeader("vary", "Origin");
+  return true;
+}
+
 function publicStatus(entry) {
   return Object.freeze({
     id: entry.id,
@@ -160,6 +175,15 @@ export function createLocalViewerServer() {
       const base = `http://${req.headers.host || `${DEFAULT_HOST}:${DEFAULT_PORT}`}`;
       const url = new URL(req.url || "/", base);
       if (url.pathname.startsWith("/api/")) {
+        if (!prepareApiCors(req, res)) {
+          json(res, 403, { error: "cross-origin access is restricted to loopback clients" });
+          return;
+        }
+        if (req.method === "OPTIONS") {
+          res.writeHead(204);
+          res.end();
+          return;
+        }
         if (await handleApi(req, res, url.pathname)) return;
         json(res, 404, { error: "unknown api route" });
         return;
