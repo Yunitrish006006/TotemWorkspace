@@ -155,6 +155,36 @@ public final class ContainerSortService { }
     {
       moduleId: "totem-a",
       repoName: "TotemA",
+      path: "src/main/java/dev/example/totema/bookshelf/BookshelfInventoryRule.java",
+      startLine: 1,
+      symbols: ["BookshelfInventoryRule"],
+      text: `package dev.example.totema.bookshelf;
+public final class BookshelfInventoryRule { }
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
+      path: "src/main/java/dev/example/totema/mixin/RecipeManagerMixin.java",
+      startLine: 1,
+      symbols: ["RecipeManagerMixin", "removeVanillaBookshelfRecipe"],
+      text: `package dev.example.totema.mixin;
+public final class RecipeManagerMixin { void removeVanillaBookshelfRecipe() {} }
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
+      path: "src/main/java/dev/example/totema/mixin/StructureTemplateMixin.java",
+      startLine: 1,
+      symbols: ["StructureTemplateMixin", "filledBookshelfState"],
+      text: `package dev.example.totema.mixin;
+public final class StructureTemplateMixin { void filledBookshelfState() {} }
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
       path: "src/client/java/dev/example/totema/client/ConfigScreen.java",
       startLine: 1,
       symbols: ["ConfigScreen"],
@@ -288,7 +318,7 @@ assert.equal(inventory.modules.length, 4);
 
 const moduleA = inventory.modules.find((entry) => entry.moduleId === "totem-a");
 assert.ok(moduleA);
-assert.equal(moduleA.productionFileCount, 17);
+assert.equal(moduleA.productionFileCount, 20);
 assert.ok(moduleA.surfaces.api.some((entry) => entry.label === "AService"));
 assert.ok(moduleA.surfaces.networking.some((entry) => entry.label === "ASyncPacket"));
 assert.ok(moduleA.surfaces.commands.some((entry) => entry.label === "RuntimeHooks"));
@@ -311,13 +341,21 @@ assert.ok(moduleA.integrations.some((entry) => entry.packageRoot === "com.google
 
 const observerArea = moduleA.featureAreas.find((entry) => entry.key === "observer");
 const inventoryArea = moduleA.featureAreas.find((entry) => entry.key === "inventory");
+const itemArea = moduleA.featureAreas.find((entry) => entry.key === "item");
+const bookshelfArea = moduleA.featureAreas.find((entry) => entry.key === "bookshelf");
 assert.ok(observerArea);
 assert.ok(inventoryArea);
+assert.ok(itemArea);
+assert.ok(bookshelfArea);
 assert.equal(observerArea.fileCount, 3);
 assert.ok(observerArea.representativePaths.some((path) => path.endsWith("ObserverBeaconScreenClient.java")));
 assert.ok(observerArea.representativePaths.some((path) => path.endsWith("ObserverUiClient.java")));
 assert.equal(inventoryArea.fileCount, 2);
 assert.ok(inventoryArea.representativePaths.some((path) => path.endsWith("ContainerSortClient.java")));
+assert.equal(itemArea.fileCount, 1);
+assert.equal(bookshelfArea.fileCount, 3);
+assert.ok(bookshelfArea.representativePaths.some((path) => path.endsWith("RecipeManagerMixin.java")));
+assert.ok(bookshelfArea.representativePaths.some((path) => path.endsWith("StructureTemplateMixin.java")));
 
 const crossB = moduleA.crossModuleImports.find((entry) => entry.targetModuleId === "totem-b");
 const crossCore = moduleA.crossModuleImports.find((entry) => entry.targetModuleId === "totem-core");
