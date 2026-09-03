@@ -228,7 +228,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
                           Text('CODE-FIRST · Production source inventory',
                               style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
                           SizedBox(height: 3),
-                          Text('只以 src/main / src/client 的 Java、Kotlin 程式碼為證據；不使用 README 或人工 feature 描述。',
+                          Text('程式碼區域與 surfaces 只採 production Java/Kotlin；data JSON 與 lang JSON 另列為 production resource evidence，不使用 README 或人工 feature 描述。',
                               style: TextStyle(color: Color(0xFF9FB4CA), fontSize: 12)),
                         ],
                       ),
@@ -309,7 +309,7 @@ class _InventoryModuleTile extends StatelessWidget {
         title: Text(module.repoName.isEmpty ? module.moduleId : module.repoName,
             style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: Text(
-          '${module.productionFileCount} production files · ${module.featureAreas.length} code areas\n${_surfaceSummary()}',
+          '${module.productionFileCount} production code files · ${module.featureAreas.length} code areas · ${module.resourceEvidence.fileCount} resource files\n${_surfaceSummary()}',
           style: const TextStyle(fontSize: 11, color: Color(0xFF9FB4CA)),
         ),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
@@ -324,6 +324,12 @@ class _InventoryModuleTile extends StatelessWidget {
                 if (area.symbols.isNotEmpty) area.symbols.take(8).join(', '),
                 if (area.representativePaths.isNotEmpty) area.representativePaths.first,
               ].join('\n'),
+            ),
+          if (module.resourceEvidence.families.isNotEmpty) const _InventoryTitle('Production resource evidence'),
+          for (final family in module.resourceEvidence.families.take(16))
+            _InventoryLine(
+              '${family.label} · ${family.fileCount} files',
+              family.representativePaths.take(6).join('\n'),
             ),
           for (final entry in const <String, String>{
             'api': 'API / contracts',
