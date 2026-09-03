@@ -138,6 +138,23 @@ public final class CustomDataStore {
     {
       moduleId: "totem-a",
       repoName: "TotemA",
+      path: "src/main/java/dev/example/totema/component/SelectionComponents.java",
+      startLine: 1,
+      symbols: ["SelectionComponents", "areaSelection"],
+      text: `package dev.example.totema.component;
+public final class SelectionComponents {
+  Object areaSelection() {
+    return DataComponentType.<AreaSelection>builder()
+      .persistent(AreaSelection.CODEC)
+      .networkSynchronized(AreaSelection.STREAM_CODEC)
+      .build();
+  }
+}
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
       path: "src/main/java/dev/example/totema/observer/ObserverSessionManager.java",
       startLine: 1,
       symbols: ["ObserverSessionManager"],
@@ -566,7 +583,7 @@ assert.equal(inventory.modules.length, 7);
 
 const moduleA = inventory.modules.find((entry) => entry.moduleId === "totem-a");
 assert.ok(moduleA);
-assert.equal(moduleA.productionFileCount, 20);
+assert.equal(moduleA.productionFileCount, 21);
 assert.equal(moduleA.resourceEvidence.sourceScope, "production-resource-evidence");
 assert.equal(moduleA.resourceEvidence.fileCount, 3);
 const baneResources = moduleA.resourceEvidence.families.find((entry) => entry.key === "tags/entity_type");
@@ -587,6 +604,8 @@ assert.ok(moduleA.surfaces.events.some((entry) => entry.label === "ConnectionSyn
 assert.ok(moduleA.surfaces.persistence.some((entry) => entry.label === "MixtureState"));
 assert.ok(moduleA.surfaces.persistence.some((entry) => entry.label === "AlchemyBlockEntity"));
 assert.ok(moduleA.surfaces.persistence.some((entry) => entry.label === "CustomDataStore"));
+assert.ok(moduleA.surfaces.persistence.some((entry) => entry.label === "SelectionComponents"));
+assert.ok(!moduleA.surfaces.networking.some((entry) => entry.label === "SelectionComponents"));
 assert.ok(!moduleA.surfaces.persistence.some((entry) => entry.label === "ObserverBeaconScreenClient"));
 assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "ConfigScreen"));
 assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "EffectTooltip"));
