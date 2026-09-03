@@ -663,7 +663,8 @@ export function buildCodeInventory({ knowledge, index } = {}) {
     schemaVersion: 4,
     generatedAt: index?.generatedAt ?? knowledge?.snapshot?.date ?? null,
     sourceScope: "production-code-only",
-    description: "Derived only from indexed production Java/Kotlin source. Curated feature descriptions and README text are not evidence for this inventory. Explicit integration surfaces are separated from ordinary third-party dependency imports.",
+    resourceScope: "production-resource-evidence",
+    description: "Code areas and surfaces are derived only from production Java/Kotlin source. Production data JSON and localization JSON are reported separately as resource evidence. Curated feature descriptions and README text are not evidence for this inventory. Explicit integration surfaces are separated from ordinary third-party dependency imports.",
     modules: Object.freeze(modules.map((module) => moduleInventory(
       module,
       byModule.get(module.id) ?? [],
