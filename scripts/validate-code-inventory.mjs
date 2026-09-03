@@ -369,7 +369,24 @@ index.chunks.push(
     "src/client/java/dev/example/totemc/client/CopperGolemClientPayloadRegistration.java",
     "dev.example.totemc.client",
     "CopperGolemClientPayloadRegistration"
-  )
+  ),
+  syntheticChunk(
+    "src/main/java/dev/example/totemc/menu/CopperGolemMenu.java",
+    "dev.example.totemc.menu",
+    "CopperGolemMenu"
+  ),
+  {
+    moduleId: "totem-c",
+    repoName: "TotemC",
+    path: "src/main/java/dev/example/totemc/TotemC.java",
+    startLine: 1,
+    symbols: ["TotemC", "onInitialize"],
+    text: `package dev.example.totemc;
+public final class TotemC implements ModInitializer {
+  public void onInitialize() { }
+}
+`
+  }
 );
 
 assert.equal(isProductionCode("src/main/java/a/A.java"), true);
@@ -449,7 +466,7 @@ assert.equal(moduleAlchemy.productionFileCount, 1);
 
 const moduleC = inventory.modules.find((entry) => entry.moduleId === "totem-c");
 assert.ok(moduleC);
-assert.equal(moduleC.productionFileCount, 36);
+assert.equal(moduleC.productionFileCount, 38);
 const gatheringArea = moduleC.featureAreas.find((entry) => entry.key === "gathering");
 const sortingArea = moduleC.featureAreas.find((entry) => entry.key === "sorting");
 const wrenchArea = moduleC.featureAreas.find((entry) => entry.key === "wrench");
@@ -462,6 +479,12 @@ assert.equal(gatheringArea.fileCount, 10);
 assert.equal(sortingArea.fileCount, 8);
 assert.equal(wrenchArea.fileCount, 5);
 assert.equal(llmArea.fileCount, 5);
+const menuAreaC = moduleC.featureAreas.find((entry) => entry.key === "menu");
+const rootAreaC = moduleC.featureAreas.find((entry) => entry.key === "module-root");
+assert.ok(menuAreaC);
+assert.ok(rootAreaC);
+assert.ok(menuAreaC.representativePaths.some((path) => path.endsWith("CopperGolemMenuScreenSession.java")));
+assert.ok(rootAreaC.representativePaths.some((path) => path.endsWith("TotemC.java")));
 for (const label of [
   "CopperGolemMenuPanelLayout",
   "CopperGolemMenuEditor",
