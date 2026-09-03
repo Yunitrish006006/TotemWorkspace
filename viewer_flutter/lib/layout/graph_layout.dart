@@ -72,7 +72,7 @@ class Camera3d {
     var z = point.x * sy + point.z * cy;
     final y = point.y * cp - z * sp;
     z = point.y * sp + z * cp;
-    final scale = zoom * 820 / math.max(200, 920 + z);
+    final scale = zoom * 820 / math.max(200.0, 920.0 + z);
     return ProjectedPoint(
       offset: Offset(size.width / 2 + x * scale, size.height / 2 + y * scale),
       scale: scale,
@@ -119,7 +119,7 @@ GraphLayoutResult buildModuleLayout(GraphData data) {
       label: external.name,
       kind: 'external',
       rank: external.rankHint,
-      position: _fibonacciPoint(index + 0.65, math.max(1, externals.length + 1), 710),
+      position: _fibonacciPoint(index + 0.65, externals.length + 1, 710),
     ));
   }
   return GraphLayoutResult(List.unmodifiable(nodes));
@@ -129,7 +129,7 @@ Vec3 _fibonacciPoint(num index, int count, double radius) {
   if (count <= 0) return Vec3.zero;
   final unitIndex = (index.toDouble() + 0.5) / count;
   final y = 1 - 2 * unitIndex;
-  final ring = math.sqrt(math.max(0, 1 - y * y));
+  final ring = math.sqrt(math.max(0.0, 1 - y * y));
   final angle = math.pi * (3 - math.sqrt(5)) * index.toDouble();
   return Vec3(
     math.cos(angle) * ring * radius,
