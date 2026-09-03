@@ -12,23 +12,18 @@
   <header class="bar">
     <div class="brand">
       <b>TOTEM Architecture V2</b>
-      <small>renderer shell · architecture data is loaded separately</small>
+      <small>3D architecture explorer · architecture data is loaded separately</small>
     </div>
     <span class="pill" id="snapshot">loading</span>
     <span class="pill" id="stats">loading</span>
     <button id="overview" type="button">總覽</button>
-    <button id="expandAll3d" type="button">3D 全展開</button>
+    <button id="expandAll3d" type="button">全展開</button>
     <button id="contracts" type="button">關係</button>
-    <button id="mode2d" type="button" aria-pressed="true">2D 分層</button>
-    <button id="mode3d" type="button" aria-pressed="false">3D 預覽</button>
   </header>
   <main class="stage">
-    <section id="pane2d" class="pane">
-      <div class="svg-wrap"><svg id="graph2d" role="img" aria-label="TOTEM V2 分層架構圖"></svg></div>
-    </section>
-    <section id="pane3d" class="pane" hidden>
-      <canvas id="graph3d" class="canvas3d" aria-label="TOTEM 3D 架構預覽"></canvas>
-      <div class="hint3d">點模組展開成 3D cluster｜功能 / capability / code 以固定散點分層｜桌機左鍵旋轉・右鍵拖曳平移・滾輪縮放｜手機一指旋轉・兩指縮放＋平移｜點子節點聚光</div>
+    <section id="pane3d" class="pane">
+      <canvas id="graph3d" class="canvas3d" tabindex="0" role="application" aria-label="TOTEM 3D 架構圖；方向鍵切換節點，Enter 或空白鍵啟動"></canvas>
+      <div class="hint3d">點模組展開成 cluster｜功能 / capability / code 固定散點分層｜左鍵旋轉・右鍵拖曳平移・滾輪縮放｜手機一指旋轉・兩指縮放＋平移｜鍵盤方向鍵選節點・Enter / Space 啟動｜箭頭表示關係方向</div>
     </section>
     <aside id="info" class="info" hidden>
       <h2 id="infoTitle"></h2>
@@ -47,7 +42,6 @@
 </div>
 <script src="viewer/generated/graph-data.js"></script>
 <script src="viewer/graph-v2-adapter.js"></script>
-<script src="viewer/graph-v2.js"></script>
 <script src="viewer/graph-v2-cluster-v2.js"></script>
 </body>
 </html>
