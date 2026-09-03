@@ -24,6 +24,16 @@
   var moduleMap = new Map(modules.map(function (x) { return [x.id, x]; }));
   var featureMap = new Map(features.map(function (x) { return [x.id, x]; }));
   var contractMap = new Map(contracts.map(function (x) { return [x.id, x]; }));
+  var edgeFilterKeys = [
+    "hard-core",
+    "fabric-suggests",
+    "runtime-optional",
+    "eventbus",
+    "observer-provider",
+    "external-service",
+    "shared-capability"
+  ];
+  var enabledEdgeFilters = new Set(edgeFilterKeys);
 
   var expanded = new Set();
   var spotlightId = null;
@@ -320,6 +330,35 @@
     return fib(peripheralIndex, peripheralCount, radius);
   }
 
+  function edgeGroup(edge) {
+    if (!edge) return null;
+    return edgeFilterKeys.includes(edge.type) ? edge.type : null;
+  }
+
+  function edgeVisible(edge) {
+    var group = edgeGroup(edge);
+    return !group || enabledEdgeFilters.has(group);
+  }
+
+  function expandedCenterEndpoint(id) {
+    return moduleMap.has(id) && expanded.has(id);
+  }
+
+  function syncEdgeFilterUi() {
+    var button = document.getElementById("edgeFilters");
+    if (button) button.textContent = "線條 " + enabledEdgeFilters.size + "/" + edgeFilterKeys.length;
+    document.querySelectorAll("[data-edge-filter]").forEach(function (input) {
+      input.checked = enabledEdgeFilters.has(input.getAttribute("data-edge-filter"));
+    });
+  }
+
+  function setAllEdgeFilters(enabled) {
+    enabledEdgeFilters.clear();
+    if (enabled) edgeFilterKeys.forEach(function (key) { enabledEdgeFilters.add(key); });
+    syncEdgeFilterUi();
+    draw();
+  }
+
   function isRetargetable(contract) {
     return Boolean(contract && (
       contract.type === "fabric-suggests" ||
@@ -344,6 +383,7 @@
   function addContractEdges(edges, contract) {
     if (!contract.from || !contract.to) return;
     if (!isRetargetable(contract) || (contract.featureIds || []).length === 0) {
+      if (expandedCenterEndpoint(contract.from) || expandedCenterEndpoint(contract.to)) return;
       edges.push({
         id: contract.id,
         from: contract.from,
@@ -358,6 +398,7 @@
     var toIds = endpoints(contract, contract.to);
     fromIds.forEach(function (from) {
       toIds.forEach(function (to) {
+        if (expandedCenterEndpoint(from) || expandedCenterEndpoint(to)) return;
         edges.push({
           id: contract.id + ":" + from + ":" + to,
           from: from,
@@ -470,13 +511,6 @@
           z: position.z,
           source: feature
         });
-        edges.push({
-          id: "owner:" + feature.id,
-          from: moduleId,
-          to: feature.id,
-          type: "feature-detail",
-          label: "curated feature"
-        });
       });
 
       syntheticCaps.forEach(function (capability) {
@@ -492,13 +526,6 @@
           z: position.z,
           source: capability
         });
-        edges.push({
-          id: "owner:" + id,
-          from: moduleId,
-          to: id,
-          type: "feature-detail",
-          label: "shared capability"
-        });
       });
 
       categories.forEach(function (category) {
@@ -512,13 +539,6 @@
           y: position.y,
           z: position.z,
           source: category
-        });
-        edges.push({
-          id: "owner:" + category.id,
-          from: moduleId,
-          to: category.id,
-          type: "detail",
-          label: "generated code"
         });
       });
     });
@@ -536,6 +556,7 @@
       ) {
         to = capability.providerFeatureId;
       }
+      if (expandedCenterEndpoint(from) || expandedCenterEndpoint(to)) return;
       edges.push({
         id: capability.id,
         from: from,
@@ -547,7 +568,7 @@
       });
     });
 
-    return { nodes: nodes, edges: edges, clusters: clusters };
+    return { nodes: nodes, edges: edges.filter(edgeVisible), clusters: clusters };
   }
 
   function rounded(ctx, x, y, width, height, radius) {
@@ -1199,6 +1220,28 @@
     draw();
   }, { passive: false });
 
+  var edgeFilterButton = document.getElementById("edgeFilters");
+  var edgeFilterPanel = document.getElementById("edgeFilterPanel");
+  if (edgeFilterButton && edgeFilterPanel) {
+    edgeFilterButton.addEventListener("click", function () {
+      var opening = edgeFilterPanel.hidden;
+      edgeFilterPanel.hidden = !opening;
+      edgeFilterButton.setAttribute("aria-expanded", opening ? "true" : "false");
+    });
+    document.querySelectorAll("[data-edge-filter]").forEach(function (input) {
+      input.addEventListener("change", function () {
+        var key = input.getAttribute("data-edge-filter");
+        if (input.checked) enabledEdgeFilters.add(key);
+        else enabledEdgeFilters.delete(key);
+        syncEdgeFilterUi();
+        draw();
+      });
+    });
+    document.getElementById("edgeFilterAll").addEventListener("click", function () { setAllEdgeFilters(true); });
+    document.getElementById("edgeFilterNone").addEventListener("click", function () { setAllEdgeFilters(false); });
+    syncEdgeFilterUi();
+  }
+
   document.getElementById("contracts").addEventListener("click", showContracts);
 
   document.getElementById("overview").addEventListener("click", function () {
@@ -1240,6 +1283,9 @@
     moduleOrbitRadius: moduleOrbitRadius,
     modulePosition: modulePosition,
     scatter: scatter,
+    edgeGroup: edgeGroup,
+    edgeVisible: edgeVisible,
+    expandedCenterEndpoint: expandedCenterEndpoint,
     featureRelations: featureRelations,
     relationAwareScatter: relationAwareScatter,
     manualFeatureFor: manualFeatureFor,

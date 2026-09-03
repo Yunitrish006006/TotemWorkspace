@@ -18,12 +18,30 @@
     <span class="pill" id="stats">loading</span>
     <button id="overview" type="button">總覽</button>
     <button id="expandAll3d" type="button">全展開</button>
+    <div class="filter-wrap">
+      <button id="edgeFilters" type="button" aria-expanded="false" aria-controls="edgeFilterPanel">線條 7/7</button>
+      <div id="edgeFilterPanel" class="edge-filter" hidden>
+        <b>線條種類</b>
+        <label><input type="checkbox" data-edge-filter="hard-core" checked><i class="dot hard"></i>Hard Core</label>
+        <label><input type="checkbox" data-edge-filter="fabric-suggests" checked><i class="dot suggest"></i>Fabric suggests</label>
+        <label><input type="checkbox" data-edge-filter="runtime-optional" checked><i class="dot compat"></i>Runtime optional</label>
+        <label><input type="checkbox" data-edge-filter="eventbus" checked><i class="dot compat"></i>EventBus</label>
+        <label><input type="checkbox" data-edge-filter="observer-provider" checked><i class="dot compat"></i>Observer provider</label>
+        <label><input type="checkbox" data-edge-filter="external-service" checked><i class="dot service"></i>External service</label>
+        <label><input type="checkbox" data-edge-filter="shared-capability" checked><i class="dot capability"></i>Shared Core capability</label>
+        <small>展開模組後，只保留能落到實際 feature / capability endpoint 的跨模組線。</small>
+        <div class="filter-actions">
+          <button id="edgeFilterAll" type="button">全部</button>
+          <button id="edgeFilterNone" type="button">清除</button>
+        </div>
+      </div>
+    </div>
     <button id="contracts" type="button">關係</button>
   </header>
   <main class="stage">
     <section id="pane3d" class="pane">
       <canvas id="graph3d" class="canvas3d" tabindex="0" role="application" aria-label="TOTEM 3D 架構圖；方向鍵切換節點，Enter 或空白鍵啟動"></canvas>
-      <div class="hint3d">點模組展開成 cluster｜功能 / capability / code 關係感知固定散點分層｜高交集節點靠近共同 junction｜左鍵旋轉・右鍵拖曳平移・滾輪縮放｜手機一指旋轉・兩指縮放＋平移｜鍵盤方向鍵選節點・Enter / Space 啟動｜箭頭表示關係方向</div>
+      <div class="hint3d">點模組展開成 cluster｜關係感知固定散點分層・高交集節點靠近共同 junction｜展開後不保留 module-center 舊線｜線條按種類篩選｜左鍵旋轉・右鍵拖曳平移・滾輪縮放｜手機一指旋轉・兩指縮放＋平移｜鍵盤方向鍵選節點・Enter / Space 啟動｜箭頭表示關係方向</div>
     </section>
     <aside id="info" class="info" hidden>
       <h2 id="infoTitle"></h2>
