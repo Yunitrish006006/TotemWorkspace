@@ -207,7 +207,7 @@ function isPersistenceSurface(record) {
 }
 
 function isClientUiSurface(record) {
-  if (/(?:Screen|HandledScreen|ScreenHandler|Menu|Renderer|Hud|Overlay)$/.test(record.label)) return true;
+  if (/(?:Screen|HandledScreen|ScreenHandler|Menu|Renderer|Hud|Overlay|Tooltip|ColorProvider)$/.test(record.label)) return true;
   return /\b(?:extends\s+(?:Screen|HandledScreen)|implements\s+HudRenderCallback|GuiGraphics|DrawContext)\b/.test(record.text);
 }
 
