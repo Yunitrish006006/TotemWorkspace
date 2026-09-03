@@ -13,7 +13,9 @@ const GENERIC_LABEL_WORDS = new Set([
   "client", "server", "screen", "screens", "payload", "payloads", "mixin", "mixins", "accessor",
   "manager", "service", "handler", "registry", "registration", "provider", "adapter", "support", "policy",
   "state", "data", "implementation", "impl", "event", "events", "hook", "hooks", "codec",
-  "item", "items", "inventory", "content"
+  "item", "items", "inventory", "content", "abstract", "default", "cached", "classifying",
+  "persisted", "persisting", "portable", "simple", "operation", "operations", "helper", "sink",
+  "native", "remote", "owned", "structured"
 ]);
 
 const SURFACE_LABELS = Object.freeze({
@@ -200,6 +202,53 @@ function featureArea(record, module, ownRoot) {
   return insideRoot ? "module-root" : "adapter";
 }
 
+function refineDominantFeatureAreas(records, assignments, module) {
+  const byArea = new Map();
+  for (const record of records) {
+    const area = assignments.get(record.path);
+    if (!area || area === "module-root" || area === "adapter") continue;
+    if (!byArea.has(area)) byArea.set(area, []);
+    byArea.get(area).push(record);
+  }
+
+  for (const [area, areaRecords] of byArea) {
+    if (areaRecords.length < 24 || areaRecords.length < Math.ceil(records.length * 0.45)) continue;
+
+    const wordsByPath = new Map();
+    const support = new Map();
+    for (const record of areaRecords) {
+      const words = semanticLabelWords(record.label, module).filter((word) => word !== area);
+      wordsByPath.set(record.path, words);
+      for (const word of unique(words)) support.set(word, (support.get(word) ?? 0) + 1);
+    }
+
+    const minSupport = Math.max(5, Math.ceil(areaRecords.length * 0.08));
+    const candidates = new Set([...support.entries()]
+      .filter(([, count]) => count >= minSupport && count <= Math.floor(areaRecords.length * 0.55))
+      .map(([word]) => word));
+    if (candidates.size < 2) continue;
+
+    const tentative = new Map();
+    const assignedCounts = new Map();
+    for (const record of areaRecords) {
+      const chosen = (wordsByPath.get(record.path) ?? []).find((word) => candidates.has(word));
+      if (!chosen) continue;
+      tentative.set(record.path, chosen);
+      assignedCounts.set(chosen, (assignedCounts.get(chosen) ?? 0) + 1);
+    }
+
+    const minAssigned = Math.max(4, Math.ceil(minSupport * 0.4));
+    const viable = new Set([...assignedCounts.entries()]
+      .filter(([, count]) => count >= minAssigned)
+      .map(([word]) => word));
+    if (viable.size < 2) continue;
+
+    for (const [recordPath, chosen] of tentative) {
+      if (viable.has(chosen)) assignments.set(recordPath, chosen);
+    }
+  }
+}
+
 function featureAreaAssignments(records, module, ownRoot) {
   const explicit = new Map(records.map((record) => [record.path, featureArea(record, module, ownRoot)]));
   const knownAreas = unique([...explicit.values()].filter((area) => area !== "module-root" && area !== "adapter"));
@@ -243,6 +292,8 @@ function featureAreaAssignments(records, module, ownRoot) {
       assignments.set(record.path, baseArea);
     }
   }
+
+  refineDominantFeatureAreas(records, assignments, module);
 
   const pathByQualifiedName = new Map(records
     .filter((record) => record.packageName)
@@ -322,6 +373,7 @@ function isPersistenceSurface(record) {
 
 function isClientUiSurface(record) {
   if (/(?:Screen|ScreenClient|UiClient|HandledScreen|ScreenHandler|Menu|Renderer|Hud|Overlay|Tooltip|ColorProvider)$/.test(record.label)) return true;
+  if (pathHas(record, "client") && /(?:Screen|Menu|Ui|UI|Layout|Editor|Widget|Panel)/.test(record.label)) return true;
   return /\bextends\s+[A-Za-z_$][\w$]*Screen\b/.test(record.text)
     || /\b(?:implements\s+HudRenderCallback|GuiGraphics|DrawContext)\b/.test(record.text)
     || /\b(?:setScreenAndShow|setScreen)\s*\(/.test(record.text)
