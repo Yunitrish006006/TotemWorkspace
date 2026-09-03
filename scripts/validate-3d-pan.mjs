@@ -14,6 +14,8 @@ const source = fs.readFileSync(rendererPath, "utf8");
 assert.ok(html.includes("兩指縮放＋平移"), "touch hint must retain two-finger zoom + pan");
 assert.ok(html.includes("右鍵拖曳平移"), "desktop hint must expose right-drag pan");
 assert.ok(html.includes('src="viewer/graph-v2-cluster-v2.js"'), "active cluster renderer must be v2");
+assert.ok(!html.includes('src="viewer/graph-v2.js"'), "legacy 2D/base renderer must not be loaded");
+assert.ok(!fs.existsSync(path.join(root, "viewer", "graph-v2.js")), "legacy 2D/base renderer must be deleted");
 assert.ok(!html.includes('src="viewer/graph-v2-pan.js"'));
 assert.ok(!fs.existsSync(obsoleteHelperPath), "obsolete CSS-transform pan helper must be removed");
 assert.ok(source.includes("panX: 0, panY: 0"));

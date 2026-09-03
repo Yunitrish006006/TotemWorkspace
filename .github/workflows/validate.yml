@@ -33,3 +33,5 @@ jobs:
         run: node scripts/validate-3d-pan.mjs
       - name: Validate deterministic 3D module clusters
         run: node scripts/validate-3d-cluster.mjs
+      - name: Validate 3D-only feature parity
+        run: node scripts/validate-3d-only-parity.mjs

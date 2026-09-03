@@ -115,7 +115,9 @@ assert.deepEqual([
 
 assert.ok(html.includes('src="viewer/generated/graph-data.js"'));
 assert.ok(html.includes('src="viewer/graph-v2-adapter.js"'));
-assert.ok(html.includes('src="viewer/graph-v2.js"'));
+assert.ok(html.includes('src="viewer/graph-v2-cluster-v2.js"'));
+assert.ok(!html.includes('src="viewer/graph-v2.js"'));
+assert.ok(!html.includes('id="mode2d"') && !html.includes('id="pane2d"'));
 assert.ok(!html.includes("graph-v2-contract-audit.js"));
 assert.ok(auditDoc.includes("32/32 contracts reviewed"));
 

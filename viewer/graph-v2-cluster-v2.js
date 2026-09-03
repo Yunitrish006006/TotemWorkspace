@@ -2,20 +2,14 @@
   "use strict";
 
   var DATA = window.__TOTEM_GRAPH_DATA__;
-  var base = document.getElementById("graph3d");
   var pane = document.getElementById("pane3d");
+  var canvas = document.getElementById("graph3d");
   var info = document.getElementById("info");
-  if (!DATA || !base || !pane) return;
+  if (!DATA || !canvas || !pane) return;
 
-  var previous = document.getElementById("graph3dCluster");
-  if (previous) previous.remove();
-
-  var canvas = document.createElement("canvas");
-  canvas.id = "graph3dClusterV2";
-  canvas.className = "canvas3d cluster3d";
-  canvas.setAttribute("aria-label", "TOTEM 3D module cluster preview");
-  pane.insertBefore(canvas, base.nextSibling);
-  base.style.display = "none";
+  canvas.tabIndex = 0;
+  canvas.setAttribute("role", "application");
+  canvas.setAttribute("aria-label", "TOTEM 3D architecture graph. Use arrow keys to choose nodes, Enter or Space to activate, left drag to rotate, right drag to pan, and wheel to zoom.");
 
   var modules = DATA.modules || [];
   var externals = DATA.externalNodes || [];
@@ -24,12 +18,16 @@
   var capabilities = DATA.sharedCapabilities || [];
   var code = DATA.code || { nodes: [] };
 
+  document.getElementById("snapshot").textContent = ((DATA.snapshot && DATA.snapshot.date) || "unknown") + " snapshot";
+  document.getElementById("stats").textContent = modules.length + " modules｜" + features.length + " features｜" + contracts.length + " contracts｜" + capabilities.length + " shared｜" + ((code.nodes || []).length) + " code nodes";
+
   var moduleMap = new Map(modules.map(function (x) { return [x.id, x]; }));
   var featureMap = new Map(features.map(function (x) { return [x.id, x]; }));
   var contractMap = new Map(contracts.map(function (x) { return [x.id, x]; }));
 
   var expanded = new Set();
   var spotlightId = null;
+  var keyboardFocusId = null;
   var lastHits = [];
   var pointers = new Map();
   var cam = { yaw: -0.48, pitch: 0.22, zoom: 1.02, panX: 0, panY: 0 };
@@ -406,6 +404,33 @@
     return "#a78bfa";
   }
 
+  function drawArrowhead(ctx, a, b, color, alpha, lineWidth) {
+    var dx = b.x - a.x;
+    var dy = b.y - a.y;
+    var length = Math.sqrt(dx * dx + dy * dy);
+    if (length < 18) return;
+    var ux = dx / length;
+    var uy = dy / length;
+    var tipOffset = 13;
+    var tipX = b.x - ux * tipOffset;
+    var tipY = b.y - uy * tipOffset;
+    var size = Math.max(6, Math.min(9, 5.5 + lineWidth));
+    var backX = tipX - ux * size;
+    var backY = tipY - uy * size;
+    var px = -uy * size * 0.62;
+    var py = ux * size * 0.62;
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = color;
+    ctx.beginPath();
+    ctx.moveTo(tipX, tipY);
+    ctx.lineTo(backX + px, backY + py);
+    ctx.lineTo(backX - px, backY - py);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
   function owner(node) {
     return node ? (node.ownerId || (node.type === "module" ? node.id : null)) : null;
   }
@@ -555,6 +580,7 @@
     var currentScene = scene();
     var projected = new Map();
     var byId = new Map(currentScene.nodes.map(function (node) { return [node.id, node]; }));
+    if (keyboardFocusId && !byId.has(keyboardFocusId)) keyboardFocusId = null;
     currentScene.nodes.forEach(function (node) {
       projected.set(node.id, project(node, width, height));
     });
@@ -577,13 +603,17 @@
       var relation = edge.type === "shared-capability" || edge.retargeted;
       var internal = edge.type === "detail" || edge.type === "feature-detail";
 
+      var edgeAlpha = spotlightId ? (active ? 1 : 0.055) : (relation ? 0.82 : internal ? 0.16 : 0.34);
+      var edgeWidth = spotlightId && active ? 4.6 : relation ? 2.6 : internal ? 1.15 : 1.45;
+      var color = edgeColor(edge);
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
-      ctx.strokeStyle = edgeColor(edge);
-      ctx.globalAlpha = spotlightId ? (active ? 1 : 0.055) : (relation ? 0.82 : internal ? 0.16 : 0.34);
-      ctx.lineWidth = spotlightId && active ? 4.6 : relation ? 2.6 : internal ? 1.15 : 1.45;
+      ctx.strokeStyle = color;
+      ctx.globalAlpha = edgeAlpha;
+      ctx.lineWidth = edgeWidth;
       ctx.stroke();
+      if (!internal) drawArrowhead(ctx, a, b, color, edgeAlpha, edgeWidth);
 
       if ((relation || (active && spotlightId)) && edge.label) {
         labels.push({ text: edge.label, x: (a.x + b.x) / 2, y: (a.y + b.y) / 2, active: active });
@@ -597,7 +627,7 @@
     }).forEach(function (node) {
       var p = projected.get(node.id);
       var child = node.type === "feature" || node.type === "category" || node.type === "capability";
-      var selected = spotlightId === node.id;
+      var selected = spotlightId === node.id || keyboardFocusId === node.id;
       var connected = connectedToSpotlight(currentScene, node.id);
 
       if (child) {
@@ -655,6 +685,27 @@
     return best;
   }
 
+  function keyboardNodes() {
+    return scene().nodes.filter(function (node) {
+      return node.type === "module" || node.type === "external" || node.type === "feature" || node.type === "category" || node.type === "capability";
+    });
+  }
+
+  function setKeyboardFocus(id) {
+    keyboardFocusId = id || null;
+    draw();
+  }
+
+  function moveKeyboardFocus(step) {
+    var nodes = keyboardNodes();
+    if (!nodes.length) return;
+    var index = nodes.findIndex(function (node) { return node.id === keyboardFocusId; });
+    if (index < 0) index = nodes.findIndex(function (node) { return node.id === "totem-core"; });
+    if (index < 0) index = 0;
+    index = (index + step + nodes.length) % nodes.length;
+    setKeyboardFocus(nodes[index].id);
+  }
+
   function setInfo(title, body, sections) {
     document.getElementById("infoTitle").textContent = title;
     document.getElementById("infoBody").textContent = body || "";
@@ -683,20 +734,55 @@
     });
   }
 
+  function showContracts() {
+    setInfo(contracts.length + " validated contracts", "Curated relationship list", [
+      {
+        title: "Contracts",
+        items: contracts.map(function (contract, index) {
+          return String(index + 1).padStart(2, "0") + "｜" + contract.type + "｜" + contract.from + " → " + contract.to + "｜" + (contract.feature || contract.id);
+        })
+      },
+      {
+        title: "Shared capabilities",
+        items: capabilities.map(function (capability) {
+          return capability.consumerModuleId + " → " + capability.providerModuleId + "｜" + capability.label;
+        })
+      }
+    ]);
+  }
+
   function showNode(node) {
+    keyboardFocusId = node.id;
     if (node.type === "module") {
       spotlightId = null;
       if (expanded.has(node.id)) expanded.delete(node.id);
       else expanded.add(node.id);
-      setInfo((node.source && node.source.name) || node.label, (node.source && node.source.role) || "", [{
-        title: "3D cluster",
-        items: [
-          expanded.has(node.id) ? "Expanded cluster" : "Collapsed",
-          "Cluster radius: " + Math.round(clusterRadius(node.id)),
-          "Module orbit radius: " + Math.round(moduleOrbitRadius(expanded.size)),
-          "Expanded modules: " + expanded.size
-        ]
-      }]);
+      var moduleFeatures = features.filter(function (feature) { return feature.ownerId === node.id; });
+      var moduleCategories = (code.nodes || []).filter(function (entry) { return entry.moduleId === node.id && entry.type === "code-category"; });
+      var moduleCapabilities = capabilities.filter(function (capability) { return capability.consumerModuleId === node.id || capability.providerModuleId === node.id; });
+      setInfo((node.source && node.source.name) || node.label, (node.source && node.source.role) || "", [
+        {
+          title: "Feature groups",
+          items: (node.source && node.source.featureGroups) || []
+        },
+        {
+          title: "Summary",
+          items: [
+            "Curated features: " + moduleFeatures.length,
+            "Generated categories: " + moduleCategories.length,
+            "Shared capabilities: " + moduleCapabilities.length
+          ]
+        },
+        {
+          title: "3D cluster",
+          items: [
+            expanded.has(node.id) ? "Expanded cluster" : "Collapsed",
+            "Cluster radius: " + Math.round(clusterRadius(node.id)),
+            "Module orbit radius: " + Math.round(moduleOrbitRadius(expanded.size)),
+            "Expanded modules: " + expanded.size
+          ]
+        }
+      ]);
       draw();
       return;
     }
@@ -772,6 +858,54 @@
     cam.panX = clamp(cam.panX + dx, Math.max(160, rect.width * 0.75));
     cam.panY = clamp(cam.panY + dy, Math.max(160, rect.height * 0.75));
   }
+
+  canvas.addEventListener("keydown", function (event) {
+    if (event.key === "ArrowRight" || event.key === "ArrowDown") {
+      event.preventDefault();
+      moveKeyboardFocus(1);
+      return;
+    }
+    if (event.key === "ArrowLeft" || event.key === "ArrowUp") {
+      event.preventDefault();
+      moveKeyboardFocus(-1);
+      return;
+    }
+    if (event.key === "Home" || event.key === "End") {
+      event.preventDefault();
+      var nodes = keyboardNodes();
+      if (!nodes.length) return;
+      var target = event.key === "Home"
+        ? (nodes.find(function (node) { return node.id === "totem-core"; }) || nodes[0])
+        : nodes[nodes.length - 1];
+      setKeyboardFocus(target.id);
+      return;
+    }
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      var focused = keyboardNodes().find(function (node) { return node.id === keyboardFocusId; });
+      if (focused) showNode(focused);
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      spotlightId = null;
+      keyboardFocusId = null;
+      info.hidden = true;
+      draw();
+    }
+  });
+
+  canvas.addEventListener("focus", function () {
+    if (keyboardFocusId) return;
+    var nodes = keyboardNodes();
+    var core = nodes.find(function (node) { return node.id === "totem-core"; });
+    if (core || nodes[0]) setKeyboardFocus((core || nodes[0]).id);
+  });
+
+  canvas.addEventListener("blur", function () {
+    keyboardFocusId = null;
+    draw();
+  });
 
   canvas.addEventListener("contextmenu", function (event) {
     event.preventDefault();
@@ -898,16 +1032,12 @@
     draw();
   }, { passive: false });
 
-  document.getElementById("mode3d").addEventListener("click", function () {
-    window.requestAnimationFrame(function () {
-      resize();
-      draw();
-    });
-  });
+  document.getElementById("contracts").addEventListener("click", showContracts);
 
   document.getElementById("overview").addEventListener("click", function () {
     expanded.clear();
     spotlightId = null;
+    keyboardFocusId = null;
     cam.panX = 0;
     cam.panY = 0;
     cam.zoom = 1.02;
@@ -917,6 +1047,7 @@
   document.getElementById("expandAll3d").addEventListener("click", function () {
     modules.forEach(function (module) { expanded.add(module.id); });
     spotlightId = null;
+    keyboardFocusId = null;
     cam.zoom = 0.52;
     cam.panX = 0;
     cam.panY = 0;
@@ -927,10 +1058,13 @@
   });
 
   window.addEventListener("resize", function () {
-    if (!pane.hidden) {
-      resize();
-      draw();
-    }
+    resize();
+    draw();
+  });
+
+  window.requestAnimationFrame(function () {
+    resize();
+    draw();
   });
 
   window.__TOTEM_CLUSTER_3D_V2__ = {
@@ -942,6 +1076,9 @@
     manualFeatureFor: manualFeatureFor,
     capabilityConsumerEndpoint: capabilityConsumerEndpoint,
     panBy: panBy,
+    drawArrowhead: drawArrowhead,
+    keyboardNodes: keyboardNodes,
+    showContracts: showContracts,
     draw: draw
   };
 }());

@@ -14,13 +14,11 @@ const audit = JSON.parse(fs.readFileSync(path.join(root, "data", "relationship-a
 assert.doesNotThrow(() => new Function(source), "cluster v2 renderer must parse");
 assert.ok(html.includes('src="viewer/graph-v2-cluster-v2.js"'), "HTML must load the cluster v2 renderer");
 assert.ok(!html.includes('src="viewer/graph-v2-cluster.js"'), "HTML must not load the legacy cluster renderer");
-assert.ok(
-  html.indexOf('src="viewer/graph-v2.js"') < html.indexOf('src="viewer/graph-v2-cluster-v2.js"'),
-  "cluster v2 renderer must load after the base renderer"
-);
+assert.ok(!html.includes('src="viewer/graph-v2.js"'), "standalone 3D must not load the deleted base/2D renderer");
+assert.ok(!fs.existsSync(path.join(root, "viewer", "graph-v2.js")), "legacy 2D/base renderer must be deleted");
 assert.ok(html.includes("固定散點分層"), "gesture/layout hint must describe deterministic scatter clusters");
 assert.ok(html.includes("右鍵拖曳平移"), "desktop hint must expose right-button camera pan");
-assert.ok(css.includes(".cluster3d{position:absolute;inset:0"), "cluster canvas must overlay the 3D pane instead of changing document flow");
+assert.ok(css.includes(".canvas3d:focus-visible"), "standalone 3D canvas must expose visible keyboard focus");
 assert.ok(pages.includes("cp viewer/graph-v2-cluster-v2.js _site/viewer/graph-v2-cluster-v2.js"), "Pages must publish the cluster v2 renderer");
 
 for (const required of [
@@ -34,6 +32,9 @@ for (const required of [
   "function capabilityConsumerEndpoint",
   "function panBy",
   "function drawCluster",
+  "function drawArrowhead",
+  "function keyboardNodes",
+  "function showContracts",
   "clusters.push",
   "feature-detail",
   "shared-capability",
@@ -51,6 +52,9 @@ assert.ok(source.includes("spotlightOwner"), "spotlight must influence cluster v
 assert.ok(source.includes("relatedOwners"), "clusters connected to the spotlight must remain partially emphasized");
 assert.ok(source.includes("cam.panX"), "cluster view must preserve camera-center panning");
 assert.ok(source.includes("gesture.startZoom"), "cluster view must preserve pinch zoom");
+assert.ok(source.includes('title: "Feature groups"'), "module detail parity must include featureGroups metadata");
+assert.ok(source.includes('canvas.addEventListener("keydown"'), "3D-only renderer must preserve keyboard node activation");
+assert.ok(source.includes("if (!internal) drawArrowhead"), "relationship directions must be visible through arrowheads");
 
 // Desktop input regression: left button rotates, right button pans, context menu is suppressed.
 assert.ok(source.includes('event.button !== 0 && event.button !== 2'), "desktop pointerdown must accept left and right mouse buttons only");
@@ -90,4 +94,4 @@ assert.ok(moduleOrbitRadius(4) > moduleOrbitRadius(1), "additional expanded clus
 assert.ok(moduleOrbitRadius(11) <= 630, "full expansion spacing must remain bounded");
 assert.ok(source.includes("var moduleRadius = moduleOrbitRadius(expandedCount)"), "scene layout must use the dynamic module orbit radius");
 
-console.log("3D cluster v2 validation passed: Core-centered topology, deterministic clusters, dynamic spacing, audited Core friendship retargeting, symmetric Shared Manual endpoints, desktop right-drag camera pan, touch gestures, spotlight integration, and Pages packaging are present.");
+console.log("3D cluster v2 validation passed: standalone 3D parity, Core-centered topology, deterministic clusters, dynamic spacing, audited Core friendship retargeting, symmetric Shared Manual endpoints, directed edges, keyboard navigation, gestures, spotlight integration, and Pages packaging are present.");
