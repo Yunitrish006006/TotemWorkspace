@@ -363,7 +363,16 @@ index.chunks.push(
   syntheticChunk(
     "src/client/java/dev/example/totemc/client/CopperGolemMenuScreenSession.java",
     "dev.example.totemc.client",
-    "CopperGolemMenuScreenSession"
+    "CopperGolemMenuScreenSession",
+    [
+      "CopperGolemMenuScreenSession",
+      "CopperGolemData",
+      "CopperGolemController",
+      "CopperGolemActivity",
+      "CopperGolemBinding",
+      "CopperGolemMode",
+      "CopperGolemFuelService"
+    ]
   ),
   syntheticChunk(
     "src/client/java/dev/example/totemc/client/CopperGolemClientPayloadRegistration.java",
