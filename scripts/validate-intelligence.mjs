@@ -106,11 +106,14 @@ function validateV2Graph() {
     assert.ok(!data.includes(marker));
 
     const html = fs.readFileSync(path.join(knowledge.root, "graph-v2.html"), "utf8");
-    const renderer = fs.readFileSync(path.join(knowledge.root, "viewer", "graph-v2.js"), "utf8");
+    const renderer = fs.readFileSync(path.join(knowledge.root, "viewer", "graph-v2-cluster-v2.js"), "utf8");
     const adapter = fs.readFileSync(path.join(knowledge.root, "viewer", "graph-v2-adapter.js"), "utf8");
     const css = fs.readFileSync(path.join(knowledge.root, "viewer", "graph-v2.css"), "utf8");
     assert.ok(html.includes('src="viewer/generated/graph-data.js"'));
-    assert.ok(html.includes('src="viewer/graph-v2.js"'));
+    assert.ok(html.includes('src="viewer/graph-v2-cluster-v2.js"'));
+    assert.ok(!html.includes('src="viewer/graph-v2.js"'));
+    assert.ok(!fs.existsSync(path.join(knowledge.root, "viewer", "graph-v2.js")));
+    assert.ok(!html.includes('id="mode2d"') && !html.includes('id="pane2d"') && !html.includes('id="graph2d"'));
     assert.ok(html.includes('href="viewer/graph-v2.css"'));
     assert.ok(html.includes('id="expandAll3d"'));
     assert.ok(!html.includes("window.__TOTEM_GRAPH_DATA__"));
@@ -119,11 +122,13 @@ function validateV2Graph() {
     assert.ok(!/<(?:script|link)[^>]+(?:src|href)=["']https?:\/\//i.test(html));
     assert.ok(!/@import\s+["']?https?:\/\/|url\(\s*["']?https?:\/\//i.test(css));
     assert.ok(css.includes("touch-action:none"));
-    assert.ok(renderer.includes("function overviewPath"));
-    assert.ok(renderer.includes("function draw3d"));
-    assert.ok(renderer.includes("function pointerDistance"));
+    assert.ok(renderer.includes("function drawArrowhead"));
+    assert.ok(renderer.includes("function draw"));
+    assert.ok(renderer.includes("function distance"));
     assert.ok(renderer.includes("spotlightId"));
-    assert.ok(renderer.includes("addCapabilityEdges3d"));
+    assert.ok(renderer.includes("function capabilityConsumerEndpoint"));
+    assert.ok(renderer.includes("function showContracts"));
+    assert.ok(renderer.includes('canvas.addEventListener("keydown"'));
     assert.doesNotThrow(() => new Function(renderer));
     assert.doesNotThrow(() => new Function(adapter));
   } finally {
