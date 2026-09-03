@@ -269,12 +269,20 @@ function featureAreaAssignments(records, module, ownRoot) {
       assignments.set(record.path, baseArea);
       continue;
     }
-    if (isEntrypoint(record) || /(?:Composition)$/.test(record.label)) {
+    const compactLabel = record.label.toLowerCase().replace(/[^a-z0-9]/g, "");
+    if (isEntrypoint(record)
+        || moduleTokens(module).includes(compactLabel)
+        || /(?:Composition)$/.test(record.label)) {
       assignments.set(record.path, baseArea);
       continue;
     }
 
     const labelWords = semanticLabelWords(record.label, module);
+    const explicitLabelAreas = labelWords.filter((word) => knownAreas.includes(word));
+    if (explicitLabelAreas.length > 0) {
+      assignments.set(record.path, explicitLabelAreas[explicitLabelAreas.length - 1]);
+      continue;
+    }
     const symbolWords = semanticSymbolWords(record, module);
     const scored = knownAreas.map((area) => {
       const labelVocabulary = labelVocabularies.get(area);
