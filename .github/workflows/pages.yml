@@ -63,11 +63,10 @@ jobs:
           rm -rf _site
           mkdir -p _site/viewer/generated
 
-          # Publish V2 as the site root without changing the repository's curated index.html.
+          # Publish the standalone 3D V2 viewer as the site root.
           cp graph-v2.html _site/index.html
           cp viewer/graph-v2.css _site/viewer/graph-v2.css
           cp viewer/graph-v2-adapter.js _site/viewer/graph-v2-adapter.js
-          cp viewer/graph-v2.js _site/viewer/graph-v2.js
           cp viewer/graph-v2-cluster-v2.js _site/viewer/graph-v2-cluster-v2.js
           cp viewer/generated/graph-data.js _site/viewer/generated/graph-data.js
 
