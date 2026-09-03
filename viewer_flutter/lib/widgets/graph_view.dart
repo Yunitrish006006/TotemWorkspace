@@ -16,9 +16,24 @@ class GraphView extends StatefulWidget {
 }
 
 class _GraphViewState extends State<GraphView> {
-  late final GraphLayoutResult _layout = buildModuleLayout(widget.data);
+  late GraphLayoutResult _layout;
   Camera3d _camera = const Camera3d();
   String? _selectedId = 'totem-core';
+
+  @override
+  void initState() {
+    super.initState();
+    _layout = buildModuleLayout(widget.data);
+  }
+
+  @override
+  void didUpdateWidget(covariant GraphView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.data != widget.data) {
+      _layout = buildModuleLayout(widget.data);
+      if (!_layout.byId.containsKey(_selectedId)) _selectedId = 'totem-core';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -76,16 +91,18 @@ class _GraphViewState extends State<GraphView> {
               onPointerSignal: (event) {
                 if (event is PointerScrollEvent) {
                   final factor = math.exp(-event.scrollDelta.dy * 0.001);
-                  setState(() => _camera = _camera.copyWith(zoom: (_camera.zoom * factor).clamp(0.32, 3.2)));
+                  final zoom = (_camera.zoom * factor).clamp(0.32, 3.2).toDouble();
+                  setState(() => _camera = _camera.copyWith(zoom: zoom));
                 }
               },
               child: GestureDetector(
                 behavior: HitTestBehavior.opaque,
                 onPanUpdate: (details) {
                   setState(() {
+                    final pitch = (_camera.pitch + details.delta.dy * 0.006).clamp(-1.2, 1.2).toDouble();
                     _camera = _camera.copyWith(
                       yaw: _camera.yaw + details.delta.dx * 0.008,
-                      pitch: (_camera.pitch + details.delta.dy * 0.006).clamp(-1.2, 1.2),
+                      pitch: pitch,
                     );
                   });
                 },
