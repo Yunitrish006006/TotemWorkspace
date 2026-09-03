@@ -1,5 +1,6 @@
 import path from "node:path";
 import { loadCodeIndex } from "./code-index.mjs";
+import { buildCodeInventory } from "./code-inventory.mjs";
 import { loadKnowledge } from "./workspace-knowledge.mjs";
 
 const FILE_LIMIT_PER_MODULE = 42;
@@ -239,6 +240,7 @@ export function buildCodeDetailGraph({ knowledge = loadKnowledge(), index = load
 
 export function buildGraphViewModel({ knowledge = loadKnowledge(), index = loadCodeIndex({ knowledge }) } = {}) {
   const code = buildCodeDetailGraph({ knowledge, index });
+  const codeInventory = buildCodeInventory({ knowledge, index });
   const externalIds = new Set();
   for (const contract of knowledge.contracts) {
     for (const node of [contract.from, contract.to, ...(contract.relatedNodes ?? [])]) {
@@ -252,7 +254,7 @@ export function buildGraphViewModel({ knowledge = loadKnowledge(), index = loadC
   });
 
   return Object.freeze({
-    schemaVersion: 2,
+    schemaVersion: 3,
     generatedAt: graphTimestamp(knowledge, index),
     snapshot: knowledge.snapshot,
     modules: Object.freeze(knowledge.modules.map((module) => Object.freeze({
@@ -287,6 +289,7 @@ export function buildGraphViewModel({ knowledge = loadKnowledge(), index = loadC
       featureIds: contract.featureIds ?? []
     }))),
     sharedCapabilities: sharedCapabilities(knowledge, index),
-    code
+    code,
+    codeInventory
   });
 }

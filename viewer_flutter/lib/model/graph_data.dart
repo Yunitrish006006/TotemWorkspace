@@ -7,6 +7,7 @@ class GraphData {
     required this.features,
     required this.contracts,
     required this.sharedCapabilities,
+    required this.codeInventory,
   });
 
   final String generatedAt;
@@ -16,6 +17,7 @@ class GraphData {
   final List<GraphFeature> features;
   final List<GraphContract> contracts;
   final List<GraphSharedCapability> sharedCapabilities;
+  final GraphCodeInventory codeInventory;
 
   factory GraphData.fromJson(Map<String, dynamic> json) {
     final snapshot = json['snapshot'] as Map<String, dynamic>? ?? const {};
@@ -28,6 +30,9 @@ class GraphData {
       contracts: _objects(json['contracts']).map(GraphContract.fromJson).toList(growable: false),
       sharedCapabilities:
           _objects(json['sharedCapabilities']).map(GraphSharedCapability.fromJson).toList(growable: false),
+      codeInventory: GraphCodeInventory.fromJson(
+        json['codeInventory'] is Map ? Map<String, dynamic>.from(json['codeInventory'] as Map) : const {},
+      ),
     );
   }
 
@@ -37,6 +42,8 @@ class GraphData {
     }
     return null;
   }
+
+  GraphModuleInventory? inventoryForModule(String id) => codeInventory.moduleById(id);
 
   GraphFeature? featureById(String id) {
     for (final feature in features) {
@@ -211,6 +218,135 @@ class GraphSharedCapability {
         providerLabel: json['providerLabel'] as String? ?? '',
         consumerLabel: json['consumerLabel'] as String? ?? '',
         label: json['label'] as String? ?? 'Shared capability',
+        evidencePaths: GraphData.strings(json['evidencePaths']),
+      );
+}
+
+class GraphCodeInventory {
+  const GraphCodeInventory({required this.sourceScope, required this.modules});
+
+  final String sourceScope;
+  final List<GraphModuleInventory> modules;
+
+  factory GraphCodeInventory.fromJson(Map<String, dynamic> json) => GraphCodeInventory(
+        sourceScope: json['sourceScope'] as String? ?? 'production-code-only',
+        modules: GraphData._objects(json['modules']).map(GraphModuleInventory.fromJson).toList(growable: false),
+      );
+
+  GraphModuleInventory? moduleById(String id) {
+    for (final module in modules) {
+      if (module.moduleId == id) return module;
+    }
+    return null;
+  }
+}
+
+class GraphModuleInventory {
+  const GraphModuleInventory({
+    required this.moduleId,
+    required this.repoName,
+    required this.packageRoot,
+    required this.productionFileCount,
+    required this.featureAreas,
+    required this.surfaces,
+    required this.integrations,
+    required this.crossModuleImports,
+  });
+
+  final String moduleId;
+  final String repoName;
+  final String? packageRoot;
+  final int productionFileCount;
+  final List<GraphFeatureArea> featureAreas;
+  final Map<String, List<GraphCodeSurfaceItem>> surfaces;
+  final List<GraphCodeIntegration> integrations;
+  final List<GraphCrossModuleImport> crossModuleImports;
+
+  factory GraphModuleInventory.fromJson(Map<String, dynamic> json) {
+    final rawSurfaces = json['surfaces'] is Map ? Map<String, dynamic>.from(json['surfaces'] as Map) : const <String, dynamic>{};
+    return GraphModuleInventory(
+      moduleId: json['moduleId'] as String? ?? '',
+      repoName: json['repoName'] as String? ?? '',
+      packageRoot: json['packageRoot'] as String?,
+      productionFileCount: (json['productionFileCount'] as num?)?.toInt() ?? 0,
+      featureAreas: GraphData._objects(json['featureAreas']).map(GraphFeatureArea.fromJson).toList(growable: false),
+      surfaces: Map.unmodifiable({
+        for (final entry in rawSurfaces.entries)
+          entry.key: GraphData._objects(entry.value).map(GraphCodeSurfaceItem.fromJson).toList(growable: false),
+      }),
+      integrations: GraphData._objects(json['integrations']).map(GraphCodeIntegration.fromJson).toList(growable: false),
+      crossModuleImports:
+          GraphData._objects(json['crossModuleImports']).map(GraphCrossModuleImport.fromJson).toList(growable: false),
+    );
+  }
+
+  List<GraphCodeSurfaceItem> surface(String key) => surfaces[key] ?? const <GraphCodeSurfaceItem>[];
+}
+
+class GraphFeatureArea {
+  const GraphFeatureArea({
+    required this.key,
+    required this.label,
+    required this.fileCount,
+    required this.representativePaths,
+    required this.symbols,
+  });
+
+  final String key;
+  final String label;
+  final int fileCount;
+  final List<String> representativePaths;
+  final List<String> symbols;
+
+  factory GraphFeatureArea.fromJson(Map<String, dynamic> json) => GraphFeatureArea(
+        key: json['key'] as String? ?? '',
+        label: json['label'] as String? ?? '',
+        fileCount: (json['fileCount'] as num?)?.toInt() ?? 0,
+        representativePaths: GraphData.strings(json['representativePaths']),
+        symbols: GraphData.strings(json['symbols']),
+      );
+}
+
+class GraphCodeSurfaceItem {
+  const GraphCodeSurfaceItem({required this.label, required this.path, required this.packageName, required this.symbols});
+
+  final String label;
+  final String path;
+  final String? packageName;
+  final List<String> symbols;
+
+  factory GraphCodeSurfaceItem.fromJson(Map<String, dynamic> json) => GraphCodeSurfaceItem(
+        label: json['label'] as String? ?? '',
+        path: json['path'] as String? ?? '',
+        packageName: json['package'] as String?,
+        symbols: GraphData.strings(json['symbols']),
+      );
+}
+
+class GraphCodeIntegration {
+  const GraphCodeIntegration({required this.packageRoot, required this.imports, required this.evidencePaths});
+
+  final String packageRoot;
+  final List<String> imports;
+  final List<String> evidencePaths;
+
+  factory GraphCodeIntegration.fromJson(Map<String, dynamic> json) => GraphCodeIntegration(
+        packageRoot: json['packageRoot'] as String? ?? '',
+        imports: GraphData.strings(json['imports']),
+        evidencePaths: GraphData.strings(json['evidencePaths']),
+      );
+}
+
+class GraphCrossModuleImport {
+  const GraphCrossModuleImport({required this.targetModuleId, required this.imports, required this.evidencePaths});
+
+  final String targetModuleId;
+  final List<String> imports;
+  final List<String> evidencePaths;
+
+  factory GraphCrossModuleImport.fromJson(Map<String, dynamic> json) => GraphCrossModuleImport(
+        targetModuleId: json['targetModuleId'] as String? ?? '',
+        imports: GraphData.strings(json['imports']),
         evidencePaths: GraphData.strings(json['evidencePaths']),
       );
 }
