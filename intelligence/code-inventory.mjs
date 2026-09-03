@@ -12,7 +12,8 @@ const TECHNICAL_AREA_SEGMENTS = new Set([
 const GENERIC_LABEL_WORDS = new Set([
   "client", "server", "screen", "screens", "payload", "payloads", "mixin", "mixins", "accessor",
   "manager", "service", "handler", "registry", "registration", "provider", "adapter", "support", "policy",
-  "state", "data", "implementation", "impl", "event", "events", "hook", "hooks", "codec"
+  "state", "data", "implementation", "impl", "event", "events", "hook", "hooks", "codec",
+  "item", "items", "inventory", "content"
 ]);
 
 const SURFACE_LABELS = Object.freeze({
@@ -122,6 +123,13 @@ function semanticLabelWords(label, module) {
   ));
 }
 
+function semanticRecordWords(record, module) {
+  return unique([
+    ...semanticLabelWords(record.label, module),
+    ...record.symbols.flatMap((symbol) => semanticLabelWords(symbol, module))
+  ]);
+}
+
 function fallbackPackageRoot(records) {
   const packages = records
     .map((record) => record.packageName.split(".").filter(Boolean))
@@ -203,7 +211,7 @@ function featureAreaAssignments(records, module, ownRoot) {
   for (const record of records) {
     const area = explicit.get(record.path);
     if (!vocabularies.has(area)) continue;
-    for (const word of semanticLabelWords(record.label, module)) vocabularies.get(area).add(word);
+    for (const word of semanticRecordWords(record, module)) vocabularies.get(area).add(word);
   }
 
   const assignments = new Map();
@@ -214,7 +222,7 @@ function featureAreaAssignments(records, module, ownRoot) {
       continue;
     }
 
-    const words = semanticLabelWords(record.label, module);
+    const words = semanticRecordWords(record, module);
     const scored = knownAreas.map((area) => {
       const vocabulary = vocabularies.get(area);
       const overlap = words.filter((word) => vocabulary.has(word)).length;
