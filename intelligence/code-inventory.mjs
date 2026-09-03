@@ -321,6 +321,7 @@ function featureAreaAssignments(records, module, ownRoot) {
   const pathByQualifiedName = new Map(records
     .filter((record) => record.packageName)
     .map((record) => [`${record.packageName}.${record.label}`, record.path]));
+  const recordByPath = new Map(records.map((record) => [record.path, record]));
 
   for (let pass = 0; pass < 3; pass += 1) {
     const incomingAreas = new Map();
@@ -330,7 +331,7 @@ function featureAreaAssignments(records, module, ownRoot) {
       for (const importName of source.imports) {
         const targetPath = pathByQualifiedName.get(importName);
         if (!targetPath || assignments.get(targetPath) !== "module-root") continue;
-        const targetRecord = records.find((record) => record.path === targetPath);
+        const targetRecord = recordByPath.get(targetPath);
         if (targetRecord && (isEntrypoint(targetRecord) || /(?:Composition)$/.test(targetRecord.label))) continue;
         if (!incomingAreas.has(targetPath)) incomingAreas.set(targetPath, new Set());
         incomingAreas.get(targetPath).add(sourceArea);
