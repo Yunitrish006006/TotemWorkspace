@@ -1,6 +1,6 @@
 # TotemWorkspace Flutter Viewer
 
-Phase 1 of the Flutter rewrite. This is intentionally parallel to the production JavaScript viewer until feature parity is proven.
+Flutter migration prototype for the TotemWorkspace architecture viewer. It remains parallel to the production JavaScript viewer until all cutover criteria are proven.
 
 ## Data invariant
 
@@ -14,7 +14,7 @@ Run that command from the TotemWorkspace repository root before launching Flutte
 
 ## Web
 
-Flutter 3.47.0 is the validated SDK for this phase.
+Flutter 3.47.0 is the validated SDK.
 
 ```bash
 cd viewer_flutter
@@ -28,19 +28,26 @@ Wasm production build:
 flutter build web --wasm
 ```
 
-## Desktop
-
-The Dart/UI code is platform-neutral. Native desktop runner folders are intentionally deferred until Phase 2; once enabled, the same graph renderer can run on macOS, Windows, and Linux without changing graph semantics.
-
-## Phase 1 scope
+## Current scope — Phase 1 + Phase 2
 
 - same generated architecture model
 - TotemCore fixed at world origin
 - deterministic peripheral module and external-service layout
-- perspective camera with drag rotation and wheel zoom
-- directed contract edges
-- node hit testing and module detail panel
-- keyboard Home/Escape basics
-- deterministic layout/unit tests
+- curated feature clusters
+- Shared Manual / shared-capability endpoints
+- relation-aware weighted junction placement with deterministic slotting
+- expanded module-center suppression
+- seven-family relationship filters
+- spotlight for selected child nodes and related clusters
+- directed contract arrows
+- desktop left-drag rotation, right-drag pan, wheel zoom
+- touch one-finger rotation and two-finger zoom/pan
+- keyboard arrows, Enter/Space, Home, End, Escape
+- responsive desktop/mobile details panel
+- deterministic layout and architecture-semantic regression tests
 
-Not yet migrated: feature clusters, relation-aware child placement, contract filters, spotlight parity, local-live workspace source, and desktop-native Git/filesystem access.
+The old Phase 1-only layout implementation was removed; `lib/model/graph_scene.dart` is now the single Flutter scene/layout implementation.
+
+## Next
+
+Phase 3 connects Flutter to the existing loopback local workspace API and adds native desktop workspace sources. Generated code-detail category/file/symbol browsing is still required before production cutover.
