@@ -35,3 +35,5 @@ jobs:
         run: node scripts/validate-3d-cluster.mjs
       - name: Validate 3D-only feature parity
         run: node scripts/validate-3d-only-parity.mjs
+      - name: Validate localhost live viewer
+        run: node scripts/validate-local-viewer.mjs

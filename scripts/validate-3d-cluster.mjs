@@ -18,6 +18,11 @@ assert.ok(!html.includes('src="viewer/graph-v2.js"'), "standalone 3D must not lo
 assert.ok(!fs.existsSync(path.join(root, "viewer", "graph-v2.js")), "legacy 2D/base renderer must be deleted");
 assert.ok(html.includes("固定散點分層"), "gesture/layout hint must describe deterministic scatter clusters");
 assert.ok(html.includes("右鍵拖曳平移"), "desktop hint must expose right-button camera pan");
+assert.ok(html.includes('id="edgeFilters"'), "3D shell must expose the edge filter control");
+for (const kind of ["hard-core", "fabric-suggests", "runtime-optional", "eventbus", "observer-provider", "external-service", "shared-capability"]) {
+  assert.ok(html.includes(`data-edge-filter="${kind}"`), `missing edge filter checkbox: ${kind}`);
+}
+assert.ok(css.includes(".edge-filter{"), "edge filter panel must be styled");
 assert.ok(css.includes(".canvas3d:focus-visible"), "standalone 3D canvas must expose visible keyboard focus");
 assert.ok(pages.includes("cp viewer/graph-v2-cluster-v2.js _site/viewer/graph-v2-cluster-v2.js"), "Pages must publish the cluster v2 renderer");
 
@@ -27,6 +32,12 @@ for (const required of [
   "function moduleOrbitRadius",
   "function modulePosition",
   "function scatter",
+  "function featureRelations",
+  "function relationAwareScatter",
+  "function edgeGroup",
+  "function edgeVisible",
+  "function expandedCenterEndpoint",
+  "function syncEdgeFilterUi",
   "function isRetargetable",
   "function manualFeatureFor",
   "function capabilityConsumerEndpoint",
@@ -78,6 +89,16 @@ assert.ok(source.includes('module.id !== "totem-core"'), "peripheral module orbi
 assert.ok(source.includes("modulePosition(coreModule, 0, peripheralModules.length, moduleRadius)"), "scene must place Core through the center-aware position helper");
 assert.ok(source.includes("modulePosition: modulePosition"), "Core-centered module positioning must remain exposed for renderer regression inspection");
 
+// Edge filtering and expanded-center cleanup regression.
+assert.ok(source.includes('var edgeFilterKeys = ['), "renderer must keep an explicit list of filterable relationship kinds");
+assert.ok(source.includes('edges.filter(edgeVisible)'), "scene edges must be filtered before spotlight/draw processing");
+assert.ok(source.includes('expandedCenterEndpoint(contract.from) || expandedCenterEndpoint(contract.to)'), "direct contracts must disappear when they would terminate on an expanded module center");
+assert.ok(source.includes('expandedCenterEndpoint(from) || expandedCenterEndpoint(to)'), "retargeted/shared edges must reject expanded module-center endpoints");
+assert.ok(!source.includes('id: "owner:" + feature.id'), "expanded curated features must not keep decorative module-center owner spokes");
+assert.ok(!source.includes('id: "owner:" + category.id'), "expanded code categories must not keep decorative module-center owner spokes");
+assert.ok(source.includes('document.querySelectorAll("[data-edge-filter]")'), "edge filter UI must drive renderer state");
+assert.ok(source.includes('setAllEdgeFilters(true)') && source.includes('setAllEdgeFilters(false)'), "edge filter must support all/none shortcuts");
+
 assert.deepEqual(audit.contractOverrides["hard:totem-nexus:totem-core"].featureIds, [
   "totem-nexus.feature-5", "totem-core.feature-3"
 ]);
@@ -94,4 +115,17 @@ assert.ok(moduleOrbitRadius(4) > moduleOrbitRadius(1), "additional expanded clus
 assert.ok(moduleOrbitRadius(11) <= 630, "full expansion spacing must remain bounded");
 assert.ok(source.includes("var moduleRadius = moduleOrbitRadius(expandedCount)"), "scene layout must use the dynamic module orbit radius");
 
-console.log("3D cluster v2 validation passed: standalone 3D parity, Core-centered topology, deterministic clusters, dynamic spacing, audited Core friendship retargeting, symmetric Shared Manual endpoints, directed edges, keyboard navigation, gestures, spotlight integration, and Pages packaging are present.");
+
+// Relation-aware layout regression: topology degree drives deterministic junction placement without inventing graph semantics.
+assert.ok(source.includes("weightedCentroid"), "relation-aware feature placement must target a weighted geometric junction");
+assert.ok(source.includes("Math.log2(degree + 1)"), "higher relationship degree must increase topology influence");
+assert.ok(source.includes("slotStrength = 0.22 / Math.sqrt"), "high-degree nodes sharing a junction must receive deterministic angular slotting");
+assert.ok(source.includes('relation.targetId === "totem-core"'), "inward placement must distinguish real Core targets from accidental center crossings");
+assert.ok(source.includes("inwardness < -0.18"), "peripheral nodes without Core relations must avoid unexplained inward folds");
+assert.ok(source.includes("featureContractIds"), "relation discovery must include curated feature contract memberships");
+assert.ok(source.includes("capability.providerFeatureId === featureId"), "Core shared-capability providers must participate in junction placement");
+assert.ok(source.includes("relationAwareScatter(parent, feature.id"), "curated feature placement must use relation-aware scatter");
+assert.ok(source.includes("featureRelations: featureRelations"), "relation topology must be exposed for deterministic regression inspection");
+assert.ok(source.includes("relationAwareScatter: relationAwareScatter"), "relation-aware placement must be exposed for deterministic regression inspection");
+
+console.log("3D cluster v2 validation passed: standalone 3D parity, Core-centered topology, deterministic relation-aware clusters, dynamic spacing, audited Core friendship retargeting, symmetric Shared Manual endpoints, directed edges, keyboard navigation, gestures, spotlight integration, and Pages packaging are present.");
