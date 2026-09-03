@@ -82,6 +82,43 @@ function graphTimestamp(knowledge, index) {
   return index?.generatedAt ?? knowledge.snapshot?.date ?? null;
 }
 
+function isProductionManualPath(filePath) {
+  const value = normalize(filePath).toLowerCase();
+  if (!(value.startsWith("src/main/") || value.startsWith("src/client/"))) return false;
+  if (value.includes("/gametest/") || value.includes("/test/")) return false;
+  const base = path.posix.basename(value);
+  return value.includes("/manual/") || /manual.*\.(?:java|kt)$/.test(base) || /.*manual\.(?:java|kt)$/.test(base);
+}
+
+function sharedCapabilities(knowledge, index) {
+  if (!index?.fileStates?.length) return Object.freeze([]);
+  const provider = knowledge.moduleById.get("totem-core");
+  if (!provider) return Object.freeze([]);
+  const providerFeature = knowledge.features.find((feature) => feature.ownerId === "totem-core" && /manual|手冊/i.test(`${feature.title} ${feature.summary}`));
+  const capabilities = [];
+  for (const module of knowledge.modules) {
+    if (module.id === "totem-core") continue;
+    const evidencePaths = index.fileStates
+      .filter((file) => file.moduleId === module.id && isProductionManualPath(file.path))
+      .map((file) => normalize(file.path))
+      .sort();
+    if (!evidencePaths.length) continue;
+    capabilities.push(Object.freeze({
+      id: `shared:manual:${module.id}`,
+      type: "shared-capability",
+      family: "manual",
+      providerModuleId: "totem-core",
+      consumerModuleId: module.id,
+      providerFeatureId: providerFeature?.id ?? null,
+      providerLabel: "Manual Registry / Renderer",
+      consumerLabel: `${module.name} shared manual chapter`,
+      label: "Shared Totem Manual",
+      evidencePaths: Object.freeze(evidencePaths.slice(0, 6))
+    }));
+  }
+  return Object.freeze(capabilities);
+}
+
 export function buildCodeDetailGraph({ knowledge = loadKnowledge(), index = loadCodeIndex({ knowledge }) } = {}) {
   const nodes = [];
   const edges = [];
@@ -249,6 +286,7 @@ export function buildGraphViewModel({ knowledge = loadKnowledge(), index = loadC
       protocol: contract.protocol ?? null,
       featureIds: contract.featureIds ?? []
     }))),
+    sharedCapabilities: sharedCapabilities(knowledge, index),
     code
   });
 }

@@ -17,6 +17,7 @@
     <span class="pill" id="snapshot">loading</span>
     <span class="pill" id="stats">loading</span>
     <button id="overview" type="button">總覽</button>
+    <button id="expandAll3d" type="button">3D 全展開</button>
     <button id="contracts" type="button">關係</button>
     <button id="mode2d" type="button" aria-pressed="true">2D 分層</button>
     <button id="mode3d" type="button" aria-pressed="false">3D 預覽</button>
@@ -27,7 +28,7 @@
     </section>
     <section id="pane3d" class="pane" hidden>
       <canvas id="graph3d" class="canvas3d" aria-label="TOTEM 3D 架構預覽"></canvas>
-      <div class="hint3d">拖曳旋轉｜滾輪縮放｜3D 只讀 view model，不參與 MCP / RAG / impact / test</div>
+      <div class="hint3d">一指拖曳旋轉｜兩指縮放｜點子節點聚光相關連線｜3D 只讀 view model</div>
     </section>
     <aside id="info" class="info" hidden>
       <h2 id="infoTitle"></h2>
@@ -39,6 +40,7 @@
       <span><i class="dot suggest"></i>Fabric suggests</span>
       <span><i class="dot compat"></i>Runtime / Observer / EventBus</span>
       <span><i class="dot service"></i>External service</span>
+      <span><i class="dot capability"></i>Shared Core capability</span>
       <span><i class="dot generated"></i>Generated code detail</span>
     </div>
   </main>

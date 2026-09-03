@@ -1,0 +1,183 @@
+{
+  "schemaVersion": 1,
+  "auditedAt": "2026-09-03",
+  "contractCount": 32,
+  "moduleOverrides": {
+    "totem-nexus": {
+      "observerProviders": [
+        {
+          "family": "nexus",
+          "protocol": 3,
+          "variants": [
+            "compass",
+            "map",
+            "management",
+            "map_legacy",
+            "friends",
+            "friends_legacy",
+            "registration",
+            "registration_legacy"
+          ]
+        },
+        {
+          "family": "nexus_death_node_admin",
+          "protocol": 1,
+          "variants": [""]
+        }
+      ]
+    }
+  },
+  "contractOverrides": {
+    "automata-excavation": {
+      "channel": "soft",
+      "featureIds": [
+        "totem-automata.feature-3",
+        "totem-excavation.feature-1",
+        "totem-excavation.feature-2"
+      ],
+      "auditStatus": "verified",
+      "auditNote": "Copper Golem gathering recognizes Excavation hammer identity and selected-area excavation; combat positioning is unrelated."
+    },
+    "villagers-remnant": {
+      "channel": "soft",
+      "featureIds": [
+        "totem-villagers.feature-1",
+        "totem-villagers.feature-2",
+        "totem-remnant.feature-1"
+      ],
+      "auditStatus": "verified",
+      "auditNote": "Toolsmith work orders, workshop completion, merchant offers, and pricing participate in four-tier Remnant backpack production and sales."
+    },
+    "remnant-trinkets": {
+      "channel": "soft",
+      "featureIds": [],
+      "implementationStatus": "metadata-only",
+      "feature": "Fabric suggests Trinkets Updated >=4.1.0-beta.2; active production bridge not independently verified in this audit.",
+      "auditNote": "Keep this relationship at module level until current production source evidence for the Trinkets inventory/death bridge is restored."
+    },
+    "automata-remnant": {
+      "channel": "soft",
+      "featureIds": [
+        "totem-automata.feature-1",
+        "totem-remnant.feature-1",
+        "totem-remnant.feature-5"
+      ],
+      "auditStatus": "verified"
+    },
+    "automata-locksmith": {
+      "channel": "soft",
+      "featureIds": [
+        "totem-automata.feature-1",
+        "totem-automata.feature-2",
+        "totem-automata.feature-3",
+        "totem-locksmith.feature-1",
+        "totem-locksmith.feature-2",
+        "totem-locksmith.feature-3"
+      ],
+      "auditStatus": "verified"
+    },
+    "remnant-nexus": {
+      "channel": "soft",
+      "featureIds": [
+        "totem-remnant.feature-4",
+        "totem-nexus.feature-6"
+      ],
+      "auditStatus": "verified"
+    },
+    "vanilla-automata-observer": {
+      "channel": "soft",
+      "featureIds": [
+        "totem-vanilla-tweaks.feature-1",
+        "totem-automata.feature-7"
+      ],
+      "auditStatus": "verified"
+    },
+    "vanilla-nexus-observer": {
+      "channel": "soft",
+      "featureIds": [
+        "totem-vanilla-tweaks.feature-1",
+        "totem-nexus.feature-1",
+        "totem-nexus.feature-2",
+        "totem-nexus.feature-4",
+        "totem-nexus.feature-5"
+      ],
+      "protocol": 3,
+      "feature": "Observer nexus@3",
+      "auditStatus": "verified",
+      "auditNote": "Generic Nexus Observer covers compass/map/management, legacy map, friends, and registration. Death-node admin remains a separate provider."
+    },
+    "vanilla-locksmith-observer": {
+      "channel": "soft",
+      "featureIds": [
+        "totem-vanilla-tweaks.feature-1",
+        "totem-locksmith.feature-5"
+      ],
+      "auditStatus": "verified"
+    },
+    "vanilla-villagers-observer": {
+      "channel": "soft",
+      "featureIds": [
+        "totem-vanilla-tweaks.feature-1",
+        "totem-villagers.feature-3"
+      ],
+      "auditStatus": "verified"
+    },
+    "vanilla-remnant-observer": {
+      "channel": "soft",
+      "featureIds": [
+        "totem-vanilla-tweaks.feature-1",
+        "totem-remnant.feature-3"
+      ],
+      "auditStatus": "verified",
+      "auditNote": "The current curated feature vocabulary has no standalone Remnant backpack GUI/Observer feature; the inventory sidebar remains the closest UI-owned endpoint."
+    },
+    "discord-worker": {
+      "channel": "service",
+      "featureIds": [
+        "totem-discord-bridge.feature-1",
+        "totem-discord-bridge.feature-2",
+        "totem-discord-bridge.feature-3",
+        "totem-discord-bridge.feature-4"
+      ],
+      "auditStatus": "verified"
+    },
+    "automata-openai": {
+      "channel": "service",
+      "to": "external:openai",
+      "featureIds": [
+        "totem-automata.feature-1",
+        "totem-automata.feature-3",
+        "totem-automata.feature-6"
+      ],
+      "auditStatus": "verified",
+      "auditNote": "LLM rules participate in both sorting/classification and gathering decisions."
+    },
+    "event-remnant-death": {
+      "channel": "event",
+      "featureIds": [
+        "totem-remnant.feature-4",
+        "totem-discord-bridge.feature-1"
+      ],
+      "implementationStatus": "contract-defined",
+      "auditNote": "Core defines the Remnant death-backpack lifecycle contract; the current Remnant publisher call was not independently located during this audit."
+    },
+    "event-nexus-audit": {
+      "channel": "event",
+      "featureIds": [
+        "totem-nexus.feature-1",
+        "totem-nexus.feature-6",
+        "totem-discord-bridge.feature-1"
+      ],
+      "auditStatus": "verified",
+      "auditNote": "Nexus publishes both public Space Unit updates and death/admin audit events."
+    },
+    "event-locksmith-break": {
+      "channel": "event",
+      "featureIds": [
+        "totem-locksmith.feature-4",
+        "totem-discord-bridge.feature-1"
+      ],
+      "auditStatus": "verified"
+    }
+  }
+}
