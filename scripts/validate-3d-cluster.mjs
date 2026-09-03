@@ -24,7 +24,10 @@ for (const kind of ["hard-core", "fabric-suggests", "runtime-optional", "eventbu
 }
 assert.ok(css.includes(".edge-filter{"), "edge filter panel must be styled");
 assert.ok(css.includes(".canvas3d:focus-visible"), "standalone 3D canvas must expose visible keyboard focus");
-assert.ok(pages.includes("cp viewer/graph-v2-cluster-v2.js _site/viewer/graph-v2-cluster-v2.js"), "Pages must publish the cluster v2 renderer");
+assert.ok(
+  pages.includes("cp viewer/graph-v2-cluster-v2.js _site/legacy/viewer/graph-v2-cluster-v2.js"),
+  "Pages must keep the standalone JS cluster renderer on the legacy rollback surface"
+);
 
 for (const required of [
   "function hashUnit",
@@ -115,7 +118,6 @@ assert.ok(moduleOrbitRadius(4) > moduleOrbitRadius(1), "additional expanded clus
 assert.ok(moduleOrbitRadius(11) <= 630, "full expansion spacing must remain bounded");
 assert.ok(source.includes("var moduleRadius = moduleOrbitRadius(expandedCount)"), "scene layout must use the dynamic module orbit radius");
 
-
 // Relation-aware layout regression: topology degree drives deterministic junction placement without inventing graph semantics.
 assert.ok(source.includes("weightedCentroid"), "relation-aware feature placement must target a weighted geometric junction");
 assert.ok(source.includes("Math.log2(degree + 1)"), "higher relationship degree must increase topology influence");
@@ -128,4 +130,4 @@ assert.ok(source.includes("relationAwareScatter(parent, feature.id"), "curated f
 assert.ok(source.includes("featureRelations: featureRelations"), "relation topology must be exposed for deterministic regression inspection");
 assert.ok(source.includes("relationAwareScatter: relationAwareScatter"), "relation-aware placement must be exposed for deterministic regression inspection");
 
-console.log("3D cluster v2 validation passed: standalone 3D parity, Core-centered topology, deterministic relation-aware clusters, dynamic spacing, audited Core friendship retargeting, symmetric Shared Manual endpoints, directed edges, keyboard navigation, gestures, spotlight integration, and Pages packaging are present.");
+console.log("3D cluster v2 validation passed: the legacy rollback renderer keeps standalone 3D parity while Flutter owns the production root.");
