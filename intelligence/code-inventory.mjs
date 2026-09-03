@@ -485,7 +485,7 @@ function isRegistrySurface(record) {
 function isPersistenceSurface(record) {
   if (["persistence", "storage", "state"].some((segment) => pathHas(record, segment))) return true;
   if (/(?:SavedData|PersistentState|Store|Storage|Repository|Codec)$/.test(record.label)) return true;
-  if (/\b(?:extends\s+(?:SavedData|PersistentState)|DataComponents?\.CUSTOM_DATA\b|ComponentType\.<|Codec\s*<|NbtCompound|CompoundTag|ValueInput|ValueOutput|saveAdditional\s*\(|loadAdditional\s*\()/.test(record.text)) return true;
+  if (/\b(?:extends\s+(?:SavedData|PersistentState)|DataComponents?\.CUSTOM_DATA\b|(?:Data)?ComponentType\.<|Codec\s*<|NbtCompound|CompoundTag|ValueInput|ValueOutput|saveAdditional\s*\(|loadAdditional\s*\()/.test(record.text)) return true;
   if (/\bFiles\.(?:write|writeString|newBufferedWriter|copy|move)\s*\(/.test(record.text)
       || /\b(?:FileOutputStream|FileWriter|BufferedWriter|ObjectOutputStream)\b/.test(record.text)) return true;
   return /\bString\s+encode\s*\(\s*\)/.test(record.text)
