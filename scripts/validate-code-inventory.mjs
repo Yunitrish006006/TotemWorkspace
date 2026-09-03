@@ -21,9 +21,23 @@ const index = {
       symbols: ["AService", "send"],
       text: `package dev.example.totema.api;
 import dev.example.totemb.api.BApi;
-import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
 public interface AService {
-  void send(CustomPayload payload);
+  void send(Object payload);
+}
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
+      path: "src/main/java/dev/example/totema/network/ASyncPacket.java",
+      startLine: 1,
+      symbols: ["ASyncPacket", "register"],
+      text: `package dev.example.totema.network;
+import net.fabricmc.fabric.api.networking.v1.ServerPlayNetworking;
+public final class ASyncPacket {
+  void register() {
+    ServerPlayNetworking.registerGlobalReceiver(null, null);
+  }
 }
 `
     },
@@ -34,12 +48,27 @@ public interface AService {
       startLine: 1,
       symbols: ["RuntimeHooks", "register"],
       text: `package dev.example.totema.runtime;
+import com.google.gson.Gson;
 import com.mojang.brigadier.CommandDispatcher;
 public final class RuntimeHooks {
   void register() {
     CommandRegistrationCallback.EVENT.register((dispatcher, access, environment) -> {});
     Registry.register(Registries.ITEM, null, null);
     ServerTickEvents.END_SERVER_TICK.register(server -> {});
+  }
+}
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
+      path: "src/main/java/dev/example/totema/integration/JadeCompat.java",
+      startLine: 1,
+      symbols: ["JadeCompat"],
+      text: `package dev.example.totema.integration;
+public final class JadeCompat {
+  boolean enabled() {
+    return FabricLoader.getInstance().isModLoaded("jade");
   }
 }
 `
@@ -84,13 +113,16 @@ assert.equal(inventory.modules.length, 2);
 
 const moduleA = inventory.modules.find((entry) => entry.moduleId === "totem-a");
 assert.ok(moduleA);
-assert.equal(moduleA.productionFileCount, 3);
+assert.equal(moduleA.productionFileCount, 5);
 assert.ok(moduleA.surfaces.api.some((entry) => entry.label === "AService"));
-assert.ok(moduleA.surfaces.networking.some((entry) => entry.label === "AService"));
+assert.ok(moduleA.surfaces.networking.some((entry) => entry.label === "ASyncPacket"));
 assert.ok(moduleA.surfaces.commands.some((entry) => entry.label === "RuntimeHooks"));
 assert.ok(moduleA.surfaces.registries.some((entry) => entry.label === "RuntimeHooks"));
 assert.ok(moduleA.surfaces.events.some((entry) => entry.label === "RuntimeHooks"));
 assert.ok(moduleA.surfaces.clientUi.some((entry) => entry.label === "ConfigScreen"));
+assert.ok(moduleA.surfaces.integrations.some((entry) => entry.label === "JadeCompat"));
+assert.ok(!moduleA.surfaces.integrations.some((entry) => entry.label === "RuntimeHooks"));
+assert.ok(moduleA.integrations.some((entry) => entry.packageRoot === "com.google.gson"));
 assert.ok(moduleA.crossModuleImports.some((entry) => entry.targetModuleId === "totem-b"));
 assert.equal(JSON.stringify(moduleA).includes("FakeFeatureTest"), false);
 assert.equal(JSON.stringify(moduleA).includes("imaginary README-only"), false);
