@@ -10,7 +10,8 @@ const knowledge = {
     { id: "totem-core", name: "TotemCore", repoName: "TotemCore" },
     { id: "totem-alchemy", name: "TotemAlchemy", repoName: "TotemAlchemy" },
     { id: "totem-copperworks", name: "TotemCopperworks", repoName: "TotemCopperworks" },
-    { id: "totem-observerdemo", name: "TotemObserverDemo", repoName: "TotemObserverDemo" }
+    { id: "totem-observerdemo", name: "TotemObserverDemo", repoName: "TotemObserverDemo" },
+    { id: "totem-bridgedemo", name: "TotemBridgeDemo", repoName: "TotemBridgeDemo" }
   ]
 };
 
@@ -430,6 +431,86 @@ public interface ObserverBeaconScreenAccessor { }
   }
 );
 
+index.chunks.push(
+  {
+    moduleId: "totem-bridgedemo",
+    repoName: "TotemBridgeDemo",
+    path: "src/main/java/dev/example/bridgedemo/TotemBridgeDemo.java",
+    startLine: 1,
+    symbols: ["TotemBridgeDemo", "onInitialize"],
+    text: `package dev.example.bridgedemo;
+public final class TotemBridgeDemo implements ModInitializer {
+  public void onInitialize() { }
+}
+`
+  },
+  {
+    moduleId: "totem-bridgedemo",
+    repoName: "TotemBridgeDemo",
+    path: "src/main/java/dev/example/bridgedemo/domain/BridgeDomainService.java",
+    startLine: 1,
+    symbols: ["BridgeDomainService"],
+    text: `package dev.example.bridgedemo.domain;
+import dev.example.bridgedemo.TotemBridgeDemo;
+public final class BridgeDomainService { TotemBridgeDemo owner; }
+`
+  },
+  {
+    moduleId: "totem-bridgedemo",
+    repoName: "TotemBridgeDemo",
+    path: "src/main/java/dev/example/bridgedemo/domain/DiscordEventPayload.java",
+    startLine: 1,
+    symbols: ["DiscordEventPayload"],
+    text: `package dev.example.bridgedemo.domain;
+public record DiscordEventPayload(String event, String message) { }
+`
+  },
+  {
+    moduleId: "totem-bridgedemo",
+    repoName: "TotemBridgeDemo",
+    path: "src/main/java/dev/example/bridgedemo/domain/DiscordEventTransport.java",
+    startLine: 1,
+    symbols: ["DiscordEventTransport", "send"],
+    text: `package dev.example.bridgedemo.domain;
+public interface DiscordEventTransport { void send(String event); }
+`
+  },
+  {
+    moduleId: "totem-bridgedemo",
+    repoName: "TotemBridgeDemo",
+    path: "src/main/java/dev/example/bridgedemo/network/RealPayload.java",
+    startLine: 1,
+    symbols: ["RealPayload", "type"],
+    text: `package dev.example.bridgedemo.network;
+public record RealPayload(String value) implements CustomPacketPayload { }
+`
+  },
+  {
+    moduleId: "totem-bridgedemo",
+    repoName: "TotemBridgeDemo",
+    path: "src/main/java/dev/example/bridgedemo/transport/JsonConfigFileStore.java",
+    startLine: 1,
+    symbols: ["JsonConfigFileStore", "save"],
+    text: `package dev.example.bridgedemo.transport;
+public final class JsonConfigFileStore {
+  void save(Path path, String json) throws Exception { Files.writeString(path, json); }
+}
+`
+  },
+  {
+    moduleId: "totem-bridgedemo",
+    repoName: "TotemBridgeDemo",
+    path: "src/main/java/dev/example/bridgedemo/domain/LanguageCacheDownloader.java",
+    startLine: 1,
+    symbols: ["LanguageCacheDownloader", "persist"],
+    text: `package dev.example.bridgedemo.domain;
+public final class LanguageCacheDownloader {
+  void persist(Path path, byte[] bytes) throws Exception { Files.write(path, bytes); Files.move(path, path); }
+}
+`
+  }
+);
+
 assert.equal(isProductionCode("src/main/java/a/A.java"), true);
 assert.equal(isProductionCode("src/client/java/a/A.kt"), true);
 assert.equal(isProductionCode("src/test/java/a/A.java"), false);
@@ -437,7 +518,7 @@ assert.equal(isProductionCode("README.md"), false);
 
 const inventory = buildCodeInventory({ knowledge, index });
 assert.equal(inventory.sourceScope, "production-code-only");
-assert.equal(inventory.modules.length, 6);
+assert.equal(inventory.modules.length, 7);
 
 const moduleA = inventory.modules.find((entry) => entry.moduleId === "totem-a");
 assert.ok(moduleA);
@@ -544,5 +625,18 @@ assert.equal(moduleD.productionFileCount, 31);
 assert.ok(moduleD.featureAreas.some((entry) => entry.key === "observer"));
 assert.ok(!moduleD.featureAreas.some((entry) => ["relay", "session", "priority"].includes(entry.key)));
 assert.ok(!moduleD.surfaces.clientUi.some((entry) => entry.label === "ObserverBeaconScreenAccessor"));
+
+const bridgeDemo = inventory.modules.find((entry) => entry.moduleId === "totem-bridgedemo");
+assert.ok(bridgeDemo);
+assert.equal(bridgeDemo.productionFileCount, 7);
+assert.ok(bridgeDemo.surfaces.entrypoints.some((entry) => entry.label === "TotemBridgeDemo"));
+assert.ok(!bridgeDemo.surfaces.networking.some((entry) => entry.label === "DiscordEventPayload"));
+assert.ok(!bridgeDemo.surfaces.networking.some((entry) => entry.label === "DiscordEventTransport"));
+assert.ok(bridgeDemo.surfaces.networking.some((entry) => entry.label === "RealPayload"));
+assert.ok(bridgeDemo.surfaces.persistence.some((entry) => entry.label === "JsonConfigFileStore"));
+assert.ok(bridgeDemo.surfaces.persistence.some((entry) => entry.label === "LanguageCacheDownloader"));
+const bridgeRootArea = bridgeDemo.featureAreas.find((entry) => entry.key === "module-root");
+assert.ok(bridgeRootArea);
+assert.ok(bridgeRootArea.representativePaths.some((path) => path.endsWith("TotemBridgeDemo.java")));
 
 console.log("Code-first inventory validation passed.");
