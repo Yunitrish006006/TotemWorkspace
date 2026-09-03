@@ -22,10 +22,16 @@ const hardIds = [
   "totem-alchemy", "totem-enchanting", "totem-discord-bridge", "totem-automata", "totem-vanilla-tweaks",
   "totem-excavation", "totem-villagers", "totem-locksmith", "totem-nexus", "totem-remnant"
 ].map((id) => `hard:${id}:totem-core`);
+const hardFeatureEndpoints = new Map([
+  ["hard:totem-locksmith:totem-core", ["totem-locksmith.feature-2", "totem-core.feature-3"]],
+  ["hard:totem-nexus:totem-core", ["totem-nexus.feature-5", "totem-core.feature-3"]]
+]);
 for (const id of hardIds) {
   assert.ok(byId.has(id), `missing hard dependency ${id}`);
-  assert.deepEqual(Array.from(byId.get(id).featureIds), []);
+  assert.deepEqual(Array.from(byId.get(id).featureIds), hardFeatureEndpoints.get(id) ?? []);
 }
+assert.equal(byId.get("hard:totem-locksmith:totem-core").auditStatus, "verified");
+assert.equal(byId.get("hard:totem-nexus:totem-core").auditStatus, "verified");
 
 assert.deepEqual(Array.from(byId.get("automata-excavation").featureIds), [
   "totem-automata.feature-3", "totem-excavation.feature-1", "totem-excavation.feature-2"
@@ -80,6 +86,9 @@ assert.deepEqual(Array.from(byId.get(nexusProviderId).variants), [
 assert.ok(byId.has("observer:totem-nexus:nexus_death_node_admin@1"));
 
 const feature = (id) => knowledge.featureById.get(id);
+assert.equal(feature("totem-core.feature-3").title, "Friendship");
+assert.equal(feature("totem-nexus.feature-5").title, "好友與玩家目標");
+assert.equal(feature("totem-locksmith.feature-2").title, "存取控制");
 assert.ok(feature("totem-automata.feature-3").softContractIds.includes("automata-excavation"));
 assert.ok(feature("totem-excavation.feature-1").softContractIds.includes("automata-excavation"));
 assert.ok(feature("totem-excavation.feature-2").softContractIds.includes("automata-excavation"));
@@ -110,4 +119,4 @@ assert.ok(html.includes('src="viewer/graph-v2.js"'));
 assert.ok(!html.includes("graph-v2-contract-audit.js"));
 assert.ok(auditDoc.includes("32/32 contracts reviewed"));
 
-console.log("Canonical relationship validation passed: 32 contracts, audited feature endpoints, metadata-only qualifications, and Nexus Observer v3 are loaded directly by workspace intelligence.");
+console.log("Canonical relationship validation passed: 32 contracts, audited feature endpoints including Core Friendship consumers, metadata-only qualifications, and Nexus Observer v3 are loaded directly by workspace intelligence.");
