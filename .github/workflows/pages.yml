@@ -50,13 +50,29 @@ jobs:
             git clone --depth=1 --single-branch --branch "$branch" "$repository" "../$name"
           done < /tmp/totem-modules.tsv
 
-      - name: Build latest code index and V2 graph data
+      - name: Build latest code index and graph data
         env:
           TOTEM_WORKSPACE_ROOT: ${{ github.workspace }}
           TOTEM_REPOS_ROOT: ${{ github.workspace }}/..
         run: |
           node scripts/totem-intelligence.mjs build-index
           node scripts/totem-intelligence.mjs render-graph
+          node scripts/render-flutter-graph.mjs
+
+      - name: Set up Flutter 3.47.0
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: "3.47.0"
+          channel: stable
+          cache: true
+
+      - name: Resolve Flutter dependencies
+        working-directory: viewer_flutter
+        run: flutter pub get
+
+      - name: Build Flutter Pages prototype (Wasm)
+        working-directory: viewer_flutter
+        run: flutter build web --wasm --base-href /TotemWorkspace/flutter/
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
@@ -64,15 +80,18 @@ jobs:
       - name: Prepare V2 static site
         run: |
           rm -rf _site
-          mkdir -p _site/viewer/generated
+          mkdir -p _site/viewer/generated _site/flutter
 
-          # Publish the standalone 3D V2 viewer as the site root.
+          # Keep the current standalone JavaScript 3D viewer as the production root.
           cp graph-v2.html _site/index.html
           cp viewer/graph-v2.css _site/viewer/graph-v2.css
           cp viewer/graph-v2-adapter.js _site/viewer/graph-v2-adapter.js
           cp viewer/graph-v2-cluster-v2.js _site/viewer/graph-v2-cluster-v2.js
           cp viewer/local-live.js _site/viewer/local-live.js
           cp viewer/generated/graph-data.js _site/viewer/generated/graph-data.js
+
+          # Publish the Flutter migration in parallel for parity review.
+          cp -R viewer_flutter/build/web/. _site/flutter/
 
           # Keep the validated curated source available for inspection.
           cp index.html _site/curated.html
