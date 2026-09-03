@@ -45,6 +45,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          git restore -- .github/workflows/pages.yml .github/workflows/validate.yml
           if git diff --quiet; then
             echo "No changes needed"
             exit 0
