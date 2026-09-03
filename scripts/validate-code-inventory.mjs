@@ -10,7 +10,7 @@ const knowledge = {
     { id: "totem-core", name: "TotemCore", repoName: "TotemCore" },
     { id: "totem-alchemy", name: "TotemAlchemy", repoName: "TotemAlchemy" },
     { id: "totem-copperworks", name: "TotemCopperworks", repoName: "TotemCopperworks" },
-    { id: "totem-d", name: "TotemD", repoName: "TotemD" }
+    { id: "totem-observerdemo", name: "TotemObserverDemo", repoName: "TotemObserverDemo" }
   ]
 };
 
@@ -405,12 +405,12 @@ public final class TotemCopperworks implements ModInitializer {
 );
 
 const observerChunk = (className) => ({
-  moduleId: "totem-d",
-  repoName: "TotemD",
-  path: `src/main/java/dev/example/totemd/observer/${className}.java`,
+  moduleId: "totem-observerdemo",
+  repoName: "TotemObserverDemo",
+  path: `src/main/java/dev/example/observerdemo/observer/${className}.java`,
   startLine: 1,
   symbols: [className],
-  text: `package dev.example.totemd.observer;
+  text: `package dev.example.observerdemo.observer;
 public final class ${className} { }
 `
 });
@@ -419,12 +419,12 @@ index.chunks.push(
   ...Array.from({ length: 10 }, (_, index) => observerChunk(`ObserverSession${index}`)),
   ...Array.from({ length: 10 }, (_, index) => observerChunk(`ObserverPriority${index}`)),
   {
-    moduleId: "totem-d",
-    repoName: "TotemD",
-    path: "src/client/java/dev/example/totemd/client/ObserverBeaconScreenAccessor.java",
+    moduleId: "totem-observerdemo",
+    repoName: "TotemObserverDemo",
+    path: "src/client/java/dev/example/observerdemo/client/ObserverBeaconScreenAccessor.java",
     startLine: 1,
     symbols: ["ObserverBeaconScreenAccessor"],
-    text: `package dev.example.totemd.client;
+    text: `package dev.example.observerdemo.client;
 public interface ObserverBeaconScreenAccessor { }
 `
   }
@@ -538,7 +538,7 @@ for (const label of [
 assert.ok(!moduleC.surfaces.clientUi.some((entry) => entry.label === "CopperGolemClientPayloadRegistration"));
 assert.ok(!moduleC.surfaces.clientUi.some((entry) => entry.label === "CopperGolemMenuPayloadBridge"));
 
-const moduleD = inventory.modules.find((entry) => entry.moduleId === "totem-d");
+const moduleD = inventory.modules.find((entry) => entry.moduleId === "totem-observerdemo");
 assert.ok(moduleD);
 assert.equal(moduleD.productionFileCount, 31);
 assert.ok(moduleD.featureAreas.some((entry) => entry.key === "observer"));
