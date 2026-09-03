@@ -12,25 +12,28 @@ The legacy `index.html` remains a historical/interactive snapshot and a source f
 
 ## Rules
 
-- A **hard dependency** stays module-to-module. Shared Core facilities such as Manual are separate capabilities, not extra dependency contracts.
+- A **hard dependency** remains a hard module dependency. When production evidence identifies a specific Core API seam, V2 may retarget that same hard contract to audited feature endpoints while modules are expanded; this does not create a new dependency contract.
+- Shared Core facilities such as Manual may be represented separately as generated shared capabilities when they are not themselves the reason for a specific curated hard-dependency endpoint.
 - A **feature endpoint** is used only when current production code/spec evidence supports that functional relationship.
 - A metadata declaration such as Fabric `suggests` is still a valid module-level relationship even when an active feature bridge cannot be verified.
 - Runtime Observer relay contracts and provider registration contracts are both retained as architecture facts; feature-level visualization should avoid presenting them as two independent gameplay integrations.
 
-## 10 hard Core dependencies — verified, module-level
+## 10 hard Core dependencies — verified
 
-All ten non-Core active Totem modules retain a hard dependency on TotemCore in their Fabric metadata. No feature retargeting is applied to these edges.
+All ten non-Core active Totem modules retain a hard dependency on TotemCore in their Fabric metadata. Eight stay module-level only. Two have verified Core Friendship API seams and therefore carry audited feature endpoints for expanded V2 visualization while remaining `hard-core` contracts.
 
-1. `hard:totem-alchemy:totem-core` — valid.
-2. `hard:totem-enchanting:totem-core` — valid.
-3. `hard:totem-discord-bridge:totem-core` — valid.
-4. `hard:totem-automata:totem-core` — valid.
-5. `hard:totem-vanilla-tweaks:totem-core` — valid.
-6. `hard:totem-excavation:totem-core` — valid.
-7. `hard:totem-villagers:totem-core` — valid.
-8. `hard:totem-locksmith:totem-core` — valid.
-9. `hard:totem-nexus:totem-core` — valid.
-10. `hard:totem-remnant:totem-core` — valid.
+1. `hard:totem-alchemy:totem-core` — valid, module-level.
+2. `hard:totem-enchanting:totem-core` — valid, module-level.
+3. `hard:totem-discord-bridge:totem-core` — valid, module-level.
+4. `hard:totem-automata:totem-core` — valid, module-level.
+5. `hard:totem-vanilla-tweaks:totem-core` — valid, module-level.
+6. `hard:totem-excavation:totem-core` — valid, module-level.
+7. `hard:totem-villagers:totem-core` — valid, module-level.
+8. `hard:totem-locksmith:totem-core` — valid; audited endpoints: Locksmith `存取控制` → Core `Friendship`. `LocksmithAccessService` uses `TotemFriendshipApi` as the server-authoritative friendship source for friendship-based access decisions.
+9. `hard:totem-nexus:totem-core` — valid; audited endpoints: Nexus `好友與玩家目標` → Core `Friendship`. `NexusFriendSavedData` and `NexusFriendshipApi` delegate relationship state and mutual-friend checks to `TotemFriendshipApi`.
+10. `hard:totem-remnant:totem-core` — valid, module-level.
+
+These two Friendship mappings qualify existing hard dependency endpoints only. The contract count remains unchanged.
 
 ## 3 Fabric suggests
 
@@ -194,11 +197,11 @@ TotemCore provides the shared Manual Registry/assembler/renderer APIs. V2 derive
 ## Audit outcome
 
 - 32/32 contracts reviewed.
-- 10 hard dependencies retained module-level.
-- 4 feature mappings required correction/expansion: `automata-excavation`, `villagers-remnant`, `automata-openai`, `event-nexus-audit`.
+- 10 hard dependencies remain `hard-core`; 8 are module-level only and 2 have verified Friendship feature endpoints (`Nexus → Core`, `Locksmith → Core`).
+- 4 non-hard feature mappings required correction/expansion: `automata-excavation`, `villagers-remnant`, `automata-openai`, `event-nexus-audit`.
 - 1 generic Observer mapping required scope correction: `vanilla-nexus-observer`.
 - 1 provider protocol was stale: Nexus `2 -> 3`.
 - 1 Fabric suggestion is retained metadata-only pending current production bridge evidence: `remnant-trinkets`.
 - 1 EventBus implementation is marked contract-defined because the current publisher call was not independently located: `event-remnant-death`.
 - No new dependency contracts were added.
-- Audited relationship data is now consumed by workspace intelligence directly; V2 no longer needs a browser-time correction layer.
+- Audited relationship data is consumed by workspace intelligence directly; V2 no longer needs a browser-time correction layer.
