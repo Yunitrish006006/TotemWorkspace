@@ -8,7 +8,8 @@ const knowledge = {
     { id: "totem-a", name: "TotemA", repoName: "TotemA" },
     { id: "totem-b", name: "TotemB", repoName: "TotemB" },
     { id: "totem-core", name: "TotemCore", repoName: "TotemCore" },
-    { id: "totem-alchemy", name: "TotemAlchemy", repoName: "TotemAlchemy" }
+    { id: "totem-alchemy", name: "TotemAlchemy", repoName: "TotemAlchemy" },
+    { id: "totem-c", name: "TotemC", repoName: "TotemC" }
   ]
 };
 
@@ -307,6 +308,70 @@ public interface AlchemyApi { }
   ]
 };
 
+const syntheticChunk = (path, packageName, className, symbols = [className]) => ({
+  moduleId: "totem-c",
+  repoName: "TotemC",
+  path,
+  startLine: 1,
+  symbols,
+  text: `package ${packageName};
+public final class ${className} { }
+`
+});
+
+index.chunks.push(
+  ...Array.from({ length: 10 }, (_, index) => syntheticChunk(
+    `src/main/java/dev/example/totemc/copper/GatheringWork${index}.java`,
+    "dev.example.totemc.copper",
+    `GatheringWork${index}`
+  )),
+  ...Array.from({ length: 8 }, (_, index) => syntheticChunk(
+    `src/main/java/dev/example/totemc/copper/SortingWork${index}.java`,
+    "dev.example.totemc.copper",
+    `SortingWork${index}`
+  )),
+  ...Array.from({ length: 5 }, (_, index) => syntheticChunk(
+    `src/main/java/dev/example/totemc/copper/CopperWrenchWork${index}.java`,
+    "dev.example.totemc.copper",
+    `CopperWrenchWork${index}`
+  )),
+  ...Array.from({ length: 5 }, (_, index) => syntheticChunk(
+    `src/main/java/dev/example/totemc/copper/LlmWorker${index}.java`,
+    "dev.example.totemc.copper",
+    `LlmWorker${index}`
+  )),
+  ...Array.from({ length: 3 }, (_, index) => syntheticChunk(
+    `src/main/java/dev/example/totemc/copper/CopperGolemCore${index}.java`,
+    "dev.example.totemc.copper",
+    `CopperGolemCore${index}`
+  )),
+  syntheticChunk(
+    "src/main/java/dev/example/totemc/client/CopperGolemMenuPanelLayout.java",
+    "dev.example.totemc.client",
+    "CopperGolemMenuPanelLayout"
+  ),
+  syntheticChunk(
+    "src/main/java/dev/example/totemc/client/CopperGolemMenuEditor.java",
+    "dev.example.totemc.client",
+    "CopperGolemMenuEditor"
+  ),
+  syntheticChunk(
+    "src/client/java/dev/example/totemc/client/CopperGolemMenuUiState.java",
+    "dev.example.totemc.client",
+    "CopperGolemMenuUiState"
+  ),
+  syntheticChunk(
+    "src/client/java/dev/example/totemc/client/CopperGolemMenuScreenSession.java",
+    "dev.example.totemc.client",
+    "CopperGolemMenuScreenSession"
+  ),
+  syntheticChunk(
+    "src/client/java/dev/example/totemc/client/CopperGolemClientPayloadRegistration.java",
+    "dev.example.totemc.client",
+    "CopperGolemClientPayloadRegistration"
+  )
+);
+
 assert.equal(isProductionCode("src/main/java/a/A.java"), true);
 assert.equal(isProductionCode("src/client/java/a/A.kt"), true);
 assert.equal(isProductionCode("src/test/java/a/A.java"), false);
@@ -314,7 +379,7 @@ assert.equal(isProductionCode("README.md"), false);
 
 const inventory = buildCodeInventory({ knowledge, index });
 assert.equal(inventory.sourceScope, "production-code-only");
-assert.equal(inventory.modules.length, 4);
+assert.equal(inventory.modules.length, 5);
 
 const moduleA = inventory.modules.find((entry) => entry.moduleId === "totem-a");
 assert.ok(moduleA);
@@ -381,5 +446,30 @@ assert.ok(moduleAlchemy);
 assert.equal(moduleB.productionFileCount, 1);
 assert.equal(moduleCore.productionFileCount, 1);
 assert.equal(moduleAlchemy.productionFileCount, 1);
+
+const moduleC = inventory.modules.find((entry) => entry.moduleId === "totem-c");
+assert.ok(moduleC);
+assert.equal(moduleC.productionFileCount, 36);
+const gatheringArea = moduleC.featureAreas.find((entry) => entry.key === "gathering");
+const sortingArea = moduleC.featureAreas.find((entry) => entry.key === "sorting");
+const wrenchArea = moduleC.featureAreas.find((entry) => entry.key === "wrench");
+const llmArea = moduleC.featureAreas.find((entry) => entry.key === "llm");
+assert.ok(gatheringArea);
+assert.ok(sortingArea);
+assert.ok(wrenchArea);
+assert.ok(llmArea);
+assert.equal(gatheringArea.fileCount, 10);
+assert.equal(sortingArea.fileCount, 8);
+assert.equal(wrenchArea.fileCount, 5);
+assert.equal(llmArea.fileCount, 5);
+for (const label of [
+  "CopperGolemMenuPanelLayout",
+  "CopperGolemMenuEditor",
+  "CopperGolemMenuUiState",
+  "CopperGolemMenuScreenSession"
+]) {
+  assert.ok(moduleC.surfaces.clientUi.some((entry) => entry.label === label), `${label} should be Client / UI evidence`);
+}
+assert.ok(!moduleC.surfaces.clientUi.some((entry) => entry.label === "CopperGolemClientPayloadRegistration"));
 
 console.log("Code-first inventory validation passed.");
