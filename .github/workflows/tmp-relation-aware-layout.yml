@@ -1,0 +1,267 @@
+name: Apply Relation-Aware 3D Layout
+
+on:
+  push:
+    branches:
+      - feat/relation-aware-cluster-layout
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: ${{ !contains(github.event.head_commit.message, '[relation-layout-patch]') }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out branch
+        uses: actions/checkout@v4
+        with:
+          ref: feat/relation-aware-cluster-layout
+          fetch-depth: 0
+
+      - name: Patch relation-aware cluster layout
+        shell: bash
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+
+          renderer = Path('viewer/graph-v2-cluster-v2.js')
+          s = renderer.read_text()
+
+          marker = '  function modulePosition(module, peripheralIndex, peripheralCount, radius) {'
+          if 'function relationAwareScatter' not in s:
+              helper = r'''  function vecLength(v) {
+            return Math.sqrt(v.x * v.x + v.y * v.y + v.z * v.z);
+          }
+
+          function normalizeVec(v) {
+            var length = vecLength(v);
+            if (length < 0.000001) return { x: 0, y: 0, z: 0 };
+            return { x: v.x / length, y: v.y / length, z: v.z / length };
+          }
+
+          function dotVec(a, b) {
+            return a.x * b.x + a.y * b.y + a.z * b.z;
+          }
+
+          function crossVec(a, b) {
+            return {
+              x: a.y * b.z - a.z * b.y,
+              y: a.z * b.x - a.x * b.z,
+              z: a.x * b.y - a.y * b.x
+            };
+          }
+
+          function featureContractIds(feature) {
+            if (!feature) return [];
+            var ids = [];
+            Object.keys(feature).forEach(function (key) {
+              if (!/ContractIds$/.test(key) || !Array.isArray(feature[key])) return;
+              feature[key].forEach(function (id) {
+                if (!ids.includes(id)) ids.push(id);
+              });
+            });
+            return ids;
+          }
+
+          function relationWeight(type) {
+            if (type === "hard-core") return 1.7;
+            if (type === "shared-capability") return 1.55;
+            if (type === "fabric-suggests") return 1.4;
+            if (type === "runtime-optional") return 1.3;
+            if (type === "external-service") return 1.25;
+            if (type === "eventbus" || type === "observer-provider") return 1.2;
+            return 1;
+          }
+
+          function featureRelations(ownerId, featureId) {
+            var feature = featureMap.get(featureId);
+            var declaredContractIds = new Set(featureContractIds(feature));
+            var merged = new Map();
+
+            function add(targetId, weight, kind) {
+              if (!targetId || targetId === ownerId) return;
+              var current = merged.get(targetId) || { targetId: targetId, weight: 0, kinds: [] };
+              current.weight += weight;
+              if (!current.kinds.includes(kind)) current.kinds.push(kind);
+              merged.set(targetId, current);
+            }
+
+            contracts.forEach(function (contract) {
+              var featureBound = (contract.featureIds || []).includes(featureId) || declaredContractIds.has(contract.id);
+              if (!featureBound) return;
+              if (contract.from === ownerId) add(contract.to, relationWeight(contract.type), contract.type);
+              else if (contract.to === ownerId) add(contract.from, relationWeight(contract.type), contract.type);
+            });
+
+            capabilities.forEach(function (capability) {
+              var consumerFeature = capability.consumerFeatureId && featureMap.get(capability.consumerFeatureId);
+              consumerFeature = consumerFeature || manualFeatureFor(capability.consumerModuleId);
+              if (capability.providerFeatureId === featureId && capability.providerModuleId === ownerId) {
+                add(capability.consumerModuleId, relationWeight("shared-capability"), "shared-capability");
+              }
+              if (consumerFeature && consumerFeature.id === featureId && capability.consumerModuleId === ownerId) {
+                add(capability.providerModuleId, relationWeight("shared-capability"), "shared-capability");
+              }
+            });
+
+            return Array.from(merged.values()).sort(function (a, b) {
+              return a.targetId.localeCompare(b.targetId);
+            });
+          }
+
+          function relationAwareScatter(parent, id, type, radius, ownerId, sceneNodes, explicitRelations) {
+            var base = scatter(parent, id, type, radius);
+            var offset = { x: base.x - parent.x, y: base.y - parent.y, z: base.z - parent.z };
+            var radialDistance = vecLength(offset);
+            var baseDirection = normalizeVec(offset);
+            var relations = explicitRelations == null ? featureRelations(ownerId, id) : explicitRelations;
+            var outward = ownerId === "totem-core" ? null : normalizeVec({ x: parent.x, y: parent.y, z: parent.z });
+
+            if (!relations.length) {
+              if (!outward) return base;
+              var ordinaryDirection = normalizeVec({
+                x: baseDirection.x * 0.72 + outward.x * 0.28,
+                y: baseDirection.y * 0.72 + outward.y * 0.28,
+                z: baseDirection.z * 0.72 + outward.z * 0.28
+              });
+              return {
+                x: parent.x + ordinaryDirection.x * radialDistance,
+                y: parent.y + ordinaryDirection.y * radialDistance,
+                z: parent.z + ordinaryDirection.z * radialDistance
+              };
+            }
+
+            var byId = new Map(sceneNodes.map(function (node) { return [node.id, node]; }));
+            var weightedCentroid = { x: 0, y: 0, z: 0 };
+            var totalWeight = 0;
+            var resolved = [];
+            relations.forEach(function (relation) {
+              var target = byId.get(relation.targetId);
+              if (!target) return;
+              var weight = Number(relation.weight || 1);
+              weightedCentroid.x += target.x * weight;
+              weightedCentroid.y += target.y * weight;
+              weightedCentroid.z += target.z * weight;
+              totalWeight += weight;
+              resolved.push(relation);
+            });
+            if (!resolved.length || totalWeight <= 0) return base;
+
+            weightedCentroid.x /= totalWeight;
+            weightedCentroid.y /= totalWeight;
+            weightedCentroid.z /= totalWeight;
+            var junctionDirection = normalizeVec({
+              x: weightedCentroid.x - parent.x,
+              y: weightedCentroid.y - parent.y,
+              z: weightedCentroid.z - parent.z
+            });
+            if (vecLength(junctionDirection) < 0.000001) junctionDirection = baseDirection;
+
+            var hasCoreTarget = resolved.some(function (relation) { return relation.targetId === "totem-core"; });
+            if (outward && !hasCoreTarget) {
+              var inwardness = dotVec(junctionDirection, outward);
+              if (inwardness < -0.18) {
+                var correction = 0.42 + Math.abs(inwardness) * 0.45;
+                junctionDirection = normalizeVec({
+                  x: junctionDirection.x + outward.x * correction,
+                  y: junctionDirection.y + outward.y * correction,
+                  z: junctionDirection.z + outward.z * correction
+                });
+              }
+            }
+
+            var degree = resolved.length;
+            var influence = Math.min(0.9, 0.38 + Math.log2(degree + 1) * 0.17 + Math.min(0.18, totalWeight * 0.035));
+            var direction = normalizeVec({
+              x: baseDirection.x * (1 - influence) + junctionDirection.x * influence,
+              y: baseDirection.y * (1 - influence) + junctionDirection.y * influence,
+              z: baseDirection.z * (1 - influence) + junctionDirection.z * influence
+            });
+
+            var axis = Math.abs(direction.y) < 0.86 ? { x: 0, y: 1, z: 0 } : { x: 1, y: 0, z: 0 };
+            var tangentA = normalizeVec(crossVec(direction, axis));
+            var tangentB = normalizeVec(crossVec(direction, tangentA));
+            var phase = hashUnit(id, 131) * Math.PI * 2;
+            var slotStrength = 0.22 / Math.sqrt(Math.max(1, degree));
+            direction = normalizeVec({
+              x: direction.x + (tangentA.x * Math.cos(phase) + tangentB.x * Math.sin(phase)) * slotStrength,
+              y: direction.y + (tangentA.y * Math.cos(phase) + tangentB.y * Math.sin(phase)) * slotStrength,
+              z: direction.z + (tangentA.z * Math.cos(phase) + tangentB.z * Math.sin(phase)) * slotStrength
+            });
+
+            return {
+              x: parent.x + direction.x * radialDistance,
+              y: parent.y + direction.y * radialDistance,
+              z: parent.z + direction.z * radialDistance
+            };
+          }
+
+'''
+              s = s.replace(marker, helper + marker)
+
+          replacements = {
+              'var position = scatter(parent, feature.id, "feature", radius);': 'var position = relationAwareScatter(parent, feature.id, "feature", radius, moduleId, nodes, null);',
+              'var position = scatter(parent, id, "capability", radius);': 'var position = relationAwareScatter(parent, id, "capability", radius, moduleId, nodes, [{ targetId: capability.providerModuleId, weight: relationWeight("shared-capability"), kinds: ["shared-capability"] }]);',
+              'var position = scatter(parent, category.id, "category", radius);': 'var position = relationAwareScatter(parent, category.id, "category", radius, moduleId, nodes, []);'
+          }
+          for old, new in replacements.items():
+              if old not in s:
+                  raise SystemExit(f'missing renderer marker: {old}')
+              s = s.replace(old, new)
+
+          if 'relationAwareScatter: relationAwareScatter' not in s:
+              s = s.replace('    scatter: scatter,', '    scatter: scatter,\n    featureRelations: featureRelations,\n    relationAwareScatter: relationAwareScatter,')
+
+          renderer.write_text(s)
+
+          validator = Path('scripts/validate-3d-cluster.mjs')
+          v = validator.read_text()
+          if '"function relationAwareScatter"' not in v:
+              v = v.replace('  "function scatter",', '  "function scatter",\n  "function featureRelations",\n  "function relationAwareScatter",')
+          anchor = 'assert.ok(source.includes("var moduleRadius = moduleOrbitRadius(expandedCount)"), "scene layout must use the dynamic module orbit radius");\n'
+          checks = r'''
+
+// Relation-aware layout regression: topology degree drives deterministic junction placement without inventing graph semantics.
+assert.ok(source.includes("weightedCentroid"), "relation-aware feature placement must target a weighted geometric junction");
+assert.ok(source.includes("Math.log2(degree + 1)"), "higher relationship degree must increase topology influence");
+assert.ok(source.includes("slotStrength = 0.22 / Math.sqrt"), "high-degree nodes sharing a junction must receive deterministic angular slotting");
+assert.ok(source.includes('relation.targetId === "totem-core"'), "inward placement must distinguish real Core targets from accidental center crossings");
+assert.ok(source.includes("inwardness < -0.18"), "peripheral nodes without Core relations must avoid unexplained inward folds");
+assert.ok(source.includes("featureContractIds"), "relation discovery must include curated feature contract memberships");
+assert.ok(source.includes("capability.providerFeatureId === featureId"), "Core shared-capability providers must participate in junction placement");
+assert.ok(source.includes("relationAwareScatter(parent, feature.id"), "curated feature placement must use relation-aware scatter");
+assert.ok(source.includes("featureRelations: featureRelations"), "relation topology must be exposed for deterministic regression inspection");
+assert.ok(source.includes("relationAwareScatter: relationAwareScatter"), "relation-aware placement must be exposed for deterministic regression inspection");
+'''
+          if 'Relation-aware layout regression' not in v:
+              if anchor not in v:
+                  raise SystemExit('validator anchor missing')
+              v = v.replace(anchor, anchor + checks)
+          v = v.replace('deterministic clusters, dynamic spacing,', 'deterministic relation-aware clusters, dynamic spacing,')
+          validator.write_text(v)
+          PY
+
+      - name: Validate renderer and workspace
+        run: |
+          node --check viewer/graph-v2-cluster-v2.js
+          node scripts/validate-workspace.mjs
+          node scripts/validate-intelligence.mjs
+          node scripts/validate-contract-audit.mjs
+          node scripts/validate-3d-pan.mjs
+          node scripts/validate-3d-cluster.mjs
+          node scripts/validate-3d-only-parity.mjs
+
+      - name: Commit layout patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git diff --quiet; then
+            echo "No changes needed"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add viewer/graph-v2-cluster-v2.js scripts/validate-3d-cluster.mjs
+          git commit -m "[relation-layout-patch] feat: make 3D clusters relation-aware"
+          git push origin HEAD:feat/relation-aware-cluster-layout
