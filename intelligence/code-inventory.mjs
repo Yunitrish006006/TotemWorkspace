@@ -269,6 +269,10 @@ function featureAreaAssignments(records, module, ownRoot) {
       assignments.set(record.path, baseArea);
       continue;
     }
+    if (isEntrypoint(record) || /(?:Composition)$/.test(record.label)) {
+      assignments.set(record.path, baseArea);
+      continue;
+    }
 
     const labelWords = semanticLabelWords(record.label, module);
     const symbolWords = semanticSymbolWords(record, module);
@@ -277,8 +281,8 @@ function featureAreaAssignments(records, module, ownRoot) {
       const symbolVocabulary = symbolVocabularies.get(area);
       const labelOverlap = labelWords.filter((word) => labelVocabulary.has(word)).length;
       const symbolOverlap = symbolWords.filter((word) => symbolVocabulary.has(word)).length;
-      const labelAreaBonus = labelWords.includes(area) ? 4 : 0;
-      const symbolAreaBonus = symbolWords.includes(area) ? 2 : 0;
+      const labelAreaBonus = labelWords.includes(area) ? 20 : 0;
+      const symbolAreaBonus = symbolWords.includes(area) ? 6 : 0;
       return {
         area,
         score: labelOverlap * 3 + symbolOverlap + labelAreaBonus + symbolAreaBonus
