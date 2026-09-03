@@ -28,6 +28,24 @@
     }
   },
   "contractOverrides": {
+    "hard:totem-nexus:totem-core": {
+      "featureIds": [
+        "totem-nexus.feature-5",
+        "totem-core.feature-3"
+      ],
+      "feature": "TotemNexus consumes the Core Friendship API for friend relationships and player targets.",
+      "auditStatus": "verified",
+      "auditNote": "NexusFriendSavedData and NexusFriendshipApi delegate friendship state and mutual-friend checks to TotemFriendshipApi."
+    },
+    "hard:totem-locksmith:totem-core": {
+      "featureIds": [
+        "totem-locksmith.feature-2",
+        "totem-core.feature-3"
+      ],
+      "feature": "TotemLocksmith access control consumes the Core Friendship API for friendship-based authorization.",
+      "auditStatus": "verified",
+      "auditNote": "LocksmithAccessService uses TotemFriendshipApi as the server-authoritative friendship source for access decisions."
+    },
     "automata-excavation": {
       "channel": "soft",
       "featureIds": [
