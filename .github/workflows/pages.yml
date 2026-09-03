@@ -70,30 +70,30 @@ jobs:
         working-directory: viewer_flutter
         run: flutter pub get
 
-      - name: Build Flutter Pages prototype (Wasm)
+      - name: Build Flutter production root (Wasm)
         working-directory: viewer_flutter
-        run: flutter build web --wasm --base-href /TotemWorkspace/flutter/
+        run: flutter build web --wasm --base-href /TotemWorkspace/
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5
 
-      - name: Prepare V2 static site
+      - name: Prepare static site
         run: |
           rm -rf _site
-          mkdir -p _site/viewer/generated _site/flutter
+          mkdir -p _site/legacy/viewer/generated
 
-          # Keep the current standalone JavaScript 3D viewer as the production root.
-          cp graph-v2.html _site/index.html
-          cp viewer/graph-v2.css _site/viewer/graph-v2.css
-          cp viewer/graph-v2-adapter.js _site/viewer/graph-v2-adapter.js
-          cp viewer/graph-v2-cluster-v2.js _site/viewer/graph-v2-cluster-v2.js
-          cp viewer/local-live.js _site/viewer/local-live.js
-          cp viewer/generated/graph-data.js _site/viewer/generated/graph-data.js
+          # Flutter is the production root.
+          cp -R viewer_flutter/build/web/. _site/
 
-          # Publish the Flutter migration in parallel for parity review.
-          cp -R viewer_flutter/build/web/. _site/flutter/
+          # Keep the previous standalone JavaScript viewer as a rollback/debug surface.
+          cp graph-v2.html _site/legacy/index.html
+          cp viewer/graph-v2.css _site/legacy/viewer/graph-v2.css
+          cp viewer/graph-v2-adapter.js _site/legacy/viewer/graph-v2-adapter.js
+          cp viewer/graph-v2-cluster-v2.js _site/legacy/viewer/graph-v2-cluster-v2.js
+          cp viewer/local-live.js _site/legacy/viewer/local-live.js
+          cp viewer/generated/graph-data.js _site/legacy/viewer/generated/graph-data.js
 
-          # Keep the validated curated source available for inspection.
+          # Keep the curated source available for inspection while code-first inventory is rebuilt.
           cp index.html _site/curated.html
           touch _site/.nojekyll
 
