@@ -210,27 +210,45 @@ function refineDominantFeatureAreas(records, assignments, module) {
     if (!byArea.has(area)) byArea.set(area, []);
     byArea.get(area).push(record);
   }
+  const knownAreas = new Set(byArea.keys());
 
   for (const [area, areaRecords] of byArea) {
     if (areaRecords.length < 24 || areaRecords.length < Math.ceil(records.length * 0.45)) continue;
 
+    const areaNamedRecords = areaRecords.filter((record) =>
+      semanticLabelWords(record.label, module).includes(area));
+    if (areaNamedRecords.length >= Math.ceil(areaRecords.length * 0.55)) continue;
+
+    const refinableRecords = [];
     const wordsByPath = new Map();
-    const support = new Map();
     for (const record of areaRecords) {
-      const words = semanticLabelWords(record.label, module).filter((word) => word !== area);
+      const words = semanticLabelWords(record.label, module);
       wordsByPath.set(record.path, words);
-      for (const word of unique(words)) support.set(word, (support.get(word) ?? 0) + 1);
+      const explicitLeafAreas = words.filter((word) => word !== area && knownAreas.has(word));
+      if (explicitLeafAreas.length > 0) {
+        assignments.set(record.path, explicitLeafAreas[explicitLeafAreas.length - 1]);
+      } else {
+        refinableRecords.push(record);
+      }
+    }
+    if (refinableRecords.length < 24) continue;
+
+    const support = new Map();
+    for (const record of refinableRecords) {
+      for (const word of unique((wordsByPath.get(record.path) ?? []).filter((word) => word !== area))) {
+        support.set(word, (support.get(word) ?? 0) + 1);
+      }
     }
 
-    const minSupport = Math.max(5, Math.ceil(areaRecords.length * 0.08));
+    const minSupport = Math.max(5, Math.ceil(refinableRecords.length * 0.08));
     const candidates = new Set([...support.entries()]
-      .filter(([, count]) => count >= minSupport && count <= Math.floor(areaRecords.length * 0.55))
+      .filter(([, count]) => count >= minSupport && count <= Math.floor(refinableRecords.length * 0.55))
       .map(([word]) => word));
-    if (candidates.size < 2) continue;
+    if (candidates.size < 3) continue;
 
     const tentative = new Map();
     const assignedCounts = new Map();
-    for (const record of areaRecords) {
+    for (const record of refinableRecords) {
       const chosen = (wordsByPath.get(record.path) ?? []).find((word) => candidates.has(word));
       if (!chosen) continue;
       tentative.set(record.path, chosen);
@@ -241,7 +259,7 @@ function refineDominantFeatureAreas(records, assignments, module) {
     const viable = new Set([...assignedCounts.entries()]
       .filter(([, count]) => count >= minAssigned)
       .map(([word]) => word));
-    if (viable.size < 2) continue;
+    if (viable.size < 3) continue;
 
     for (const [recordPath, chosen] of tentative) {
       if (viable.has(chosen)) assignments.set(recordPath, chosen);
@@ -269,28 +287,16 @@ function featureAreaAssignments(records, module, ownRoot) {
       assignments.set(record.path, baseArea);
       continue;
     }
-    const compactLabel = record.label.toLowerCase().replace(/[^a-z0-9]/g, "");
-    if (isEntrypoint(record)
-        || moduleTokens(module).includes(compactLabel)
-        || /(?:Composition)$/.test(record.label)) {
-      assignments.set(record.path, baseArea);
-      continue;
-    }
 
     const labelWords = semanticLabelWords(record.label, module);
-    const explicitLabelAreas = labelWords.filter((word) => knownAreas.includes(word));
-    if (explicitLabelAreas.length > 0) {
-      assignments.set(record.path, explicitLabelAreas[explicitLabelAreas.length - 1]);
-      continue;
-    }
     const symbolWords = semanticSymbolWords(record, module);
     const scored = knownAreas.map((area) => {
       const labelVocabulary = labelVocabularies.get(area);
       const symbolVocabulary = symbolVocabularies.get(area);
       const labelOverlap = labelWords.filter((word) => labelVocabulary.has(word)).length;
       const symbolOverlap = symbolWords.filter((word) => symbolVocabulary.has(word)).length;
-      const labelAreaBonus = labelWords.includes(area) ? 20 : 0;
-      const symbolAreaBonus = symbolWords.includes(area) ? 6 : 0;
+      const labelAreaBonus = labelWords.includes(area) ? 4 : 0;
+      const symbolAreaBonus = symbolWords.includes(area) ? 2 : 0;
       return {
         area,
         score: labelOverlap * 3 + symbolOverlap + labelAreaBonus + symbolAreaBonus
@@ -385,7 +391,8 @@ function isPersistenceSurface(record) {
 
 function isClientUiSurface(record) {
   if (/(?:Screen|ScreenClient|UiClient|HandledScreen|ScreenHandler|Menu|Renderer|Hud|Overlay|Tooltip|ColorProvider)$/.test(record.label)) return true;
-  if (pathHas(record, "client") && /(?:Screen|Menu|Ui|UI|Layout|Editor|Widget|Panel)/.test(record.label)) return true;
+  if (pathHas(record, "client")
+      && /(?:ClientController|Editor|PanelLayout|UiState|ScreenLifecycle|ScreenSession)$/.test(record.label)) return true;
   return /\bextends\s+[A-Za-z_$][\w$]*Screen\b/.test(record.text)
     || /\b(?:implements\s+HudRenderCallback|GuiGraphics|DrawContext)\b/.test(record.text)
     || /\b(?:setScreenAndShow|setScreen)\s*\(/.test(record.text)
