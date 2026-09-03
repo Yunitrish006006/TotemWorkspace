@@ -45,6 +45,7 @@ Phase 2 intentionally covers curated architecture nodes first. Generated code-de
 - keeps absolute repository paths out of browser-facing status payloads
 - local server accepts browser CORS only from `localhost`, `127.0.0.1`, or `::1`
 - published Pages builds remain static and never probe localhost
+- Pages publishes Flutter in parallel at `/TotemWorkspace/flutter/`; the JavaScript viewer remains the root production viewer
 
 ### Native desktop source — remaining
 
