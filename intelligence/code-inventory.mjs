@@ -243,6 +243,33 @@ function featureAreaAssignments(records, module, ownRoot) {
       assignments.set(record.path, baseArea);
     }
   }
+
+  const pathByQualifiedName = new Map(records
+    .filter((record) => record.packageName)
+    .map((record) => [`${record.packageName}.${record.label}`, record.path]));
+
+  for (let pass = 0; pass < 3; pass += 1) {
+    const incomingAreas = new Map();
+    for (const source of records) {
+      const sourceArea = assignments.get(source.path);
+      if (!sourceArea || sourceArea === "module-root" || sourceArea === "adapter") continue;
+      for (const importName of source.imports) {
+        const targetPath = pathByQualifiedName.get(importName);
+        if (!targetPath || assignments.get(targetPath) !== "module-root") continue;
+        if (!incomingAreas.has(targetPath)) incomingAreas.set(targetPath, new Set());
+        incomingAreas.get(targetPath).add(sourceArea);
+      }
+    }
+
+    let changed = false;
+    for (const [targetPath, areas] of incomingAreas) {
+      if (areas.size !== 1) continue;
+      assignments.set(targetPath, [...areas][0]);
+      changed = true;
+    }
+    if (!changed) break;
+  }
+
   return assignments;
 }
 
