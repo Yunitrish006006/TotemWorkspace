@@ -9,7 +9,8 @@ const knowledge = {
     { id: "totem-b", name: "TotemB", repoName: "TotemB" },
     { id: "totem-core", name: "TotemCore", repoName: "TotemCore" },
     { id: "totem-alchemy", name: "TotemAlchemy", repoName: "TotemAlchemy" },
-    { id: "totem-c", name: "TotemC", repoName: "TotemC" }
+    { id: "totem-c", name: "TotemC", repoName: "TotemC" },
+    { id: "totem-d", name: "TotemD", repoName: "TotemD" }
   ]
 };
 
@@ -398,6 +399,32 @@ public final class TotemC implements ModInitializer {
   }
 );
 
+const observerChunk = (className) => ({
+  moduleId: "totem-d",
+  repoName: "TotemD",
+  path: `src/main/java/dev/example/totemd/observer/${className}.java`,
+  startLine: 1,
+  symbols: [className],
+  text: `package dev.example.totemd.observer;
+public final class ${className} { }
+`
+});
+index.chunks.push(
+  ...Array.from({ length: 10 }, (_, index) => observerChunk(`ObserverRelay${index}`)),
+  ...Array.from({ length: 10 }, (_, index) => observerChunk(`ObserverSession${index}`)),
+  ...Array.from({ length: 10 }, (_, index) => observerChunk(`ObserverPriority${index}`)),
+  {
+    moduleId: "totem-d",
+    repoName: "TotemD",
+    path: "src/client/java/dev/example/totemd/client/ObserverBeaconScreenAccessor.java",
+    startLine: 1,
+    symbols: ["ObserverBeaconScreenAccessor"],
+    text: `package dev.example.totemd.client;
+public interface ObserverBeaconScreenAccessor { }
+`
+  }
+);
+
 assert.equal(isProductionCode("src/main/java/a/A.java"), true);
 assert.equal(isProductionCode("src/client/java/a/A.kt"), true);
 assert.equal(isProductionCode("src/test/java/a/A.java"), false);
@@ -405,7 +432,7 @@ assert.equal(isProductionCode("README.md"), false);
 
 const inventory = buildCodeInventory({ knowledge, index });
 assert.equal(inventory.sourceScope, "production-code-only");
-assert.equal(inventory.modules.length, 5);
+assert.equal(inventory.modules.length, 6);
 
 const moduleA = inventory.modules.find((entry) => entry.moduleId === "totem-a");
 assert.ok(moduleA);
@@ -503,5 +530,12 @@ for (const label of [
   assert.ok(moduleC.surfaces.clientUi.some((entry) => entry.label === label), `${label} should be Client / UI evidence`);
 }
 assert.ok(!moduleC.surfaces.clientUi.some((entry) => entry.label === "CopperGolemClientPayloadRegistration"));
+
+const moduleD = inventory.modules.find((entry) => entry.moduleId === "totem-d");
+assert.ok(moduleD);
+assert.equal(moduleD.productionFileCount, 31);
+assert.ok(moduleD.featureAreas.some((entry) => entry.key === "observer"));
+assert.ok(!moduleD.featureAreas.some((entry) => ["relay", "session", "priority"].includes(entry.key)));
+assert.ok(!moduleD.surfaces.clientUi.some((entry) => entry.label === "ObserverBeaconScreenAccessor"));
 
 console.log("Code-first inventory validation passed.");
