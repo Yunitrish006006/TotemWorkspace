@@ -82,7 +82,13 @@ function moduleTokens(module) {
   ].map((value) => String(value ?? "").toLowerCase().replace(/[^a-z0-9]/g, "")).filter((value) => value.length >= 4));
 }
 
-function packageRoot(records) {
+function moduleNamespaceTokens(module) {
+  const suffix = String(module.id ?? "").toLowerCase().replace(/^totem-/, "");
+  const parts = suffix.split("-").map((part) => part.replace(/[^a-z0-9]/g, "")).filter((part) => part.length >= 4);
+  return unique([...parts, suffix.replace(/[^a-z0-9]/g, "")]);
+}
+
+function fallbackPackageRoot(records) {
   const packages = records
     .map((record) => record.packageName.split(".").filter(Boolean))
     .filter((parts) => parts.length >= 2);
@@ -106,6 +112,36 @@ function packageRoot(records) {
   return [...counts.entries()]
     .map(([prefix, count]) => ({ prefix, count, depth: prefix.split(".").length }))
     .sort((a, b) => b.count - a.count || b.depth - a.depth || a.prefix.localeCompare(b.prefix))[0]?.prefix ?? "";
+}
+
+function packageRoot(records, module) {
+  const namespaceTokens = new Set(moduleNamespaceTokens(module));
+  const roots = new Map();
+  let packageCount = 0;
+
+  for (const record of records) {
+    const parts = record.packageName.split(".").filter(Boolean);
+    if (parts.length < 2) continue;
+    packageCount += 1;
+    for (let index = 0; index < parts.length; index += 1) {
+      const compact = parts[index].toLowerCase().replace(/[^a-z0-9]/g, "");
+      if (!namespaceTokens.has(compact)) continue;
+      const root = parts.slice(0, index + 1).join(".");
+      roots.set(root, (roots.get(root) ?? 0) + 1);
+      break;
+    }
+  }
+
+  if (roots.size) {
+    const threshold = Math.max(1, Math.ceil(packageCount * 0.45));
+    const best = [...roots.entries()]
+      .map(([root, count]) => ({ root, count, depth: root.split(".").length }))
+      .filter((entry) => entry.count >= threshold)
+      .sort((a, b) => b.count - a.count || b.depth - a.depth || a.root.localeCompare(b.root))[0];
+    if (best) return best.root;
+  }
+
+  return fallbackPackageRoot(records);
 }
 
 function featureArea(record, module, ownRoot) {
@@ -136,9 +172,7 @@ function isEntrypoint(record) {
 
 function isApiSurface(record) {
   if (pathHas(record, "api")) return true;
-  if (/(?:Api|API|Contract|Facade|Provider)$/.test(record.label)) return true;
-  if (/(?:Bridge)$/.test(record.label) && /\bpublic\s+(?:final\s+)?(?:class|interface|record)\b/.test(record.text)) return true;
-  return false;
+  return /(?:Api|API|Contract|Facade)$/.test(record.label);
 }
 
 function isNetworkingSurface(record) {
@@ -182,9 +216,10 @@ function isMixinSurface(record) {
 }
 
 function integrationSignal(record) {
-  return /https?:\/\//i.test(record.text) ||
-    /\b(?:openai|cloudflare|trinkets|jade|modmenu|midnightlib)\b/i.test(record.text) ||
-    /isModLoaded\s*\(\s*["'][^"']+["']\s*\)/.test(record.text);
+  if (pathHas(record, "integration") || pathHas(record, "integrations") || pathHas(record, "compat")) return true;
+  if (/\bFabricLoader\.getInstance\(\)\.isModLoaded\s*\(/.test(record.text) || /\bisModLoaded\s*\(\s*["'][^"']+["']\s*\)/.test(record.text)) return true;
+  if (/\b(?:HttpClient|HttpRequest|WebSocket)\b/.test(record.text) || /https?:\/\//i.test(record.text)) return true;
+  return /\b(?:Jade|TrinketsApi|TrinketsCompat|OpenAI|Cloudflare)\b/.test(record.text);
 }
 
 function surfaceKeys(record) {
@@ -198,6 +233,7 @@ function surfaceKeys(record) {
   if (isPersistenceSurface(record)) keys.push("persistence");
   if (isClientUiSurface(record)) keys.push("clientUi");
   if (isMixinSurface(record)) keys.push("mixins");
+  if (integrationSignal(record)) keys.push("integrations");
   return keys;
 }
 
@@ -233,11 +269,10 @@ function targetModuleForImport(importName, modules, sourceModuleId) {
 }
 
 function moduleInventory(module, records, allModules) {
-  const ownRoot = packageRoot(records);
+  const ownRoot = packageRoot(records, module);
   const surfaces = Object.fromEntries(Object.keys(SURFACE_LABELS).map((key) => [key, []]));
   const areas = new Map();
   const integrations = new Map();
-  const integrationFiles = new Set();
   const crossImports = new Map();
 
   for (const record of records) {
@@ -249,7 +284,6 @@ function moduleInventory(module, records, allModules) {
 
     for (const key of surfaceKeys(record)) surfaces[key].push(surfaceItem(record));
 
-    let hasExternalImport = false;
     for (const importName of record.imports) {
       const target = targetModuleForImport(importName, allModules, module.id);
       if (target) {
@@ -259,16 +293,10 @@ function moduleInventory(module, records, allModules) {
         continue;
       }
       if (!externalImport(importName, ownRoot)) continue;
-      hasExternalImport = true;
       const root = importName.split(".").slice(0, 3).join(".");
       if (!integrations.has(root)) integrations.set(root, { packageRoot: root, imports: [], evidencePaths: [] });
       integrations.get(root).imports.push(importName);
       integrations.get(root).evidencePaths.push(record.path);
-    }
-
-    if (hasExternalImport || integrationSignal(record) || pathHas(record, "integration") || pathHas(record, "integrations")) {
-      integrationFiles.add(record.path);
-      surfaces.integrations.push(surfaceItem(record));
     }
   }
 
@@ -315,7 +343,7 @@ function moduleInventory(module, records, allModules) {
       persistence: normalizedSurfaces.persistence.length,
       clientUi: normalizedSurfaces.clientUi.length,
       mixins: normalizedSurfaces.mixins.length,
-      integrations: integrationFiles.size
+      integrations: normalizedSurfaces.integrations.length
     })
   });
 }
@@ -330,10 +358,10 @@ export function buildCodeInventory({ knowledge, index } = {}) {
   }
 
   return Object.freeze({
-    schemaVersion: 2,
+    schemaVersion: 3,
     generatedAt: index?.generatedAt ?? knowledge?.snapshot?.date ?? null,
     sourceScope: "production-code-only",
-    description: "Derived only from indexed production Java/Kotlin source. Curated feature descriptions and README text are not evidence for this inventory.",
+    description: "Derived only from indexed production Java/Kotlin source. Curated feature descriptions and README text are not evidence for this inventory. Explicit integration surfaces are separated from ordinary third-party dependency imports.",
     modules: Object.freeze(modules.map((module) => moduleInventory(module, byModule.get(module.id) ?? [], modules)))
   });
 }
