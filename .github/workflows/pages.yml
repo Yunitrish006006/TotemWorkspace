@@ -30,6 +30,9 @@ jobs:
       - name: Validate coordination snapshot
         run: node scripts/validate-workspace.mjs
 
+      - name: Validate localhost live viewer
+        run: node scripts/validate-local-viewer.mjs
+
       - name: Clone latest active Totem repositories
         shell: bash
         run: |
@@ -68,6 +71,7 @@ jobs:
           cp viewer/graph-v2.css _site/viewer/graph-v2.css
           cp viewer/graph-v2-adapter.js _site/viewer/graph-v2-adapter.js
           cp viewer/graph-v2-cluster-v2.js _site/viewer/graph-v2-cluster-v2.js
+          cp viewer/local-live.js _site/viewer/local-live.js
           cp viewer/generated/graph-data.js _site/viewer/generated/graph-data.js
 
           # Keep the validated curated source available for inspection.
