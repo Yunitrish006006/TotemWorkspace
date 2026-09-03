@@ -39,8 +39,8 @@ void main() {
       'mode': 'local',
       'generatedAt': '2026-09-04T00:00:00Z',
       'snapshot': {'date': '2026-09-04'},
-      'modules': [
-        {
+      'modules': <Object>[
+        <String, Object>{
           'id': 'totem-a',
           'repoName': 'TotemA',
           'present': true,
@@ -49,7 +49,7 @@ void main() {
           'dirty': true,
           'snapshotMatch': false,
         },
-        {
+        <String, Object>{
           'id': 'totem-b',
           'repoName': 'TotemB',
           'present': true,
@@ -58,7 +58,7 @@ void main() {
           'dirty': false,
           'snapshotMatch': true,
         },
-        {
+        <String, Object>{
           'id': 'totem-c',
           'repoName': 'TotemC',
           'present': false,
@@ -79,36 +79,36 @@ void main() {
     final mock = MockClient((request) async {
       requests.add(request);
       if (request.url.path == '/api/health') {
-        return http.Response(jsonEncode({'status': 'ok', 'mode': 'local'}), 200);
+        return http.Response(jsonEncode(<String, Object>{'status': 'ok', 'mode': 'local'}), 200);
       }
       if (request.url.path == '/api/workspace-status') {
         return http.Response(
-          jsonEncode({
+          jsonEncode(<String, Object>{
             'mode': 'local',
             'generatedAt': 'now',
-            'snapshot': {'date': '2026-09-04'},
-            'modules': [],
+            'snapshot': <String, Object>{'date': '2026-09-04'},
+            'modules': <Object>[],
           }),
           200,
         );
       }
       if (request.url.path == '/api/graph-data') {
         return http.Response(
-          jsonEncode({
+          jsonEncode(<String, Object>{
             'generatedAt': 'now',
-            'snapshot': {'date': '2026-09-04'},
-            'modules': [],
-            'features': [],
-            'externalNodes': [],
-            'contracts': [],
-            'sharedCapabilities': [],
-            'code': {'nodes': []},
+            'snapshot': <String, Object>{'date': '2026-09-04'},
+            'modules': <Object>[],
+            'features': <Object>[],
+            'externalNodes': <Object>[],
+            'contracts': <Object>[],
+            'sharedCapabilities': <Object>[],
+            'code': <String, Object>{'nodes': <Object>[]},
           }),
           200,
         );
       }
       if (request.url.path == '/api/refresh') {
-        return http.Response(jsonEncode({'status': 'ok'}), 200);
+        return http.Response(jsonEncode(<String, Object>{'status': 'ok'}), 200);
       }
       return http.Response('not found', 404);
     });
@@ -117,11 +117,14 @@ void main() {
     expect(await client.health(), isTrue);
     expect((await client.workspaceStatus()).mode, 'local');
     expect((await client.graphData()).modules, isEmpty);
-    await client.refresh(modules: const ['totem-core']);
+    await client.refresh(modules: const <String>['totem-core']);
 
     final refresh = requests.singleWhere((request) => request.url.path == '/api/refresh');
     expect(refresh.method, 'POST');
-    expect(jsonDecode(refresh.body), {'modules': ['totem-core']});
+    expect(
+      jsonDecode(refresh.body),
+      const <String, Object>{'modules': <String>['totem-core']},
+    );
     client.close();
   });
 }
