@@ -515,8 +515,9 @@ class VerificationState {
       schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 1,
       generatedAt: json['generatedAt'] as String? ?? '',
       updatedAt: json['updatedAt'] as String?,
-      entries: GraphData._objects(json['entries'])
-          .map(VerificationStateEntry.fromJson)
+      entries: (json['entries'] as List? ?? const <Object>[])
+          .whereType<Map>()
+          .map((entry) => VerificationStateEntry.fromJson(Map<String, dynamic>.from(entry)))
           .toList(growable: false),
       runningCount: (summary['running'] as num?)?.toInt() ?? 0,
       passedCount: (summary['passed'] as num?)?.toInt() ?? 0,
