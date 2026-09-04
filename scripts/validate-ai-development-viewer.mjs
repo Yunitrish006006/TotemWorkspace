@@ -31,7 +31,8 @@ for (const phrase of [
 for (const endpoint of [
   "/api/viewer-settings",
   "/api/activity",
-  "/api/prompt"
+  "/api/prompt",
+  "/api/agent-adapter"
 ]) {
   assert.ok(server.includes(endpoint), `local bridge is missing ${endpoint}`);
 }
@@ -44,6 +45,7 @@ assert.ok(!server.includes('node:child_process'), "Phase 1 browser prompt intake
 
 for (const id of [
   'id="agentActivity"',
+  'id="agentAdapter"',
   'id="promptToggle"',
   'id="promptBar"',
   'id="promptInput"',
@@ -57,6 +59,7 @@ for (const behavior of [
   'apiUrl("/api/viewer-settings")',
   'apiUrl("/api/activity?after="',
   'apiUrl("/api/prompt")',
+  'apiUrl("/api/agent-adapter")',
   'settings.agentActivityEnabled === false',
   'settings.promptEnabled === true',
   'host === "yunitrish006006.github.io"',
@@ -81,7 +84,8 @@ for (const behavior of [
   "Future<ViewerSettings> viewerSettings()",
   "Future<ViewerSettings> updateViewerSettings",
   "Future<AgentActivityBatch> activity",
-  "Future<AgentActivityEvent> submitPrompt"
+  "Future<PromptSubmission> submitPrompt",
+  "Future<AgentAdapterStatus> agentAdapterStatus()"
 ]) {
   assert.ok(flutterLive.includes(behavior), `Flutter bridge parity is missing: ${behavior}`);
 }
@@ -89,6 +93,7 @@ for (const behavior of [
 for (const behavior of [
   "ViewerSettings _settings = ViewerSettings.defaults",
   "_ActivityStrip(event: _activity.last)",
+  "_AgentAdapterStrip(status: _adapter!)",
   "if (isLocal && _settings.promptEnabled)",
   "if (isLocal && _settings.agentActivityEnabled && _activity.isNotEmpty)",
   "Switch.adaptive",
@@ -134,4 +139,4 @@ assert.ok(localValidation.includes("published TotemWorkspace Pages must be able 
 assert.ok(localValidation.includes("Prompt must default to OFF"), "local bridge regression must protect Prompt default-off behavior");
 assert.ok(localValidation.includes("Agent Activity must remain independent of Prompt"), "local bridge regression must protect Prompt/Activity independence");
 
-console.log("AI development viewer validation passed: Flutter owns both Pages and local Bridge roots, /legacy/ remains synchronized, prompt/activity semantics stay shared, and the Bridge remains loopback-only and adapter-gated.");
+console.log("AI development viewer validation passed: Flutter owns both Pages and local Bridge roots, /legacy/ remains synchronized, prompt/activity/agent-adapter semantics stay shared, and the Bridge remains loopback-only and explicitly adapter-gated.");
