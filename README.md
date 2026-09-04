@@ -98,7 +98,7 @@ flutter pub get
 flutter run -d chrome
 ```
 
-Local Bridge 固定綁定 `127.0.0.1:8765`。Flutter production root 與 `/legacy/` 使用同一套本機設定／activity contract；公開 Pages 只允許連回 loopback bridge，不會把本機 source、未提交 diff 或絕對路徑打包進 Pages。
+Local Bridge 固定綁定 `127.0.0.1:18765`。Flutter production root 與 `/legacy/` 使用同一套本機設定／activity contract；公開 Pages 只允許連回 loopback bridge，不會把本機 source、未提交 diff 或絕對路徑打包進 Pages。
 
 Prompt 預設關閉，而且只控制 Prompt 輸入框；Agent Activity 與 Graph 功能保持獨立。連上 Local Bridge 後可直接從 Viewer 切換 Prompt，也可用 CLI：
 
