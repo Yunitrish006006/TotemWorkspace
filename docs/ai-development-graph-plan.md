@@ -62,6 +62,7 @@ Initial event families:
 
 - `task_started`
 - `task_completed`
+- `task_failed`
 - `prompt_submitted`
 - `feature_selected`
 - `file_read`
@@ -424,3 +425,89 @@ visibility. Disabling change animations does not disable verification state.
 
 Phase 5 remains responsible for the concrete Codex/agent adapter that actually
 starts test processes and emits lifecycle events.
+
+
+## Phase 5 — Codex Agent Adapter implementation
+
+Phase 5 adds a concrete local Codex CLI adapter while preserving the browser/host
+security boundary.
+
+### Explicit host opt-in
+
+Agent execution is disabled by default:
+
+```text
+TOTEM_AGENT_ADAPTER=off
+```
+
+Only the Bridge host environment may enable Codex:
+
+```text
+TOTEM_AGENT_ADAPTER=codex
+TOTEM_CODEX_BIN=codex
+TOTEM_CODEX_CWD=<path inside Totem workspace>
+TOTEM_CODEX_SANDBOX=workspace-write|read-only
+TOTEM_CODEX_MODEL=<optional>
+```
+
+The browser Prompt request contains only the user prompt and optional semantic
+Module/Feature focus. It cannot select the executable, cwd, sandbox, model, or
+arbitrary CLI arguments.
+
+### Codex execution contract
+
+The adapter launches Codex non-interactively with structured argv and Prompt
+stdin:
+
+```text
+codex exec --json --skip-git-repo-check
+  --sandbox <host-configured mode>
+  --cd <host-configured Totem workspace cwd>
+  [--model <host-configured model>]
+  -
+```
+
+The adapter intentionally does not add `--full-auto` or
+`--dangerously-bypass-approvals-and-sandbox`. Authentication and approval
+policy remain part of the operating-system user's Codex configuration.
+
+### JSONL → graph activity
+
+The adapter consumes Codex JSONL events instead of scraping terminal prose:
+
+- process launch → `task_started`
+- `thread.started` → task thread ID
+- completed `file_change` → repository-relative `file_edit`
+- started `mcp_tool_call` → bounded `dependency_followed`
+- `turn.completed` / successful exit → `task_completed`
+- `turn.failed`, stream error, spawn/process failure → `task_failed`
+
+Absolute local file paths are mapped back to Module + repository-relative path
+before entering the browser-visible activity stream.
+
+### Dispatch and refresh lifecycle
+
+`GET /api/agent-adapter` exposes only bounded adapter/task status. `POST
+/api/prompt` always records `prompt_submitted`; it creates a Codex task only
+when the adapter is configured and available. No `task_started` event is emitted
+for an unavailable adapter.
+
+Only one Codex task may run at a time. Busy dispatch returns a conflict rather than
+starting an implicit second process.
+
+After task settlement, the Bridge automatically runs the existing Phase 3 refresh
+pipeline. This updates the code index, generated graph, Git→semantic mapping and
+change/impact state without requiring a manual Viewer refresh.
+
+Both maintained viewers render the same adapter lifecycle:
+
+```text
+ADAPTER OFF
+CODEX UNAVAILABLE
+CODEX READY
+CODEX BUSY
+last task failed
+```
+
+Phase 6 will make task/activity sessions durable and replayable; Phase 5 keeps the
+live Codex task state in Bridge memory.
