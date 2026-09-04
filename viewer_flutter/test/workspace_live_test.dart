@@ -172,6 +172,12 @@ void main() {
               'removed': <Object>[],
               'changedEntityIds': <String>['component:totem-core:api'],
             },
+            'affectedEntityIds': <String>[
+              'totem-core',
+              'totem-core.feature-5',
+              'component:totem-core:api',
+              'implementation:component:totem-core:api:src/main/java/example/Core.java',
+            ],
             'impact': <String, Object>{
               'touchedModules': <String>['totem-core'],
               'impactedModules': <String>['totem-core', 'totem-alchemy'],
@@ -288,6 +294,8 @@ void main() {
     final initialChange = await client.changeIntelligence();
     expect(initialChange.gitChanges.single.moduleId, 'totem-core');
     expect(initialChange.semanticDiff.changedEntityIds, contains('component:totem-core:api'));
+    expect(initialChange.changedEntityIds, contains('totem-core.feature-5'));
+    expect(initialChange.changedEntityIds, contains('implementation:component:totem-core:api:src/main/java/example/Core.java'));
     expect(initialChange.impact.impactedModules, contains('totem-alchemy'));
 
     final refreshChange = await client.refresh(modules: const <String>['totem-core']);
