@@ -118,6 +118,8 @@ Phase 2 加入 progressive semantic LOD：`Module → Feature → Component / Re
 
 Phase 3 加入 change intelligence：Local Bridge 在重新索引前後建立 semantic snapshot，將 sibling repositories 的 Git working-tree diff 映射到 Module / Feature / Component / Implementation，再用既有 impact analysis 傳播跨模組影響。Flutter 與 legacy 3D 使用同一份 `/api/change-intelligence`，變更 entity／relation 以 change animation 顯示，受影響 module 顯示 impact halo；本機結果只保存於 `.totem-index/change-intelligence.json`。
 
+Phase 4 加入 Verification Graph：實際被 code index 掃到的 Test / GameTest / E2E 檔案才會成為 Test entity，穩定 ID 為 `test:<module-id>:<repo-relative-path>`；`test-matrix.json` 只代表 required verification，不會被當成已通過證據。Feature、contract/API 與 shared capability 可產生 `validated-by` 關係；Local Bridge 透過 `/api/verification-state` 保存與傳送 `test_started / test_passed / test_failed` 最新狀態，Flutter 與 legacy 3D 同步顯示 Test LOD、驗證線與 pass/run/fail highlighting。
+
 ### VS Code Remote-SSH / tmux Bridge
 
 遠端開發時，Bridge 預設使用 `127.0.0.1:18765`，並可由 repository 內的 background controller 執行；有 tmux 時優先使用 tmux，否則 fallback 到 nohup：
