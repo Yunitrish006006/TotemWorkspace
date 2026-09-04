@@ -32,7 +32,7 @@ for (const fragment of [
   '.totem-index/remote-bridge.log',
   'Cannot start Totem Bridge: remote port',
   'ensure_flutter_build',
-  'flutter build web --wasm --base-href /',
+  '"$flutter_cmd" build web --wasm --base-href /',
   'flutter-local-build-fingerprint.mjs',
 ]) {
   assert.ok(bridge.includes(fragment), `remote bridge controller is missing: ${fragment}`);
