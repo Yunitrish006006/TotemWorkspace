@@ -43,6 +43,7 @@ for (const required of [
   "function syncEdgeFilterUi",
   "function isRetargetable",
   "function manualFeatureFor",
+  "function capabilityConsumerFeature",
   "function capabilityConsumerEndpoint",
   "function panBy",
   "function drawCluster",
@@ -52,7 +53,7 @@ for (const required of [
   "clusters.push",
   "feature-detail",
   "shared-capability",
-  "Shared Manual links",
+  "Shared capability links",
   "Core API links",
   "window.__TOTEM_CLUSTER_3D_V2__"
 ]) assert.ok(source.includes(required), `missing cluster v2 behavior: ${required}`);
@@ -78,12 +79,13 @@ assert.ok(source.includes("panBy(dx, dy)"), "desktop pan must update camera proj
 assert.ok(source.includes('canvas.addEventListener("contextmenu"'), "right-drag must suppress the browser context menu");
 assert.ok(!source.includes("canvas.style.transform"), "desktop pan must not translate the canvas DOM element");
 
-// Shared Manual regression: a curated consumer manual feature must replace the synthetic capability point.
+// Shared capability regression: explicit API feature endpoints win, while manual keeps its legacy inference fallback.
 assert.ok(source.includes('/manual|手冊/i'), "manual capability endpoint must recognize curated manual features");
-assert.ok(source.includes("manualFeatureFor(capability.consumerModuleId)"), "consumer-side manual feature must be resolved from the capability consumer module");
-assert.ok(source.includes("return inferred.id"), "expanded consumer must retarget the shared manual edge to the curated manual feature");
-assert.ok(source.includes("syntheticCaps"), "modules without a curated manual feature must still retain a synthetic capability point");
-assert.ok(source.includes("capability.providerFeatureId"), "provider-side Core Manual feature retargeting must remain intact");
+assert.ok(source.includes('capability.family === "manual"'), "manual fallback must apply only to manual capabilities");
+assert.ok(source.includes("capability.consumerFeatureId && featureMap.get(capability.consumerFeatureId)"), "shared capabilities must honor explicit consumer feature endpoints");
+assert.ok(source.includes("return inferred.id"), "expanded consumers must retarget shared capability edges to curated features");
+assert.ok(source.includes("syntheticCaps"), "capabilities without a curated consumer feature must still retain a synthetic capability point");
+assert.ok(source.includes("capability.providerFeatureId"), "provider-side Core capability feature retargeting must remain intact");
 
 // Core topology regression: TotemCore is the fixed world-space center and only non-Core modules use the orbit.
 assert.ok(source.includes('if (module.id === "totem-core") return { x: 0, y: 0, z: 0 };'), "TotemCore must be anchored to the 3D world origin");
