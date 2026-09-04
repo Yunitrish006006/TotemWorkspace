@@ -26,8 +26,8 @@
     var loopback = host === "127.0.0.1" || host === "localhost" || host === "::1";
     var approvedPages = host === "yunitrish006006.github.io";
     if (!loopback && !approvedPages) return null;
-    if (loopback && window.location.port === "8765") return window.location.origin;
-    return "http://127.0.0.1:8765";
+    if (loopback && window.location.port === "18765") return window.location.origin;
+    return "http://127.0.0.1:18765";
   }
 
   function apiUrl(path) {

@@ -16,10 +16,10 @@ String? discoverLocalApiBase({String configured = _configuredLocalApi, Uri? page
   final approvedPages = host == 'yunitrish006006.github.io';
   if (!loopback && !approvedPages) return null;
 
-  if (loopback && uri.hasPort && uri.port == 8765) {
+  if (loopback && uri.hasPort && uri.port == 18765) {
     return '${uri.scheme}://${uri.host}:${uri.port}';
   }
-  return 'http://127.0.0.1:8765';
+  return 'http://127.0.0.1:18765';
 }
 
 class WorkspaceModuleStatus {

@@ -49,7 +49,7 @@ for (const id of [
 ]) {
   assert.ok(legacyHtml.includes(id), `legacy maintained surface is missing ${id}`);
 }
-assert.ok(legacyHtml.includes("connect-src 'self' http://127.0.0.1:8765"), "legacy CSP must allow only the loopback bridge connection");
+assert.ok(legacyHtml.includes("connect-src 'self' http://127.0.0.1:18765"), "legacy CSP must allow only the loopback bridge connection");
 
 for (const behavior of [
   'apiUrl("/api/viewer-settings")',
