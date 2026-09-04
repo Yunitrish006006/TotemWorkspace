@@ -24,10 +24,15 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
   Timer? _activityPoller;
   Timer? _verificationPoller;
   Timer? _adapterPoller;
+  Timer? _replayPoller;
   ViewerSettings _settings = ViewerSettings.defaults;
   ChangeIntelligence? _change;
   VerificationState? _verification;
   AgentAdapterStatus? _adapter;
+  DevelopmentReplayTimeline? _replayTimeline;
+  DevelopmentReplayFrame? _replayFrame;
+  double? _replayDraftSequence;
+  bool _replayLoading = false;
   final List<AgentActivityEvent> _activity = <AgentActivityEvent>[];
   int _activitySequence = 0;
   bool _probing = true;
@@ -49,6 +54,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
     _activityPoller?.cancel();
     _verificationPoller?.cancel();
     _adapterPoller?.cancel();
+    _replayPoller?.cancel();
     _client?.close();
     super.dispose();
   }
@@ -74,6 +80,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
         client.changeIntelligence(),
         client.verificationState(),
         client.agentAdapterStatus(),
+        client.replayTimeline(),
       ]);
       if (!mounted) {
         client.close();
@@ -85,6 +92,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
       final change = results[3] as ChangeIntelligence;
       final verification = results[4] as VerificationState;
       final adapter = results[5] as AgentAdapterStatus;
+      final replayTimeline = results[6] as DevelopmentReplayTimeline;
       setState(() {
         _client = client;
         _live = status;
@@ -92,6 +100,8 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
         _change = change;
         _verification = verification;
         _adapter = adapter;
+        _replayTimeline = replayTimeline;
+        _replayDraftSequence = replayTimeline.latestSequence.toDouble();
         _mergeActivity(activity);
         _probing = false;
         _liveError = null;
@@ -102,6 +112,8 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
           Timer.periodic(const Duration(seconds: 2), (_) => unawaited(_pollVerification()));
       _adapterPoller =
           Timer.periodic(const Duration(seconds: 2), (_) => unawaited(_pollAdapter()));
+      _replayPoller =
+          Timer.periodic(const Duration(seconds: 3), (_) => unawaited(_pollReplayTimeline()));
     } catch (error) {
       client.close();
       if (mounted) {
@@ -183,6 +195,61 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
       if (!mounted) return;
       setState(() => _liveError = error.toString());
     }
+  }
+
+  Future<void> _pollReplayTimeline() async {
+    final client = _client;
+    if (client == null || !_settings.replayEnabled) return;
+    try {
+      final timeline = await client.replayTimeline();
+      if (!mounted) return;
+      setState(() {
+        _replayTimeline = timeline;
+        if (_replayFrame == null || _replayFrame!.live) {
+          _replayDraftSequence = timeline.latestSequence.toDouble();
+        }
+        _liveError = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _liveError = error.toString());
+    }
+  }
+
+  Future<void> _selectReplaySequence(int sequence) async {
+    final client = _client;
+    final timeline = _replayTimeline;
+    if (client == null || timeline == null || _replayLoading) return;
+    final clamped = sequence.clamp(timeline.earliestSequence, timeline.latestSequence);
+    if (clamped >= timeline.latestSequence) {
+      setState(() {
+        _replayFrame = null;
+        _replayDraftSequence = timeline.latestSequence.toDouble();
+      });
+      return;
+    }
+    setState(() => _replayLoading = true);
+    try {
+      final frame = await client.replayFrame(clamped);
+      if (!mounted) return;
+      setState(() {
+        _replayFrame = frame;
+        _replayDraftSequence = frame.sequence.toDouble();
+        _liveError = null;
+      });
+    } catch (error) {
+      if (mounted) setState(() => _liveError = error.toString());
+    } finally {
+      if (mounted) setState(() => _replayLoading = false);
+    }
+  }
+
+  void _goReplayLive() {
+    final timeline = _replayTimeline;
+    setState(() {
+      _replayFrame = null;
+      _replayDraftSequence = timeline?.latestSequence.toDouble();
+    });
   }
 
   Future<void> _setPromptEnabled(bool enabled) async {
@@ -399,7 +466,12 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
   Widget build(BuildContext context) {
     final live = _live;
     final isLocal = _client != null && live != null;
-    final latestActivity = _activity.isEmpty ? null : _activity.last;
+    final replaying = _replayFrame != null && !_replayFrame!.live;
+    final liveActivity = _activity.isEmpty ? null : _activity.last;
+    final displayedActivity = replaying ? _replayFrame!.activity : liveActivity;
+    final displayedChange = replaying ? _replayFrame!.changeIntelligence : _change;
+    final displayedVerification = replaying ? _replayFrame!.verificationState : _verification;
+    final historicalEntityIds = replaying ? _replayFrame!.historicalEntityIds : const <String>{};
     return Scaffold(
       backgroundColor: const Color(0xFF050B14),
       body: Column(
@@ -417,14 +489,24 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
             onInventory: _showCodeInventory,
             onPromptChanged: isLocal ? _setPromptEnabled : null,
           ),
+          if (isLocal && _settings.replayEnabled && _replayTimeline?.hasEvents == true)
+            _ReplayScrubber(
+              timeline: _replayTimeline!,
+              sequence: _replayDraftSequence ?? _replayTimeline!.latestSequence.toDouble(),
+              replaying: replaying,
+              loading: _replayLoading,
+              onChanged: (value) => setState(() => _replayDraftSequence = value),
+              onChangeEnd: (value) => unawaited(_selectReplaySequence(value.round())),
+              onLive: _goReplayLive,
+            ),
           if (isLocal && _adapter != null)
             _AgentAdapterStrip(status: _adapter!),
-          if (isLocal && _change?.hasChanges == true)
-            _ChangeStrip(change: _change!),
-          if (isLocal && _verification != null && (_verification!.hasState || _verification!.activePlan.modules.isNotEmpty))
-            _VerificationStrip(state: _verification!),
-          if (isLocal && _settings.agentActivityEnabled && _activity.isNotEmpty)
-            _ActivityStrip(event: _activity.last),
+          if (isLocal && displayedChange?.hasChanges == true)
+            _ChangeStrip(change: displayedChange!),
+          if (isLocal && displayedVerification != null && (displayedVerification.hasState || displayedVerification.activePlan.modules.isNotEmpty))
+            _VerificationStrip(state: displayedVerification),
+          if (isLocal && _settings.agentActivityEnabled && displayedActivity != null)
+            _ActivityStrip(event: displayedActivity),
           if (isLocal && _settings.promptEnabled)
             _PromptPanel(
               submitting: _submittingPrompt,
@@ -433,18 +515,89 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
           Expanded(
             child: GraphView(
               data: _data,
-              activityFeatureId: latestActivity?.featureId,
-              activityComponentId: latestActivity?.componentId,
-              activityModuleId: latestActivity?.moduleId,
-              activityType: latestActivity?.type,
+              activityFeatureId: displayedActivity?.featureId,
+              activityComponentId: displayedActivity?.componentId,
+              activityModuleId: displayedActivity?.moduleId,
+              activityType: displayedActivity?.type,
               autoExpandAgentFocus: _settings.autoExpandAgentFocus,
-              changedEntityIds: _change?.changedEntityIds ?? const <String>{},
-              impactedModuleIds: _change?.impactedModuleIds ?? const <String>{},
+              changedEntityIds: displayedChange?.changedEntityIds ?? const <String>{},
+              impactedModuleIds: displayedChange?.impactedModuleIds ?? const <String>{},
               changeAnimationsEnabled: _settings.changeAnimationsEnabled,
-              runningVerificationTargetIds: _verification?.runningTargetIds ?? const <String>{},
-              passedVerificationTargetIds: _verification?.passedTargetIds ?? const <String>{},
-              failedVerificationTargetIds: _verification?.failedTargetIds ?? const <String>{},
+              runningVerificationTargetIds: displayedVerification?.runningTargetIds ?? const <String>{},
+              passedVerificationTargetIds: displayedVerification?.passedTargetIds ?? const <String>{},
+              failedVerificationTargetIds: displayedVerification?.failedTargetIds ?? const <String>{},
+              historicalEntityIds: historicalEntityIds,
             ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReplayScrubber extends StatelessWidget {
+  const _ReplayScrubber({
+    required this.timeline,
+    required this.sequence,
+    required this.replaying,
+    required this.loading,
+    required this.onChanged,
+    required this.onChangeEnd,
+    required this.onLive,
+  });
+
+  final DevelopmentReplayTimeline timeline;
+  final double sequence;
+  final bool replaying;
+  final bool loading;
+  final ValueChanged<double> onChanged;
+  final ValueChanged<double> onChangeEnd;
+  final VoidCallback onLive;
+
+  @override
+  Widget build(BuildContext context) {
+    final min = timeline.earliestSequence.toDouble();
+    final max = math.max(timeline.latestSequence.toDouble(), min + 1);
+    final value = sequence.clamp(min, max).toDouble();
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
+      decoration: const BoxDecoration(
+        color: Color(0xFF120D1B),
+        border: Border(bottom: BorderSide(color: Color(0xFF4C3566))),
+      ),
+      child: Row(
+        children: [
+          Text(
+            replaying ? 'REPLAY · #${value.round()}' : 'REPLAY · LIVE',
+            style: TextStyle(
+              color: replaying ? const Color(0xFFC4B5FD) : const Color(0xFF86EFAC),
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Slider(
+              min: min,
+              max: max,
+              value: value,
+              divisions: timeline.latestSequence > timeline.earliestSequence
+                  ? timeline.latestSequence - timeline.earliestSequence
+                  : 1,
+              onChanged: loading ? null : onChanged,
+              onChangeEnd: loading ? null : onChangeEnd,
+            ),
+          ),
+          Text(
+            '${timeline.eventCount} events · ${timeline.sessions.length} sessions · ${timeline.milestones.length} milestones',
+            style: const TextStyle(color: Color(0xFF9FB4CA), fontSize: 10),
+          ),
+          const SizedBox(width: 8),
+          TextButton.icon(
+            onPressed: replaying && !loading ? onLive : null,
+            icon: const Icon(Icons.live_tv, size: 15),
+            label: const Text('LIVE'),
           ),
         ],
       ),
