@@ -12,6 +12,10 @@ import {
   saveChangeIntelligence
 } from "../intelligence/change-intelligence.mjs";
 import { defaultReposRoot, loadKnowledge, workspaceStatus } from "../intelligence/workspace-knowledge.mjs";
+import {
+  recordVerificationEvent,
+  verificationStatePayload
+} from "../intelligence/verification-state.mjs";
 import { renderGraphV2 } from "./render-graph-v2.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -208,6 +212,7 @@ function appendActivity(value, options) {
   const event = normalizeActivityEvent(value, options);
   activityEvents.push(event);
   if (activityEvents.length > ACTIVITY_LIMIT) activityEvents.splice(0, activityEvents.length - ACTIVITY_LIMIT);
+  recordVerificationEvent(ROOT, event);
   return event;
 }
 
@@ -332,6 +337,7 @@ async function handleApi(req, res, url) {
       status: "ok",
       mode: "local",
       activitySchemaVersion: 1,
+      verificationSchemaVersion: 1,
       promptExecution: "agent-adapter-required"
     });
     return true;
@@ -378,6 +384,20 @@ async function handleApi(req, res, url) {
       beforeGraph: graph,
       afterGraph: graph,
       gitChanges
+    }));
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/verification-state") {
+    const knowledge = loadKnowledge();
+    const index = loadCodeIndex({ knowledge });
+    const graph = buildGraphViewModel({ knowledge, index });
+    const changeIntelligence = loadChangeIntelligence(knowledge.root);
+    json(res, 200, verificationStatePayload({
+      workspaceRoot: knowledge.root,
+      knowledge,
+      verification: graph.verification,
+      changeIntelligence
     }));
     return true;
   }
