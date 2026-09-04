@@ -153,6 +153,7 @@ try {
 
 const server = fs.readFileSync(new URL("./serve-local-viewer.mjs", import.meta.url), "utf8");
 const verification = fs.readFileSync(new URL("../intelligence/verification-state.mjs", import.meta.url), "utf8");
+const activityCli = fs.readFileSync(new URL("./totem-activity.mjs", import.meta.url), "utf8");
 
 for (const fragment of [
   'pathname === "/api/replay"',
@@ -169,5 +170,7 @@ assert.ok(
   verification.includes("verificationStatePayloadFromState"),
   "historical verification payload must be reconstructable without mutating live verification state"
 );
+assert.ok(activityCli.includes('request("/api/replay")'), "activity CLI status/replay must expose timeline");
+assert.ok(activityCli.includes('command === "replay"'), "activity CLI must support historical replay frame inspection");
 
 console.log("Phase 6 replay validation passed: durable sequence/session restore, checkpointed change state, historical verification folding, and commit/PR/deployment milestones are reconstructable by sequence.");
