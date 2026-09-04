@@ -278,7 +278,7 @@ GraphScene buildGraphScene(
       );
       nodes.add(VisualNode(
         id: id,
-        label: '${_moduleShort(data, moduleId)} · SHARED MANUAL',
+        label: '${_moduleShort(data, moduleId)} · ${capability.label.toUpperCase()}',
         kind: 'capability',
         rank: parent.rank,
         position: position,
@@ -382,9 +382,15 @@ List<String> _endpoints(GraphData data, GraphContract contract, String ownerId, 
 bool _expandedCenterEndpoint(GraphData data, Set<String> expanded, String id) =>
     data.moduleById(id) != null && expanded.contains(id);
 
-String _capabilityConsumerEndpoint(GraphData data, GraphSharedCapability capability, Set<String> expanded) {
+GraphFeature? _capabilityConsumerFeature(GraphData data, GraphSharedCapability capability) {
   final explicit = capability.consumerFeatureId == null ? null : data.featureById(capability.consumerFeatureId!);
-  final inferred = explicit ?? data.manualFeatureFor(capability.consumerModuleId);
+  if (explicit != null) return explicit;
+  if (capability.family == 'manual') return data.manualFeatureFor(capability.consumerModuleId);
+  return null;
+}
+
+String _capabilityConsumerEndpoint(GraphData data, GraphSharedCapability capability, Set<String> expanded) {
+  final inferred = _capabilityConsumerFeature(data, capability);
   if (expanded.contains(capability.consumerModuleId) && inferred != null) return inferred.id;
   return 'capability-node:${capability.id}';
 }
@@ -408,8 +414,7 @@ List<_Relation> _featureRelations(GraphData data, String ownerId, GraphFeature f
   }
 
   for (final capability in data.sharedCapabilities) {
-    final explicit = capability.consumerFeatureId == null ? null : data.featureById(capability.consumerFeatureId!);
-    final consumerFeature = explicit ?? data.manualFeatureFor(capability.consumerModuleId);
+    final consumerFeature = _capabilityConsumerFeature(data, capability);
     if (capability.providerFeatureId == feature.id && capability.providerModuleId == ownerId) {
       add(capability.consumerModuleId, _relationWeight('shared-capability'));
     }

@@ -91,7 +91,67 @@ function isProductionManualPath(filePath) {
   return value.includes("/manual/") || /manual.*\.(?:java|kt)$/.test(base) || /.*manual\.(?:java|kt)$/.test(base);
 }
 
-function sharedCapabilities(knowledge, index) {
+const CORE_API_CAPABILITY_FAMILIES = Object.freeze([
+  Object.freeze({
+    key: "client.world",
+    label: "Core World Outline API",
+    importPattern: /^(?:v\d+\.)?client\.world\./,
+    providerFeaturePattern: /世界輪廓|world\s*outline|outline/i,
+    consumerFeaturePattern: /輪廓|框線|連線|world\s*outline|outline|visualization|visual|line/i
+  })
+]);
+
+function coreApiCapabilities(knowledge, codeInventory) {
+  const coreInventory = codeInventory?.modules?.find((module) => module.moduleId === "totem-core");
+  const corePackageRoot = coreInventory?.packageRoot;
+  if (!corePackageRoot) return [];
+
+  const apiPrefix = `${corePackageRoot}.api.`;
+  const capabilities = [];
+  for (const consumerInventory of codeInventory.modules ?? []) {
+    if (consumerInventory.moduleId === "totem-core") continue;
+    const crossImport = (consumerInventory.crossModuleImports ?? [])
+      .find((entry) => entry.targetModuleId === "totem-core");
+    if (!crossImport) continue;
+
+    for (const family of CORE_API_CAPABILITY_FAMILIES) {
+      const imports = (crossImport.imports ?? []).filter((importName) => {
+        if (!importName.startsWith(apiPrefix)) return false;
+        return family.importPattern.test(importName.slice(apiPrefix.length));
+      });
+      if (!imports.length) continue;
+
+      const providerFeature = knowledge.features.find((feature) =>
+        feature.ownerId === "totem-core"
+        && family.providerFeaturePattern.test(`${feature.title} ${feature.summary}`));
+      const consumerFeatures = knowledge.features.filter((feature) =>
+        feature.ownerId === consumerInventory.moduleId
+        && family.consumerFeaturePattern.test(`${feature.title} ${feature.summary}`));
+      const endpoints = consumerFeatures.length ? consumerFeatures : [null];
+      const consumerModule = knowledge.moduleById.get(consumerInventory.moduleId);
+
+      endpoints.forEach((consumerFeature, index) => {
+        capabilities.push(Object.freeze({
+          id: `shared:core-api:${family.key}:${consumerInventory.moduleId}:${consumerFeature?.id ?? index + 1}`,
+          type: "shared-capability",
+          family: `core-api:${family.key}`,
+          providerModuleId: "totem-core",
+          consumerModuleId: consumerInventory.moduleId,
+          providerFeatureId: providerFeature?.id ?? null,
+          consumerFeatureId: consumerFeature?.id ?? null,
+          providerLabel: providerFeature?.title ?? family.label,
+          consumerLabel: consumerFeature?.title ?? `${consumerModule?.name ?? consumerInventory.moduleId} ${family.key} consumer`,
+          label: family.label,
+          evidencePaths: Object.freeze([...(crossImport.evidencePaths ?? [])].sort().slice(0, 8)),
+          imports: Object.freeze([...imports].sort())
+        }));
+      });
+    }
+  }
+  return capabilities;
+}
+
+function sharedCapabilities(knowledge, index, codeInventory) {
   if (!index?.fileStates?.length) return Object.freeze([]);
   const provider = knowledge.moduleById.get("totem-core");
   if (!provider) return Object.freeze([]);
@@ -111,12 +171,15 @@ function sharedCapabilities(knowledge, index) {
       providerModuleId: "totem-core",
       consumerModuleId: module.id,
       providerFeatureId: providerFeature?.id ?? null,
+      consumerFeatureId: null,
       providerLabel: "Manual Registry / Renderer",
       consumerLabel: `${module.name} shared manual chapter`,
       label: "Shared Totem Manual",
-      evidencePaths: Object.freeze(evidencePaths.slice(0, 6))
+      evidencePaths: Object.freeze(evidencePaths.slice(0, 6)),
+      imports: Object.freeze([])
     }));
   }
+  capabilities.push(...coreApiCapabilities(knowledge, codeInventory));
   return Object.freeze(capabilities);
 }
 
@@ -288,7 +351,7 @@ export function buildGraphViewModel({ knowledge = loadKnowledge(), index = loadC
       protocol: contract.protocol ?? null,
       featureIds: contract.featureIds ?? []
     }))),
-    sharedCapabilities: sharedCapabilities(knowledge, index),
+    sharedCapabilities: sharedCapabilities(knowledge, index, codeInventory),
     code,
     codeInventory
   });
