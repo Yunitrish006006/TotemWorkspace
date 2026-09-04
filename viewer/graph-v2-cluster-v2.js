@@ -17,14 +17,18 @@
   var contracts = DATA.contracts || [];
   var capabilities = DATA.sharedCapabilities || [];
   var components = DATA.components || [];
+  var verification = DATA.verification || { tests: [], relations: [], requirements: [], coverage: [] };
+  var tests = verification.tests || [];
+  var verificationRelations = verification.relations || [];
   var code = DATA.code || { nodes: [] };
 
   document.getElementById("snapshot").textContent = ((DATA.snapshot && DATA.snapshot.date) || "unknown") + " snapshot";
-  document.getElementById("stats").textContent = modules.length + " modules｜" + features.length + " features｜" + components.length + " components｜" + contracts.length + " contracts｜" + capabilities.length + " shared";
+  document.getElementById("stats").textContent = modules.length + " modules｜" + features.length + " features｜" + components.length + " components｜" + tests.length + " tests｜" + contracts.length + " contracts｜" + capabilities.length + " shared";
 
   var moduleMap = new Map(modules.map(function (x) { return [x.id, x]; }));
   var featureMap = new Map(features.map(function (x) { return [x.id, x]; }));
   var componentMap = new Map(components.map(function (x) { return [x.id, x]; }));
+  var testMap = new Map(tests.map(function (x) { return [x.id, x]; }));
   var contractMap = new Map(contracts.map(function (x) { return [x.id, x]; }));
   var edgeFilterKeys = [
     "hard-core",
@@ -33,7 +37,8 @@
     "eventbus",
     "observer-provider",
     "external-service",
-    "shared-capability"
+    "shared-capability",
+    "validated-by"
   ];
   var enabledEdgeFilters = new Set(edgeFilterKeys);
 
@@ -130,7 +135,10 @@
     var syntheticCapabilityCount = capabilities.filter(function (capability) {
       return capability.consumerModuleId === moduleId && !capabilityConsumerFeature(capability);
     }).length;
-    var count = Math.max(1, featureCount + unmappedComponentCount + syntheticCapabilityCount);
+    var unmappedTestCount = tests.filter(function (test) {
+      return test.moduleId === moduleId && !(test.featureIds || []).length;
+    }).length;
+    var count = Math.max(1, featureCount + unmappedComponentCount + syntheticCapabilityCount + unmappedTestCount);
     return Math.min(245, 118 + Math.sqrt(count) * 27);
   }
 
@@ -141,6 +149,7 @@
   function band(type) {
     if (type === "component") return [0.48, 0.72];
     if (type === "implementation") return [0.38, 0.62];
+    if (type === "test") return [0.44, 0.70];
     if (type === "capability") return [0.56, 0.78];
     return [0.34, 0.64];
   }
