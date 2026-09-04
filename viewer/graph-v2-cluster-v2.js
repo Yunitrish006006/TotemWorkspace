@@ -785,6 +785,31 @@
     ctx.restore();
   }
 
+  function drawChangeHalo(ctx, projected, radius, kind) {
+    var animated = window.__TOTEM_CHANGE_ANIMATIONS__ !== false;
+    var phase = animated ? (Date.now() % 1200) / 1200 : 0.25;
+    var pulse = (Math.sin(phase * Math.PI * 2) + 1) / 2;
+    var color = kind === "impact" ? "#a78bfa" : "#fbbf24";
+    var extra = kind === "impact" ? 14 : 9 + pulse * 5;
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(projected.x, projected.y, radius + extra, 0, Math.PI * 2);
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = kind === "impact" ? 0.56 : 0.72 + pulse * 0.23;
+    ctx.lineWidth = kind === "impact" ? 2.2 : 2 + pulse * 1.4;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = kind === "impact" ? 8 : 9 + pulse * 7;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function relationChanged(edge, changedIds) {
+    for (var id of changedIds) {
+      if (edge.id === id || edge.id.indexOf(id + ":") === 0) return true;
+    }
+    return false;
+  }
+
   function connectedToSpotlight(currentScene, id) {
     return !spotlightId || id === spotlightId || currentScene.edges.some(function (edge) {
       return (edge.from === spotlightId || edge.to === spotlightId) && (edge.from === id || edge.to === id);
@@ -880,6 +905,11 @@
     var spotlightOwner = owner(byId.get(spotlightId));
     var related = relatedOwners(currentScene);
     var agentActivity = window.__TOTEM_AGENT_ACTIVITY__ || null;
+    var changeIntelligence = window.__TOTEM_CHANGE_INTELLIGENCE__ || null;
+    var changeDiff = changeIntelligence && changeIntelligence.semanticDiff ? changeIntelligence.semanticDiff : {};
+    var changeImpact = changeIntelligence && changeIntelligence.impact ? changeIntelligence.impact : {};
+    var changedEntityIds = new Set(Array.isArray(changeDiff.changedEntityIds) ? changeDiff.changedEntityIds : []);
+    var impactedModules = new Set(Array.isArray(changeImpact.impactedModules) ? changeImpact.impactedModules : []);
     var agentActivityNodeId = null;
     if (agentActivity) {
       if (agentActivity.componentId && byId.has(agentActivity.componentId)) agentActivityNodeId = agentActivity.componentId;
@@ -902,9 +932,11 @@
       var relation = edge.type === "shared-capability" || edge.retargeted;
       var internal = edge.type === "detail" || edge.type === "feature-detail";
 
-      var edgeAlpha = spotlightId ? (active ? 1 : 0.055) : (relation ? 0.82 : internal ? 0.16 : 0.34);
-      var edgeWidth = spotlightId && active ? 4.6 : relation ? 2.6 : internal ? 1.15 : 1.45;
-      var color = edgeColor(edge);
+      var changedRelation = relationChanged(edge, changedEntityIds);
+      var changePhase = window.__TOTEM_CHANGE_ANIMATIONS__ === false ? 0.5 : (Math.sin((Date.now() % 1200) / 1200 * Math.PI * 2) + 1) / 2;
+      var edgeAlpha = changedRelation ? 0.74 + changePhase * 0.24 : spotlightId ? (active ? 1 : 0.055) : (relation ? 0.82 : internal ? 0.16 : 0.34);
+      var edgeWidth = changedRelation ? 2.8 + changePhase * 1.8 : spotlightId && active ? 4.6 : relation ? 2.6 : internal ? 1.15 : 1.45;
+      var color = changedRelation ? "#fbbf24" : edgeColor(edge);
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
@@ -931,6 +963,12 @@
       var activityRadius = child
         ? (node.type === "capability" ? 6 : node.type === "component" ? 5.8 : node.type === "implementation" ? 4.3 : 5.25)
         : Math.max(8, 12 * p.scale);
+      if (node.type === "module" && impactedModules.has(node.id)) {
+        drawChangeHalo(ctx, p, activityRadius, "impact");
+      }
+      if (changedEntityIds.has(node.id)) {
+        drawChangeHalo(ctx, p, activityRadius, "change");
+      }
       if (node.id === agentActivityNodeId) {
         drawAgentActivityHalo(ctx, p, activityRadius, agentActivity && agentActivity.type);
       }
