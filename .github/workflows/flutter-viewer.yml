@@ -8,10 +8,6 @@ on:
       - "graph-v2.html"
       - "docs/ai-development-graph-plan.md"
       - "scripts/validate-ai-development-viewer.mjs"
-      - "viewer/**"
-      - "graph-v2.html"
-      - "docs/ai-development-graph-plan.md"
-      - "scripts/validate-ai-development-viewer.mjs"
       - "scripts/render-flutter-graph.mjs"
       - "scripts/serve-local-viewer.mjs"
       - "scripts/validate-local-viewer.mjs"
@@ -21,6 +17,10 @@ on:
   pull_request:
     paths:
       - "viewer_flutter/**"
+      - "viewer/**"
+      - "graph-v2.html"
+      - "docs/ai-development-graph-plan.md"
+      - "scripts/validate-ai-development-viewer.mjs"
       - "scripts/render-flutter-graph.mjs"
       - "scripts/serve-local-viewer.mjs"
       - "scripts/validate-local-viewer.mjs"
