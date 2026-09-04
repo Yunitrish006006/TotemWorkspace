@@ -234,7 +234,7 @@ function appendActivity(value, options) {
 function activityPayload(after = 0) {
   const sequence = Number.isFinite(after) && after >= 0 ? Math.floor(after) : 0;
   return Object.freeze({
-    schemaVersion: 1,
+    schemaVersion: 3,
     generatedAt: new Date().toISOString(),
     latestSequence: activitySequence,
     events: activityEvents.filter((event) => event.sequence > sequence)
@@ -281,10 +281,11 @@ function graphReplayState(graph) {
       type: entry.type
     }))
   ].filter((entry) => entry.id && entry.from && entry.to);
+  const relationEndpoints = relations.flatMap((entry) => [entry.from, entry.to]).filter(Boolean);
   return Object.freeze({
     schemaVersion: graph?.schemaVersion ?? null,
     generatedAt: graph?.generatedAt ?? null,
-    entityIds: Object.freeze([...new Set(ids)].sort()),
+    entityIds: Object.freeze([...new Set([...ids, ...relationEndpoints])].sort()),
     relations: Object.freeze(relations)
   });
 }
@@ -546,7 +547,8 @@ async function handleApi(req, res, url, { agentAdapter } = {}) {
   }
 
   if (req.method === "GET" && pathname === "/api/replay/frame") {
-    const rawSequence = Number(url.searchParams.get("sequence"));
+    const raw = url.searchParams.get("sequence");
+    const rawSequence = raw == null ? Number.NaN : Number(raw);
     json(res, 200, replayFrame(rawSequence));
     return true;
   }
