@@ -162,7 +162,27 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
     try {
       final batch = await client.activity(after: _activitySequence);
       if (!mounted || batch.events.isEmpty) return;
-      setState(() => _mergeActivity(batch));
+      GraphData? graph;
+      ChangeIntelligence? change;
+      if (batch.events.any((event) => event.type == 'git_diff_updated')) {
+        try {
+          graph = await client.graphData();
+          change = await client.changeIntelligence();
+        } catch (error) {
+          if (mounted) {
+            setState(() {
+              _liveError = error.toString();
+              _liveErrorSource = 'live-graph-refresh';
+            });
+          }
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _mergeActivity(batch);
+        if (graph != null) _data = graph!;
+        if (change != null) _change = change;
+      });
     } catch (error) {
       if (!mounted) return;
       setState(() { _liveError = error.toString(); _liveErrorSource = 'activity'; });
