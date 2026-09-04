@@ -687,6 +687,29 @@
     ctx.restore();
   }
 
+  function agentActivityColor(type) {
+    if (type === "test_failed" || type === "deployment_failed") return "#f87171";
+    if (type === "test_passed" || type === "task_completed" || type === "deployment_completed") return "#86efac";
+    if (type === "file_edit" || type === "symbol_edit" || type === "git_diff_updated") return "#fbbf24";
+    return "#67e8f9";
+  }
+
+  function drawAgentActivityHalo(ctx, projected, radius, type) {
+    var phase = (Date.now() % 1200) / 1200;
+    var pulse = (Math.sin(phase * Math.PI * 2) + 1) / 2;
+    var color = agentActivityColor(type);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(projected.x, projected.y, radius + 8 + pulse * 7, 0, Math.PI * 2);
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = 0.9 - pulse * 0.45;
+    ctx.lineWidth = 2.2 + pulse * 1.6;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = 10 + pulse * 8;
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function connectedToSpotlight(currentScene, id) {
     return !spotlightId || id === spotlightId || currentScene.edges.some(function (edge) {
       return (edge.from === spotlightId || edge.to === spotlightId) && (edge.from === id || edge.to === id);
@@ -781,6 +804,12 @@
 
     var spotlightOwner = owner(byId.get(spotlightId));
     var related = relatedOwners(currentScene);
+    var agentActivity = window.__TOTEM_AGENT_ACTIVITY__ || null;
+    var agentActivityNodeId = null;
+    if (agentActivity) {
+      if (agentActivity.featureId && byId.has(agentActivity.featureId)) agentActivityNodeId = agentActivity.featureId;
+      else if (agentActivity.moduleId && byId.has(agentActivity.moduleId)) agentActivityNodeId = agentActivity.moduleId;
+    }
     currentScene.clusters.forEach(function (cluster) {
       var p = projected.get(cluster.ownerId);
       if (!p) return;
@@ -823,6 +852,12 @@
       var child = node.type === "feature" || node.type === "category" || node.type === "capability";
       var selected = spotlightId === node.id || keyboardFocusId === node.id;
       var connected = connectedToSpotlight(currentScene, node.id);
+      var activityRadius = child
+        ? (node.type === "capability" ? 6 : node.type === "category" ? 4.5 : 5.25)
+        : Math.max(8, 12 * p.scale);
+      if (node.id === agentActivityNodeId) {
+        drawAgentActivityHalo(ctx, p, activityRadius, agentActivity && agentActivity.type);
+      }
 
       if (child) {
         var hit = drawChild(ctx, node, p, selected, connected);
