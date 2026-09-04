@@ -7,6 +7,7 @@ class GraphData {
     required this.features,
     required this.contracts,
     required this.sharedCapabilities,
+    required this.components,
     required this.codeInventory,
   });
 
@@ -17,6 +18,7 @@ class GraphData {
   final List<GraphFeature> features;
   final List<GraphContract> contracts;
   final List<GraphSharedCapability> sharedCapabilities;
+  final List<GraphComponent> components;
   final GraphCodeInventory codeInventory;
 
   factory GraphData.fromJson(Map<String, dynamic> json) {
@@ -30,6 +32,7 @@ class GraphData {
       contracts: _objects(json['contracts']).map(GraphContract.fromJson).toList(growable: false),
       sharedCapabilities:
           _objects(json['sharedCapabilities']).map(GraphSharedCapability.fromJson).toList(growable: false),
+      components: _objects(json['components']).map(GraphComponent.fromJson).toList(growable: false),
       codeInventory: GraphCodeInventory.fromJson(
         json['codeInventory'] is Map ? Map<String, dynamic>.from(json['codeInventory'] as Map) : const {},
       ),
@@ -51,6 +54,19 @@ class GraphData {
     }
     return null;
   }
+
+  GraphComponent? componentById(String id) {
+    for (final component in components) {
+      if (component.id == id) return component;
+    }
+    return null;
+  }
+
+  List<GraphComponent> componentsForFeature(String featureId) =>
+      components.where((component) => component.featureIds.contains(featureId)).toList(growable: false);
+
+  List<GraphComponent> componentsForModule(String moduleId) =>
+      components.where((component) => component.moduleId == moduleId).toList(growable: false);
 
   GraphFeature? manualFeatureFor(String moduleId) {
     final matcher = RegExp(r'manual|手冊', caseSensitive: false);
@@ -222,6 +238,56 @@ class GraphSharedCapability {
       );
 }
 
+class GraphComponent {
+  const GraphComponent({
+    required this.id,
+    required this.moduleId,
+    required this.key,
+    required this.label,
+    required this.responsibility,
+    required this.featureIds,
+    required this.mappingScore,
+    required this.mappingConfidence,
+    required this.fileCount,
+    required this.implementationPaths,
+    required this.representativePaths,
+    required this.symbols,
+    required this.surfaceKinds,
+  });
+
+  final String id;
+  final String moduleId;
+  final String key;
+  final String label;
+  final String responsibility;
+  final List<String> featureIds;
+  final int mappingScore;
+  final String mappingConfidence;
+  final int fileCount;
+  final List<String> implementationPaths;
+  final List<String> representativePaths;
+  final List<String> symbols;
+  final List<String> surfaceKinds;
+
+  bool get isMapped => featureIds.isNotEmpty;
+
+  factory GraphComponent.fromJson(Map<String, dynamic> json) => GraphComponent(
+        id: json['id'] as String? ?? '',
+        moduleId: json['moduleId'] as String? ?? '',
+        key: json['key'] as String? ?? '',
+        label: json['label'] as String? ?? '',
+        responsibility: json['responsibility'] as String? ?? '',
+        featureIds: GraphData.strings(json['featureIds']),
+        mappingScore: (json['mappingScore'] as num?)?.toInt() ?? 0,
+        mappingConfidence: json['mappingConfidence'] as String? ?? 'unmapped',
+        fileCount: (json['fileCount'] as num?)?.toInt() ?? 0,
+        implementationPaths: GraphData.strings(json['implementationPaths']),
+        representativePaths: GraphData.strings(json['representativePaths']),
+        symbols: GraphData.strings(json['symbols']),
+        surfaceKinds: GraphData.strings(json['surfaceKinds']),
+      );
+}
+
 class GraphCodeInventory {
   const GraphCodeInventory({required this.sourceScope, required this.modules});
 
@@ -249,6 +315,7 @@ class GraphModuleInventory {
     required this.productionFileCount,
     required this.resourceEvidence,
     required this.featureAreas,
+    required this.components,
     required this.surfaces,
     required this.integrations,
     required this.crossModuleImports,
@@ -260,6 +327,7 @@ class GraphModuleInventory {
   final int productionFileCount;
   final GraphResourceEvidence resourceEvidence;
   final List<GraphFeatureArea> featureAreas;
+  final List<GraphComponent> components;
   final Map<String, List<GraphCodeSurfaceItem>> surfaces;
   final List<GraphCodeIntegration> integrations;
   final List<GraphCrossModuleImport> crossModuleImports;
@@ -275,6 +343,7 @@ class GraphModuleInventory {
         json['resourceEvidence'] is Map ? Map<String, dynamic>.from(json['resourceEvidence'] as Map) : const {},
       ),
       featureAreas: GraphData._objects(json['featureAreas']).map(GraphFeatureArea.fromJson).toList(growable: false),
+      components: GraphData._objects(json['components']).map(GraphComponent.fromJson).toList(growable: false),
       surfaces: Map.unmodifiable({
         for (final entry in rawSurfaces.entries)
           entry.key: GraphData._objects(entry.value).map(GraphCodeSurfaceItem.fromJson).toList(growable: false),
