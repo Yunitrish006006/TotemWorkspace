@@ -11,7 +11,7 @@ import { renderGraphV2 } from "./render-graph-v2.mjs";
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
 const DEFAULT_HOST = "127.0.0.1";
-const DEFAULT_PORT = 8765;
+const DEFAULT_PORT = 18765;
 const BODY_LIMIT = 64 * 1024;
 const PROMPT_LIMIT = 8 * 1024;
 const ACTIVITY_LIMIT = 500;
