@@ -328,9 +328,9 @@ The Bridge exposes the latest result at `GET /api/change-intelligence`.
 a `git_diff_updated` Agent Activity event when either Git files or semantic
 entities changed.
 
-Phase 3 semantic snapshots include Module, Feature, Component, Implementation
-and relation identities. Full before/after snapshot identities and fingerprints
-are persisted locally. Test entities remain deferred to Phase 4.
+Phase 3 semantic snapshots include Module, Feature, Component, Implementation,
+Test and relation identities after Phase 4. Full before/after snapshot identities
+and fingerprints are persisted locally.
 
 `affectedEntityIds` is the union of structural semantic diff IDs and
 Git-to-semantic mappings, so a method-body-only edit still highlights its Module,
@@ -347,3 +347,80 @@ Both maintained viewer surfaces consume the same payload:
 
 All Git paths exposed to the browser are repository-relative; absolute local paths
 are never included.
+
+
+## Phase 4 — Verification Graph implementation
+
+Phase 4 separates **test evidence**, **verification requirements**, and **live
+execution state** so the viewer never claims that a required check has passed
+merely because it appears in policy.
+
+### Test entities are code evidence
+
+Test entities are derived from files actually present in the sibling repository
+code index. Supported generic evidence includes unit tests, GameTests, client
+tests, integration tests and E2E test source locations. Stable IDs are:
+
+```text
+test:<module-id>:<repository-relative-path>
+```
+
+No absolute local path is exposed. Test entities may carry inferred links to
+Feature, Component, contract/API and shared capability targets when code/path/
+symbol evidence is strong enough.
+
+### Required verification is not passed evidence
+
+`data/test-matrix.json` produces verification requirements and the active
+verification plan. It does **not** create Test entities and it does not imply
+success. The active plan combines:
+
+```text
+default requirements
+  + affected / impacted module requirements
+  + Phase 3 risk-derived requirements
+```
+
+This keeps statements such as `three-jvm-e2e required` distinct from
+`three-jvm-e2e passed`.
+
+### validated-by relations
+
+The graph payload publishes typed `validated-by` relations from semantic targets
+to Test entities. The initial target set is:
+
+- Feature → Test
+- contract/API → Test when the contract is feature-bound
+- shared capability → Test when the capability is feature-bound
+
+The viewers use controlled Test LOD: linked Tests appear when the owning Feature
+is expanded; Tests without a reliable Feature mapping remain module-level and are
+shown only when that Module is expanded.
+
+### Live verification state
+
+The Local Bridge records `test_started`, `test_passed` and `test_failed`
+activity events into:
+
+```text
+.totem-index/verification-state.json
+```
+
+Only the latest state for the same module/test target is retained. The browser
+reads `GET /api/verification-state`; it cannot execute Gradle or arbitrary shell
+commands through this endpoint.
+
+When a Test entity resolves, its live status propagates to its Test, Module,
+Feature, Component, contract and capability targets. Both maintained viewers use
+the same status sets:
+
+- running: cyan pulse
+- passed: green verification state
+- failed: red failure halo
+- `validated-by` edges inherit the active verification state
+
+Verification polling is independent of Prompt visibility and Agent Activity
+visibility. Disabling change animations does not disable verification state.
+
+Phase 5 remains responsible for the concrete Codex/agent adapter that actually
+starts test processes and emits lifecycle events.
