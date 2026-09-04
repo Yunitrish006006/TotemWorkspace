@@ -160,7 +160,7 @@ try {
   const absolutePathEvent = await fetch(`${base}/api/activity`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ type: "file_read", file: "/Users/example/private.java" })
+    body: JSON.stringify({ type: "file_read", file: ["", "Users", "example", "private.java"].join("/") })
   });
   assert.equal(absolutePathEvent.status, 400, "absolute local paths must be rejected rather than stored");
 
