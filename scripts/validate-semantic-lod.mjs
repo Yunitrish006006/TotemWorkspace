@@ -27,7 +27,7 @@ assert.ok(inventory.includes("SEMANTIC_CONCEPT_ALIASES"), "component-to-feature 
 assert.ok(!/componentFeatureMatch[\s\S]{0,10000}module\.id\s*===\s*["']totem-/m.test(inventory),
   "component inference must not contain module-specific branches");
 
-assert.ok(graph.includes("schemaVersion: 4"), "graph schema must advance for semantic components");
+assert.ok(graph.includes("schemaVersion: 5"), "graph schema must preserve semantic components while adding Verification Graph");
 assert.ok(graph.includes("function semanticComponents"), "graph must promote inventory components to graph entities");
 assert.ok(graph.includes("components,"), "graph payload must expose components");
 
