@@ -1,5 +1,6 @@
 import { loadKnowledge, resolveTask, testPlan } from "./workspace-knowledge.mjs";
 import { searchCode } from "./code-index.mjs";
+import { buildOrchestrationPlan, orchestrationPlanSummary } from "./orchestration-plan.mjs";
 
 function compactModule(module) {
   return {
@@ -43,7 +44,15 @@ function compactContract(contract) {
 }
 
 function pruneCodeResults(results, audience) {
-  const maxPreview = audience === "primary" ? 700 : audience === "reviewer" ? 1100 : 1800;
+  const maxPreview = audience === "primary"
+    ? 700
+    : audience === "reviewer"
+      ? 1100
+      : audience === "architect"
+        ? 1200
+        : audience === "explorer"
+          ? 1400
+          : 1800;
   return results.map((result) => ({
     ...result,
     preview: result.preview.slice(0, maxPreview)
@@ -85,12 +94,26 @@ export function buildContextPack(query, { audience = "primary", moduleId = null,
     .filter((contract) => [contract.from, contract.to, ...(contract.relatedNodes ?? [])].some((node) => moduleSet.has(node)))
     .map(compactContract);
   const plan = testPlan({ query, changedModules: selectedModuleIds }, knowledge);
+  const orchestration = buildOrchestrationPlan({
+    query,
+    moduleId,
+    knowledge
+  });
 
+  const codeLimit = audience === "primary"
+    ? 6
+    : audience === "reviewer"
+      ? 10
+      : audience === "architect"
+        ? 10
+        : audience === "explorer"
+          ? 14
+          : 16;
   const code = includeCode
     ? searchCode(query, {
       knowledge,
       modules: selectedModuleIds,
-      limit: audience === "primary" ? 6 : audience === "reviewer" ? 10 : 16
+      limit: codeLimit
     })
     : { indexed: false, freshness: null, results: [] };
 
@@ -102,7 +125,12 @@ export function buildContextPack(query, { audience = "primary", moduleId = null,
     routing: {
       modules: selectedModuleIds,
       risks: resolved.risks,
-      recommendedAgents: resolved.recommendedAgents
+      recommendedAgents: resolved.recommendedAgents,
+      orchestration: orchestrationPlanSummary(orchestration),
+      assignment: orchestration.assignments.find((entry) =>
+        entry.contextAudience === audience
+        && (!moduleId || entry.modules.includes(moduleId))
+      ) ?? null
     },
     modules,
     features,
@@ -121,6 +149,9 @@ export function buildContextPack(query, { audience = "primary", moduleId = null,
       "Use TotemWorkspace graph/contracts as the cross-module architecture source of truth.",
       "Do not broaden repository-wide reads before using this narrowed context unless evidence requires it.",
       "For shared contract changes, stabilize the contract before parallel module implementation.",
+      "Follow the TotemWorkspace orchestration assignment boundaries; read-only roles must not edit files and workers must stay inside their assigned module.",
+      "Do not spawn subagents for a primary-only orchestration plan.",
+      "If the runtime cannot execute multiple agents, preserve the same role/order boundaries sequentially in Primary rather than discarding the orchestration plan.",
       "After edits, run impact analysis; the MCP impact path refreshes touched module index chunks before validation/review."
     ]
   };
