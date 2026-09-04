@@ -14,10 +14,13 @@ const activityCli = fs.readFileSync("scripts/totem-activity.mjs", "utf8");
 for (const fragment of [
   'SESSION="${TOTEM_BRIDGE_SESSION:-totem-workspace-bridge}"',
   'PORT="${TOTEM_BRIDGE_PORT:-18765}"',
+  'BACKEND="${TOTEM_BRIDGE_BACKEND:-auto}"',
   'HOST="127.0.0.1"',
   'tmux new-session -d',
   'tmux kill-session',
   'tmux attach-session',
+  'nohup node scripts/serve-local-viewer.mjs',
+  '.totem-index/remote-bridge.pid',
   'scripts/serve-local-viewer.mjs --port',
   '.totem-index/remote-bridge.log',
   'Cannot start Totem Bridge: remote port',
@@ -32,6 +35,8 @@ for (const action of ["start)", "stop)", "restart)", "status)", "logs)", "follow
 assert.ok(remoteGuide.includes("LocalForward 127.0.0.1:18765 127.0.0.1:18765"), "remote guide must document the VS Code SSH tunnel");
 assert.ok(remoteGuide.includes("bash tools/remote/bridge.sh start"), "remote guide must document bridge startup");
 assert.ok(remoteGuide.includes("tmux"), "remote guide must document tmux background execution");
+assert.ok(remoteGuide.includes("nohup"), "remote guide must document the no-sudo nohup fallback");
+assert.ok(remoteGuide.includes("sudo is not required"), "remote guide must explain that Bridge background execution does not require sudo");
 
 const labels = new Set((tasks.tasks ?? []).map((task) => task.label));
 for (const label of [
