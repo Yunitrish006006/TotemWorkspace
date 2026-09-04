@@ -504,6 +504,9 @@
       var unmappedComponents = components.filter(function (component) {
         return component.moduleId === moduleId && !(component.featureIds || []).length;
       });
+      var unmappedTests = tests.filter(function (test) {
+        return test.moduleId === moduleId && !(test.featureIds || []).length;
+      }).slice(0, 8);
       var moduleCaps = capabilities.filter(function (capability) {
         return capability.consumerModuleId === moduleId;
       });
@@ -515,7 +518,7 @@
       clusters.push({
         ownerId: moduleId,
         radius: radius,
-        childCount: moduleFeatures.length + unmappedComponents.length + syntheticCaps.length
+        childCount: moduleFeatures.length + unmappedComponents.length + syntheticCaps.length + unmappedTests.length
       });
 
       moduleFeatures.forEach(function (feature) {
@@ -568,6 +571,28 @@
           retargeted: true
         });
       });
+
+      unmappedTests.forEach(function (test) {
+        var position = relationAwareScatter(parent, test.id, "test", radius, moduleId, nodes, []);
+        nodes.push({
+          id: test.id,
+          label: "TEST · " + test.label,
+          type: "test",
+          ownerId: moduleId,
+          x: position.x,
+          y: position.y,
+          z: position.z,
+          source: test
+        });
+        edges.push({
+          id: "validated-by-module:" + moduleId + ":" + test.id,
+          from: moduleId,
+          to: test.id,
+          type: "validated-by",
+          label: "module test evidence",
+          retargeted: true
+        });
+      });
     });
 
     expanded.forEach(function (featureId) {
@@ -578,7 +603,10 @@
       var mapped = components.filter(function (component) {
         return (component.featureIds || []).includes(featureId);
       });
-      var radius = Math.min(150, 74 + Math.sqrt(Math.max(1, mapped.length)) * 22);
+      var linkedTests = tests.filter(function (test) {
+        return (test.featureIds || []).includes(featureId);
+      }).slice(0, 8);
+      var radius = Math.min(150, 74 + Math.sqrt(Math.max(1, mapped.length + linkedTests.length)) * 22);
       mapped.forEach(function (component) {
         var position = scatter(parent, component.id, "component", radius);
         nodes.push({
@@ -597,6 +625,30 @@
           to: component.id,
           type: "detail",
           label: "responsibility",
+          retargeted: true
+        });
+      });
+
+      linkedTests.forEach(function (test) {
+        if (!nodes.some(function (node) { return node.id === test.id; })) {
+          var position = scatter(parent, test.id, "test", radius * 0.92);
+          nodes.push({
+            id: test.id,
+            label: "TEST · " + test.label,
+            type: "test",
+            ownerId: feature.ownerId,
+            x: position.x,
+            y: position.y,
+            z: position.z,
+            source: test
+          });
+        }
+        edges.push({
+          id: "validated-by:" + featureId + ":" + test.id,
+          from: featureId,
+          to: test.id,
+          type: "validated-by",
+          label: "validated by",
           retargeted: true
         });
       });
