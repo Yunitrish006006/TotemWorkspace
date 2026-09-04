@@ -20,6 +20,8 @@ assert.ok(serverSource.includes('pathname === "/api/viewer-settings"'), "viewer 
 assert.ok(serverSource.includes('pathname === "/api/activity"'), "agent activity endpoint is required");
 assert.ok(serverSource.includes('pathname === "/api/change-intelligence"'), "Phase 3 change-intelligence endpoint is required");
 assert.ok(serverSource.includes('pathname === "/api/agent-adapter"'), "Phase 5 agent-adapter endpoint is required");
+assert.ok(serverSource.includes('pathname === "/api/replay"'), "Phase 6 replay timeline endpoint is required");
+assert.ok(serverSource.includes('pathname === "/api/replay/frame"'), "Phase 6 replay frame endpoint is required");
 assert.ok(serverSource.includes('pathname === "/api/verification-state"'), "Phase 4 verification-state endpoint is required");
 assert.ok(serverSource.includes('pathname === "/api/prompt"'), "prompt intake endpoint is required");
 assert.ok(serverSource.includes('"https://yunitrish006006.github.io"'), "official TotemWorkspace Pages origin must be explicitly allowlisted");
@@ -45,6 +47,8 @@ assert.ok(liveSource.includes('apiUrl("/api/viewer-settings")'), "legacy viewer 
 assert.ok(liveSource.includes('apiUrl("/api/activity?after="'), "legacy viewer must poll shared agent activity");
 assert.ok(liveSource.includes('apiUrl("/api/verification-state")'), "legacy viewer must poll shared verification state");
 assert.ok(liveSource.includes('apiUrl("/api/prompt")'), "legacy prompt surface must submit through the bridge");
+assert.ok(liveSource.includes('apiUrl("/api/replay")'), "legacy viewer must poll durable replay timeline");
+assert.ok(liveSource.includes('apiUrl("/api/replay/frame?sequence="'), "legacy viewer must load historical replay frames");
 assert.ok(liveSource.includes('host === "yunitrish006006.github.io"'), "legacy Pages must discover the loopback bridge");
 assert.ok(liveSource.includes("window.setInterval(poll, 5000)"), "local status must refresh periodically");
 assert.ok(liveSource.includes("window.location.reload()"), "successful local refresh must reload regenerated graph data");
@@ -56,6 +60,10 @@ if (fs.existsSync(settingsPath)) fs.rmSync(settingsPath);
 const verificationPath = path.join(ROOT, ".totem-index", "verification-state.json");
 const verificationBackup = fs.existsSync(verificationPath) ? fs.readFileSync(verificationPath) : null;
 if (fs.existsSync(verificationPath)) fs.rmSync(verificationPath);
+
+const replayPath = path.join(ROOT, ".totem-index", "development-replay.json");
+const replayBackup = fs.existsSync(replayPath) ? fs.readFileSync(replayPath) : null;
+if (fs.existsSync(replayPath)) fs.rmSync(replayPath);
 
 const flutterFixture = fs.mkdtempSync(path.join(os.tmpdir(), "totem-flutter-root-"));
 fs.writeFileSync(path.join(flutterFixture, "index.html"), "<!doctype html><title>TOTEM Flutter fixture</title><script src=\"main.dart.js\"></script>", "utf8");
@@ -113,8 +121,9 @@ try {
   const healthPayload = await health.json();
   assert.equal(healthPayload.status, "ok");
   assert.equal(healthPayload.mode, "local");
-  assert.equal(healthPayload.activitySchemaVersion, 2);
+  assert.equal(healthPayload.activitySchemaVersion, 3);
   assert.equal(healthPayload.verificationSchemaVersion, 1);
+  assert.equal(healthPayload.replaySchemaVersion, 1);
   assert.equal(healthPayload.agentAdapterSchemaVersion, 1);
   assert.equal(healthPayload.promptExecution, "codex");
   assert.equal(healthPayload.agentAdapter.available, true);
@@ -236,6 +245,7 @@ try {
     })
   });
   assert.equal(testStarted.status, 202);
+  const startedEvent = (await testStarted.json()).event;
 
   const runningVerification = await fetch(`${base}/api/verification-state`);
   assert.equal(runningVerification.status, 200);
@@ -256,6 +266,7 @@ try {
     })
   });
   assert.equal(testFailed.status, 202);
+  const failedEvent = (await testFailed.json()).event;
 
   const failedVerification = await fetch(`${base}/api/verification-state`);
   assert.equal(failedVerification.status, 200);
@@ -265,6 +276,46 @@ try {
   const fixtureEntries = failedPayload.entries.filter((entry) => entry.target === testTarget);
   assert.equal(fixtureEntries.length, 1, "same test target must have one latest verification state");
   assert.equal(fixtureEntries[0].status, "failed");
+
+  const replayTimeline = await fetch(`${base}/api/replay`);
+  assert.equal(replayTimeline.status, 200);
+  const replayTimelinePayload = await replayTimeline.json();
+  assert.equal(replayTimelinePayload.schemaVersion, 1);
+  assert.ok(replayTimelinePayload.eventCount >= 4);
+  assert.ok(replayTimelinePayload.latestSequence >= failedEvent.sequence);
+
+  const runningFrameResponse = await fetch(
+    `${base}/api/replay/frame?sequence=${encodeURIComponent(startedEvent.sequence)}`
+  );
+  assert.equal(runningFrameResponse.status, 200);
+  const runningFrame = await runningFrameResponse.json();
+  assert.equal(runningFrame.sequence, startedEvent.sequence);
+  assert.equal(runningFrame.live, false);
+  assert.equal(runningFrame.verificationState.summary.running, 1);
+  assert.equal(runningFrame.verificationState.summary.failed, 0);
+
+  const failedFrameResponse = await fetch(
+    `${base}/api/replay/frame?sequence=${encodeURIComponent(failedEvent.sequence)}`
+  );
+  assert.equal(failedFrameResponse.status, 200);
+  const failedFrame = await failedFrameResponse.json();
+  assert.equal(failedFrame.verificationState.summary.running, 0);
+  assert.equal(failedFrame.verificationState.summary.failed, 1);
+
+  const milestonePost = await fetch(`${base}/api/activity`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      type: "commit_created",
+      moduleId: "totem-core",
+      summary: "abcdef12 replay milestone"
+    })
+  });
+  assert.equal(milestonePost.status, 202);
+
+  const milestoneTimeline = await fetch(`${base}/api/replay`);
+  const milestonePayload = await milestoneTimeline.json();
+  assert.equal(milestonePayload.milestones.at(-1).type, "commit_created");
 
   const absolutePathEvent = await fetch(`${base}/api/activity`, {
     method: "POST",
@@ -331,6 +382,12 @@ try {
     fs.mkdirSync(path.dirname(verificationPath), { recursive: true });
     fs.writeFileSync(verificationPath, verificationBackup);
   }
+  if (replayBackup == null) {
+    if (fs.existsSync(replayPath)) fs.rmSync(replayPath);
+  } else {
+    fs.mkdirSync(path.dirname(replayPath), { recursive: true });
+    fs.writeFileSync(replayPath, replayBackup);
+  }
 }
 
-console.log("Local live viewer validation passed: Flutter owns /, legacy JS stays under /legacy/, and loopback-only API/settings/activity/change/verification/agent-dispatch/refresh behavior remains intact.");
+console.log("Local live viewer validation passed: Flutter owns /, legacy JS stays under /legacy/, and loopback-only API/settings/activity/change/verification/agent-dispatch/replay/refresh behavior remains intact.");
