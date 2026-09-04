@@ -125,11 +125,16 @@
       return;
     }
     window.__TOTEM_AGENT_ACTIVITY__ = event;
-    var target = event.featureId || event.componentId || event.moduleId || event.file || event.symbol || event.test || "";
+    var target = event.componentId || event.featureId || event.moduleId || event.file || event.symbol || event.test || "";
     activityBadge.hidden = false;
     activityBadge.textContent = "AGENT · " + event.type + (target ? " · " + target : "") + (event.summary ? " · " + event.summary : "");
     activityBadge.title = event.timestamp || "";
-    requestAgentDraw();
+    var renderer = window.__TOTEM_CLUSTER_3D_V2__;
+    if (renderer && typeof renderer.focusActivity === "function") {
+      renderer.focusActivity(event, settings.autoExpandAgentFocus !== false);
+    } else {
+      requestAgentDraw();
+    }
     if (!activityAnimation) activityAnimation = window.setInterval(requestAgentDraw, 80);
   }
 
