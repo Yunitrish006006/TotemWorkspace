@@ -196,7 +196,6 @@ function normalizeActivityEvent(value = {}, { source = "bridge" } = {}) {
     ["status", 80],
     ["from", 200],
     ["to", 200],
-    ["test", 256],
     ["taskId", 160]
   ];
   for (const [key, max] of fields) {
@@ -205,6 +204,8 @@ function normalizeActivityEvent(value = {}, { source = "bridge" } = {}) {
   }
   const file = relativeCodePath(value.file);
   if (file) event.file = file;
+  const test = relativeCodePath(value.test);
+  if (test) event.test = test;
   return Object.freeze(event);
 }
 
