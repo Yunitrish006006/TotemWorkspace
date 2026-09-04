@@ -11,6 +11,9 @@ on:
       - "scripts/render-flutter-graph.mjs"
       - "scripts/serve-local-viewer.mjs"
       - "scripts/validate-local-viewer.mjs"
+      - "scripts/flutter-local-build-fingerprint.mjs"
+      - "scripts/validate-remote-bridge.mjs"
+      - "tools/remote/**"
       - "intelligence/**"
       - ".github/workflows/flutter-viewer.yml"
       - ".github/workflows/pages.yml"
@@ -24,6 +27,9 @@ on:
       - "scripts/render-flutter-graph.mjs"
       - "scripts/serve-local-viewer.mjs"
       - "scripts/validate-local-viewer.mjs"
+      - "scripts/flutter-local-build-fingerprint.mjs"
+      - "scripts/validate-remote-bridge.mjs"
+      - "tools/remote/**"
       - "intelligence/**"
       - ".github/workflows/flutter-viewer.yml"
       - ".github/workflows/pages.yml"
@@ -71,6 +77,10 @@ jobs:
       - name: Test Flutter viewer
         working-directory: viewer_flutter
         run: flutter test
+
+      - name: Build Flutter local bridge root (Wasm)
+        working-directory: viewer_flutter
+        run: flutter build web --wasm --base-href /
 
       - name: Build Flutter Pages root (Wasm)
         working-directory: viewer_flutter
