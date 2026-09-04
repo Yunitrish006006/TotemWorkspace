@@ -8,6 +8,7 @@ on:
       - "graph-v2.html"
       - "docs/ai-development-graph-plan.md"
       - "scripts/validate-ai-development-viewer.mjs"
+      - "scripts/validate-semantic-lod.mjs"
       - "scripts/render-flutter-graph.mjs"
       - "scripts/serve-local-viewer.mjs"
       - "scripts/validate-local-viewer.mjs"
@@ -24,6 +25,7 @@ on:
       - "graph-v2.html"
       - "docs/ai-development-graph-plan.md"
       - "scripts/validate-ai-development-viewer.mjs"
+      - "scripts/validate-semantic-lod.mjs"
       - "scripts/render-flutter-graph.mjs"
       - "scripts/serve-local-viewer.mjs"
       - "scripts/validate-local-viewer.mjs"
@@ -58,6 +60,8 @@ jobs:
 
       - name: Validate maintained viewer parity
         run: node scripts/validate-ai-development-viewer.mjs
+      - name: Validate semantic LOD parity
+        run: node scripts/validate-semantic-lod.mjs
 
       - name: Set up Flutter 3.47.0
         uses: subosito/flutter-action@v2

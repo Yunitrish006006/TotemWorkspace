@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import { buildCodeInventory, isProductionCode } from "../intelligence/code-inventory.mjs";
 
 const knowledge = {
@@ -12,6 +13,15 @@ const knowledge = {
     { id: "totem-copperworks", name: "TotemCopperworks", repoName: "TotemCopperworks" },
     { id: "totem-observerdemo", name: "TotemObserverDemo", repoName: "TotemObserverDemo" },
     { id: "totem-bridgedemo", name: "TotemBridgeDemo", repoName: "TotemBridgeDemo" }
+  ],
+  features: [
+    { id: "totem-a.feature-observer", ownerId: "totem-a", title: "Observer View", summary: "Semantic observer screen reconstruction." },
+    { id: "totem-a.feature-inventory", ownerId: "totem-a", title: "Container sorting", summary: "Inventory and container sorting." },
+    { id: "totem-a.feature-bookshelf", ownerId: "totem-a", title: "Bookshelf rules", summary: "Bookshelf recipes and structure behavior." },
+    { id: "totem-copperworks.feature-gathering", ownerId: "totem-copperworks", title: "採集模式", summary: "Gathering and harvest work area." },
+    { id: "totem-copperworks.feature-sorting", ownerId: "totem-copperworks", title: "分類模式", summary: "Sorting and destination routing." },
+    { id: "totem-copperworks.feature-llm", ownerId: "totem-copperworks", title: "選配 LLM", summary: "OpenAI prompt rules for work decisions." },
+    { id: "totem-copperworks.feature-menu", ownerId: "totem-copperworks", title: "管理介面", summary: "Menu screen UI and payload state." }
   ]
 };
 
@@ -671,6 +681,7 @@ assert.equal(isProductionCode("src/test/java/a/A.java"), false);
 assert.equal(isProductionCode("README.md"), false);
 
 const inventory = buildCodeInventory({ knowledge, index });
+assert.equal(inventory.schemaVersion, 5);
 assert.equal(inventory.sourceScope, "production-code-only");
 assert.equal(inventory.modules.length, 7);
 
@@ -737,6 +748,19 @@ assert.equal(bookshelfArea.fileCount, 3);
 assert.ok(bookshelfArea.representativePaths.some((path) => path.endsWith("RecipeManagerMixin.java")));
 assert.ok(bookshelfArea.representativePaths.some((path) => path.endsWith("StructureTemplateMixin.java")));
 
+const observerComponent = moduleA.components.find((entry) => entry.key === "observer");
+const inventoryComponent = moduleA.components.find((entry) => entry.key === "inventory");
+const bookshelfComponent = moduleA.components.find((entry) => entry.key === "bookshelf");
+assert.ok(observerComponent);
+assert.ok(inventoryComponent);
+assert.ok(bookshelfComponent);
+assert.equal(observerComponent.id, "component:totem-a:observer");
+assert.deepEqual(observerComponent.featureIds, ["totem-a.feature-observer"]);
+assert.deepEqual(inventoryComponent.featureIds, ["totem-a.feature-inventory"]);
+assert.deepEqual(bookshelfComponent.featureIds, ["totem-a.feature-bookshelf"]);
+assert.ok(observerComponent.implementationPaths.every((path) => path.startsWith("src/main/") || path.startsWith("src/client/")));
+assert.ok(observerComponent.surfaceKinds.includes("clientUi"));
+
 const crossB = moduleA.crossModuleImports.find((entry) => entry.targetModuleId === "totem-b");
 const crossCore = moduleA.crossModuleImports.find((entry) => entry.targetModuleId === "totem-core");
 const crossAlchemy = moduleA.crossModuleImports.find((entry) => entry.targetModuleId === "totem-alchemy");
@@ -784,6 +808,24 @@ assert.ok(rootAreaC);
 assert.ok(menuAreaC.representativePaths.some((path) => path.endsWith("CopperGolemMenuScreenSession.java")));
 assert.ok(menuAreaC.representativePaths.some((path) => path.endsWith("CopperGolemMenuPayloadBridge.java")));
 assert.ok(rootAreaC.representativePaths.some((path) => path.endsWith("TotemCopperworks.java")));
+
+for (const [key, featureId] of [
+  ["gathering", "totem-copperworks.feature-gathering"],
+  ["sorting", "totem-copperworks.feature-sorting"],
+  ["llm", "totem-copperworks.feature-llm"],
+  ["menu", "totem-copperworks.feature-menu"]
+]) {
+  const component = moduleC.components.find((entry) => entry.key === key);
+  assert.ok(component, `missing inferred component ${key}`);
+  assert.equal(component.id, `component:totem-copperworks:${key}`);
+  assert.deepEqual(component.featureIds, [featureId]);
+  assert.ok(["medium", "high"].includes(component.mappingConfidence));
+  assert.ok(component.implementationPaths.length > 0);
+}
+const rootComponentC = moduleC.components.find((entry) => entry.key === "module-root");
+assert.ok(rootComponentC);
+assert.deepEqual(rootComponentC.featureIds, [], "weak module-root evidence must remain unmapped rather than inventing a feature link");
+
 for (const label of [
   "CopperGolemMenuPanelLayout",
   "CopperGolemMenuEditor",
@@ -817,4 +859,6 @@ const bridgeRootArea = bridgeDemo.featureAreas.find((entry) => entry.key === "mo
 assert.ok(bridgeRootArea);
 assert.ok(bridgeRootArea.representativePaths.some((path) => path.endsWith("TotemBridgeDemo.java")));
 
-console.log("Code-first inventory validation passed.");
+const inventorySource = fs.readFileSync("intelligence/code-inventory.mjs", "utf8");
+assert.ok(!/componentFeatureMatch[\s\S]{0,10000}module\.id\s*===\s*["']totem-/m.test(inventorySource), "component inference must not contain module-specific branches");
+console.log("Code-first inventory validation passed with generic L3 component inference.");

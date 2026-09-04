@@ -17,7 +17,9 @@ assert.ok(!pages.includes("cp viewer/graph-v2.js"), "Pages must not publish the 
 assert.ok(source.includes("drawArrowhead"), "3D relationships must render arrowheads");
 assert.ok(source.includes("if (!internal) drawArrowhead"), "directed contract/capability edges must receive arrowheads");
 assert.ok(source.includes('title: "Feature groups"'), "3D module info must expose featureGroups metadata");
-assert.ok(source.includes('title: "Summary"'), "3D module info must retain curated/code/capability summary counts");
+assert.ok(source.includes('title: "Semantic LOD"'), "3D module info must expose Feature/Component semantic LOD counts");
+assert.ok(source.includes('"L2 curated features: "'), "3D module info must retain curated Feature counts");
+assert.ok(source.includes('"L3 inferred components: "'), "3D module info must expose inferred Component counts");
 assert.ok(source.includes("function showContracts"), "3D renderer must own the relationship list button");
 assert.ok(source.includes("validated contracts"), "3D relationship list must expose the full contract inventory");
 assert.ok(source.includes('document.getElementById("snapshot").textContent'), "3D renderer must initialize snapshot metadata");
@@ -30,4 +32,4 @@ assert.ok(source.includes('event.key === "Enter" || event.key === " "'), "Enter/
 assert.ok(source.includes("keyboardFocusId"), "keyboard focus must be represented visually in the 3D renderer");
 assert.ok(html.includes("鍵盤方向鍵選節點"), "visible help must document keyboard navigation");
 
-console.log("3D-only parity validation passed: directional edges, module metadata, contracts/stats ownership, keyboard navigation, and 2D removal are complete.");
+console.log("3D-only parity validation passed: directional edges, semantic LOD metadata, contracts/stats ownership, keyboard navigation, and 2D removal are complete.");

@@ -301,9 +301,31 @@ export function buildCodeDetailGraph({ knowledge = loadKnowledge(), index = load
   });
 }
 
+function semanticComponents(codeInventory) {
+  return Object.freeze((codeInventory?.modules ?? [])
+    .flatMap((module) => (module.components ?? []).map((component) => Object.freeze({
+      id: component.id,
+      type: "component",
+      moduleId: component.moduleId,
+      key: component.key,
+      label: component.label,
+      responsibility: component.responsibility,
+      featureIds: Object.freeze([...(component.featureIds ?? [])]),
+      mappingScore: component.mappingScore ?? 0,
+      mappingConfidence: component.mappingConfidence ?? "unmapped",
+      fileCount: component.fileCount ?? 0,
+      implementationPaths: Object.freeze([...(component.implementationPaths ?? [])]),
+      representativePaths: Object.freeze([...(component.representativePaths ?? [])]),
+      symbols: Object.freeze([...(component.symbols ?? [])]),
+      surfaceKinds: Object.freeze([...(component.surfaceKinds ?? [])])
+    })))
+    .sort((a, b) => a.moduleId.localeCompare(b.moduleId) || a.key.localeCompare(b.key)));
+}
+
 export function buildGraphViewModel({ knowledge = loadKnowledge(), index = loadCodeIndex({ knowledge }) } = {}) {
   const code = buildCodeDetailGraph({ knowledge, index });
   const codeInventory = buildCodeInventory({ knowledge, index });
+  const components = semanticComponents(codeInventory);
   const externalIds = new Set();
   for (const contract of knowledge.contracts) {
     for (const node of [contract.from, contract.to, ...(contract.relatedNodes ?? [])]) {
@@ -317,7 +339,7 @@ export function buildGraphViewModel({ knowledge = loadKnowledge(), index = loadC
   });
 
   return Object.freeze({
-    schemaVersion: 3,
+    schemaVersion: 4,
     generatedAt: graphTimestamp(knowledge, index),
     snapshot: knowledge.snapshot,
     modules: Object.freeze(knowledge.modules.map((module) => Object.freeze({
@@ -352,6 +374,7 @@ export function buildGraphViewModel({ knowledge = loadKnowledge(), index = loadC
       featureIds: contract.featureIds ?? []
     }))),
     sharedCapabilities: sharedCapabilities(knowledge, index, codeInventory),
+    components,
     code,
     codeInventory
   });

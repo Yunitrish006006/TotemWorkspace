@@ -369,8 +369,10 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
             child: GraphView(
               data: _data,
               activityFeatureId: latestActivity?.featureId,
+              activityComponentId: latestActivity?.componentId,
               activityModuleId: latestActivity?.moduleId,
               activityType: latestActivity?.type,
+              autoExpandAgentFocus: _settings.autoExpandAgentFocus,
             ),
           ),
         ],
@@ -502,20 +504,22 @@ class _InventoryModuleTile extends StatelessWidget {
         title: Text(module.repoName.isEmpty ? module.moduleId : module.repoName,
             style: const TextStyle(fontWeight: FontWeight.w700)),
         subtitle: Text(
-          '${module.productionFileCount} production code files · ${module.featureAreas.length} code areas · ${module.resourceEvidence.fileCount} resource files\n${_surfaceSummary()}',
+          '${module.productionFileCount} production code files · ${module.components.length} components · ${module.resourceEvidence.fileCount} resource files\n${_surfaceSummary()}',
           style: const TextStyle(fontSize: 11, color: Color(0xFF9FB4CA)),
         ),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
         children: [
           if (module.packageRoot != null) _InventoryLine('Package root', module.packageRoot!),
-          const _InventoryTitle('Feature areas inferred from package / source structure'),
-          if (module.featureAreas.isEmpty) const _InventoryLine('Areas', 'No production source indexed'),
-          for (final area in module.featureAreas.take(12))
+          const _InventoryTitle('L3 Components inferred from production code'),
+          if (module.components.isEmpty) const _InventoryLine('Components', 'No production source indexed'),
+          for (final component in module.components.take(16))
             _InventoryLine(
-              '${area.label} · ${area.fileCount} files',
+              '${component.label} · ${component.fileCount} files · ${component.mappingConfidence}',
               [
-                if (area.symbols.isNotEmpty) area.symbols.take(8).join(', '),
-                if (area.representativePaths.isNotEmpty) area.representativePaths.first,
+                if (component.featureIds.isNotEmpty) 'Feature: ${component.featureIds.join(', ')}',
+                if (component.surfaceKinds.isNotEmpty) 'Surfaces: ${component.surfaceKinds.join(', ')}',
+                if (component.symbols.isNotEmpty) component.symbols.take(8).join(', '),
+                if (component.representativePaths.isNotEmpty) component.representativePaths.first,
               ].join('\n'),
             ),
           if (module.resourceEvidence.families.isNotEmpty) const _InventoryTitle('Production resource evidence'),

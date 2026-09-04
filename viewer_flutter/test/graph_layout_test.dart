@@ -84,6 +84,41 @@ void main() {
         'feature': 'Unbound event contract',
       },
     ],
+    'components': [
+      {
+        'id': 'component:totem-a:integration',
+        'moduleId': 'totem-a',
+        'key': 'integration',
+        'label': 'Integration',
+        'responsibility': 'Integration responsibility',
+        'featureIds': ['a.integration'],
+        'mappingScore': 12,
+        'mappingConfidence': 'high',
+        'fileCount': 2,
+        'implementationPaths': [
+          'src/main/java/dev/example/a/IntegrationService.java',
+          'src/client/java/dev/example/a/IntegrationScreen.java',
+        ],
+        'representativePaths': ['src/main/java/dev/example/a/IntegrationService.java'],
+        'symbols': ['IntegrationService'],
+        'surfaceKinds': ['api', 'clientUi'],
+      },
+      {
+        'id': 'component:totem-a:runtime',
+        'moduleId': 'totem-a',
+        'key': 'runtime',
+        'label': 'Runtime',
+        'responsibility': 'Unmapped runtime responsibility',
+        'featureIds': <String>[],
+        'mappingScore': 1,
+        'mappingConfidence': 'unmapped',
+        'fileCount': 1,
+        'implementationPaths': ['src/main/java/dev/example/a/RuntimeHooks.java'],
+        'representativePaths': ['src/main/java/dev/example/a/RuntimeHooks.java'],
+        'symbols': ['RuntimeHooks'],
+        'surfaceKinds': ['events'],
+      },
+    ],
     'sharedCapabilities': [
       {
         'id': 'shared:manual:totem-a',
@@ -126,6 +161,9 @@ void main() {
     expect(data.modules, hasLength(3));
     expect(data.features, hasLength(5));
     expect(data.sharedCapabilities.single.providerFeatureId, 'core.manual');
+    expect(data.components, hasLength(2));
+    expect(data.componentById('component:totem-a:integration')?.mappingConfidence, 'high');
+    expect(data.componentsForFeature('a.integration').single.key, 'integration');
     expect(data.manualFeatureFor('totem-a')?.id, 'a.manual');
   });
 
@@ -151,8 +189,16 @@ void main() {
 
     expect(scene.edges.any((edge) => edge.id == 'event:a:b'), isFalse);
     expect(
-      scene.edges.any((edge) => edge.from == 'totem-a' || edge.to == 'totem-a'),
+      scene.edges.any((edge) =>
+          edge.type != 'detail' && (edge.from == 'totem-a' || edge.to == 'totem-a')),
       isFalse,
+    );
+    expect(
+      scene.edges.any((edge) =>
+          edge.type == 'detail' &&
+          edge.from == 'totem-a' &&
+          edge.to == 'component:totem-a:runtime'),
+      isTrue,
     );
   });
 
@@ -172,6 +218,42 @@ void main() {
 
     expect(edge.from, 'a.manual');
     expect(edge.to, 'core.manual');
+  });
+
+  test('semantic LOD expands feature to component and component to implementation', () {
+    final data = GraphData.fromJson(fixture);
+
+    final moduleOnly = buildGraphScene(data, expanded: {'totem-a'});
+    expect(moduleOnly.byId.containsKey('a.integration'), isTrue);
+    expect(moduleOnly.byId.containsKey('component:totem-a:runtime'), isTrue);
+    expect(moduleOnly.byId.containsKey('component:totem-a:integration'), isFalse);
+
+    final componentScene = buildGraphScene(data, expanded: {'totem-a', 'a.integration'});
+    expect(componentScene.byId.containsKey('component:totem-a:integration'), isTrue);
+    expect(
+      componentScene.edges.any((edge) =>
+          edge.type == 'detail' &&
+          edge.from == 'a.integration' &&
+          edge.to == 'component:totem-a:integration'),
+      isTrue,
+    );
+    expect(componentScene.nodes.any((node) => node.kind == 'implementation'), isFalse);
+
+    final implementationScene = buildGraphScene(
+      data,
+      expanded: {'totem-a', 'a.integration', 'component:totem-a:integration'},
+    );
+    expect(
+      implementationScene.nodes.where((node) => node.kind == 'implementation'),
+      hasLength(2),
+    );
+    expect(
+      implementationScene.edges.where((edge) =>
+          edge.type == 'detail' &&
+          edge.from == 'component:totem-a:integration' &&
+          edge.label == 'implementation'),
+      hasLength(2),
+    );
   });
 
   test('edge filters remove disabled relationship families', () {

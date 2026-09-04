@@ -53,13 +53,17 @@ for (const required of [
   "clusters.push",
   "feature-detail",
   "shared-capability",
+  "componentMap",
+  "focusActivity",
+  "implementationPaths",
   "Shared capability links",
   "Core API links",
   "window.__TOTEM_CLUSTER_3D_V2__"
 ]) assert.ok(source.includes(required), `missing cluster v2 behavior: ${required}`);
 
 assert.ok(!source.includes("Math.random"), "cluster positions must remain deterministic across reloads");
-assert.ok(source.includes('type === "category"'), "generated code semantic radius band must remain present");
+assert.ok(source.includes('type === "component"'), "semantic Component radius band must remain present");
+assert.ok(source.includes('type === "implementation"'), "L4 implementation radius band must remain present");
 assert.ok(source.includes('type === "capability"'), "shared capability semantic radius band must remain present");
 assert.ok(source.includes('contract.type === "hard-core"'), "audited hard Core contracts with feature endpoints must remain retargetable");
 assert.ok(source.includes("cluster.radius * projected.scale"), "cluster boundary must scale with the same 3D projection as its module");
@@ -102,7 +106,9 @@ assert.ok(source.includes('edges.filter(edgeVisible)'), "scene edges must be fil
 assert.ok(source.includes('expandedCenterEndpoint(contract.from) || expandedCenterEndpoint(contract.to)'), "direct contracts must disappear when they would terminate on an expanded module center");
 assert.ok(source.includes('expandedCenterEndpoint(from) || expandedCenterEndpoint(to)'), "retargeted/shared edges must reject expanded module-center endpoints");
 assert.ok(!source.includes('id: "owner:" + feature.id'), "expanded curated features must not keep decorative module-center owner spokes");
-assert.ok(!source.includes('id: "owner:" + category.id'), "expanded code categories must not keep decorative module-center owner spokes");
+assert.ok(!source.includes('type: "category"'), "legacy code-category nodes must be replaced by semantic Components");
+assert.ok(source.includes('"contains-component:"'), "Feature/Module to Component containment must remain explicit");
+assert.ok(source.includes('"contains-implementation:"'), "Component to L4 implementation containment must remain explicit");
 assert.ok(source.includes('document.querySelectorAll("[data-edge-filter]")'), "edge filter UI must drive renderer state");
 assert.ok(source.includes('setAllEdgeFilters(true)') && source.includes('setAllEdgeFilters(false)'), "edge filter must support all/none shortcuts");
 
@@ -134,4 +140,4 @@ assert.ok(source.includes("relationAwareScatter(parent, feature.id"), "curated f
 assert.ok(source.includes("featureRelations: featureRelations"), "relation topology must be exposed for deterministic regression inspection");
 assert.ok(source.includes("relationAwareScatter: relationAwareScatter"), "relation-aware placement must be exposed for deterministic regression inspection");
 
-console.log("3D cluster v2 validation passed: the legacy rollback renderer keeps standalone 3D parity while Flutter owns the production root.");
+console.log("3D cluster v2 validation passed: legacy uses deterministic Module → Feature → Component → Implementation LOD while Flutter owns the production root.");

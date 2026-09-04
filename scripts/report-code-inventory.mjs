@@ -34,6 +34,8 @@ for (const module of inventory.modules) {
   lines.push(`- Production resource evidence: ${module.resourceEvidence?.fileCount ?? 0}`);
   lines.push(`- Package root: ${module.packageRoot ? `\`${module.packageRoot}\`` : "n/a"}`);
   lines.push(`- Feature areas: ${module.featureAreas.length}`);
+  lines.push(`- L3 Components: ${module.components.length}`);
+  lines.push(`- Mapped Components: ${module.components.filter((component) => component.featureIds.length > 0).length}`);
   lines.push(`- API / contract files: ${module.surfaces.api.length}`);
   lines.push(`- Networking: ${module.surfaces.networking.length}`);
   lines.push(`- Events / hooks: ${module.surfaces.events.length}`);
@@ -54,12 +56,18 @@ for (const module of inventory.modules) {
     lines.push("");
   }
 
-  if (module.featureAreas.length) {
-    lines.push("### Feature areas");
+  if (module.components.length) {
+    lines.push("### L3 Components / Responsibilities");
     lines.push("");
-    for (const area of module.featureAreas.slice(0, 16)) {
-      const symbols = area.symbols.slice(0, 5).join(", ");
-      lines.push(`- **${area.label}** — ${area.fileCount} files${symbols ? ` — ${symbols}` : ""}`);
+    for (const component of module.components.slice(0, 24)) {
+      const mapping = component.featureIds.length
+        ? ` → ${component.featureIds.join(", ")}`
+        : " → module-level";
+      const surfaces = component.surfaceKinds.length ? ` — ${component.surfaceKinds.join(", ")}` : "";
+      lines.push(`- **${component.label}** — ${component.fileCount} files — ${component.mappingConfidence}(${component.mappingScore})${mapping}${surfaces}`);
+      for (const evidencePath of component.representativePaths.slice(0, 3)) {
+        lines.push(`  - \`${evidencePath}\``);
+      }
     }
     lines.push("");
   }
@@ -101,16 +109,32 @@ if (strict) {
   if (missingProductionCode.length) {
     throw new Error(`Present modules without production Java/Kotlin evidence: ${missingProductionCode.join(", ")}`);
   }
+  for (const module of inventory.modules) {
+    if (module.components.length !== module.featureAreas.length) {
+      throw new Error(`Component/area cardinality drift in ${module.moduleId}: ${module.components.length} components vs ${module.featureAreas.length} areas`);
+    }
+    for (const component of module.components) {
+      for (const implementationPath of component.implementationPaths) {
+        const value = implementationPath.toLowerCase();
+        if (!(value.startsWith("src/main/") || value.startsWith("src/client/")) ||
+            value.includes("/test/") || value.includes("/gametest/") || value.includes("/generated/")) {
+          throw new Error(`Non-production implementation path in ${component.id}: ${implementationPath}`);
+        }
+      }
+    }
+  }
 }
 
 const totals = inventory.modules.reduce((sum, module) => ({
   files: sum.files + module.productionFileCount,
   areas: sum.areas + module.featureAreas.length,
+  components: sum.components + module.components.length,
+  mappedComponents: sum.mappedComponents + module.components.filter((component) => component.featureIds.length > 0).length,
   api: sum.api + module.surfaces.api.length,
   networking: sum.networking + module.surfaces.networking.length,
   events: sum.events + module.surfaces.events.length,
   resources: sum.resources + (module.resourceEvidence?.fileCount ?? 0)
-}), { files: 0, areas: 0, api: 0, networking: 0, events: 0, resources: 0 });
+}), { files: 0, areas: 0, components: 0, mappedComponents: 0, api: 0, networking: 0, events: 0, resources: 0 });
 
 process.stdout.write(`${JSON.stringify({
   sourceScope: inventory.sourceScope,

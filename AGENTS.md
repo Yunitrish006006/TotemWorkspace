@@ -98,3 +98,11 @@ the 11 active Totem repositories. It is not a Minecraft mod.
   runtime state.
 - VS Code tasks may invoke repository tooling, but must not embed host passwords
   or private SSH configuration.
+
+- Semantic LOD Component inference must stay generic and production-code-only.
+  Never add module-ID-specific mapping branches to make a particular Component
+  attach to a curated Feature.
+- Feature-to-Component links are confidence-gated. Ambiguous evidence must
+  remain module-level instead of inventing a relationship.
+- L4 implementation nodes are progressive detail: render them only beneath an
+  expanded/active Component, not globally.
