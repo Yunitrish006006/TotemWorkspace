@@ -47,3 +47,7 @@ jobs:
         run: node scripts/validate-local-viewer.mjs
       - name: Validate AI development viewer parity
         run: node scripts/validate-ai-development-viewer.mjs
+      - name: Validate remote bridge shell syntax
+        run: bash -n tools/remote/bridge.sh
+      - name: Validate remote tmux bridge tooling
+        run: node scripts/validate-remote-bridge.mjs
