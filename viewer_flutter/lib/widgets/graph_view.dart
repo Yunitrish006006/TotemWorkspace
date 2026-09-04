@@ -8,21 +8,46 @@ import '../model/graph_data.dart';
 import '../model/graph_scene.dart';
 
 class GraphView extends StatefulWidget {
-  const GraphView({super.key, required this.data});
+  const GraphView({
+    super.key,
+    required this.data,
+    this.activityFeatureId,
+    this.activityModuleId,
+    this.activityType,
+  });
 
   final GraphData data;
+  final String? activityFeatureId;
+  final String? activityModuleId;
+  final String? activityType;
 
   @override
   State<GraphView> createState() => _GraphViewState();
 }
 
-class _GraphViewState extends State<GraphView> {
+class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMixin {
   Camera3d _camera = const Camera3d();
   String? _selectedId = 'totem-core';
   final Set<String> _expanded = <String>{};
   final Set<String> _enabledFilters = edgeFilterKeys.toSet();
   double _gestureStartZoom = 1;
   Offset? _lastFocalPoint;
+  late final AnimationController _activityPulse;
+
+  @override
+  void initState() {
+    super.initState();
+    _activityPulse = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1200),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _activityPulse.dispose();
+    super.dispose();
+  }
 
   GraphScene get _scene => buildGraphScene(
         widget.data,
@@ -163,6 +188,11 @@ class _GraphViewState extends State<GraphView> {
                     scene: scene,
                     camera: _camera,
                     selectedId: _selectedId,
+                    activityNodeId: widget.activityFeatureId != null && scene.byId.containsKey(widget.activityFeatureId)
+                        ? widget.activityFeatureId
+                        : widget.activityModuleId,
+                    activityType: widget.activityType,
+                    activityPulse: _activityPulse,
                   ),
                 ),
               ),
@@ -452,17 +482,23 @@ class _Item extends StatelessWidget {
 }
 
 class _GraphPainter extends CustomPainter {
-  const _GraphPainter({
+  _GraphPainter({
     required this.data,
     required this.scene,
     required this.camera,
     required this.selectedId,
-  });
+    required this.activityNodeId,
+    required this.activityType,
+    required this.activityPulse,
+  }) : super(repaint: activityPulse);
 
   final GraphData data;
   final GraphScene scene;
   final Camera3d camera;
   final String? selectedId;
+  final String? activityNodeId;
+  final String? activityType;
+  final Animation<double> activityPulse;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -517,7 +553,15 @@ class _GraphPainter extends CustomPainter {
       final point = projected[node.id]!;
       final nodeSelected = node.id == selectedId;
       final nodeConnected = spotlightId == null || connected.contains(node.id) || node.ownerId == scene.ownerOf(spotlightId);
-      _drawNode(canvas, node, point, selected: nodeSelected, connected: nodeConnected);
+      final agentActive = node.id == activityNodeId;
+      _drawNode(
+        canvas,
+        node,
+        point,
+        selected: nodeSelected,
+        connected: nodeConnected,
+        agentActive: agentActive,
+      );
     }
   }
 
@@ -556,6 +600,7 @@ class _GraphPainter extends CustomPainter {
     ProjectedPoint projected, {
     required bool selected,
     required bool connected,
+    required bool agentActive,
   }) {
     final child = node.isChild;
     final radius = child ? (node.kind == 'capability' ? 6.0 : 5.3) : math.max(8.0, 12 * projected.scale);
@@ -568,6 +613,24 @@ class _GraphPainter extends CustomPainter {
     };
     final stroke = node.feature?.hasCrossModuleRelations == true ? const Color(0xFFFBBF24) : fill;
     final alpha = connected ? 1.0 : 0.18;
+
+    if (agentActive) {
+      final pulse = (math.sin(activityPulse.value * math.pi * 2) + 1) / 2;
+      final haloColor = _activityColor(activityType);
+      canvas.drawCircle(
+        projected.offset,
+        radius + 8 + pulse * 7,
+        Paint()
+          ..color = haloColor.withValues(alpha: 0.9 - pulse * 0.45)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.2 + pulse * 1.6,
+      );
+      canvas.drawCircle(
+        projected.offset,
+        radius + 4,
+        Paint()..color = haloColor.withValues(alpha: 0.08 + (1 - pulse) * 0.08),
+      );
+    }
 
     if (selected) {
       canvas.drawCircle(
@@ -617,6 +680,18 @@ class _GraphPainter extends CustomPainter {
       ..lineTo((tip - direction * 8 - normal * 4).dx, (tip - direction * 8 - normal * 4).dy)
       ..close();
     canvas.drawPath(path, Paint()..color = color);
+  }
+
+  Color _activityColor(String? type) {
+    final value = type ?? '';
+    if (value == 'test_failed' || value == 'deployment_failed') return const Color(0xFFF87171);
+    if (value == 'test_passed' || value == 'task_completed' || value == 'deployment_completed') {
+      return const Color(0xFF86EFAC);
+    }
+    if (value == 'file_edit' || value == 'symbol_edit' || value == 'git_diff_updated') {
+      return const Color(0xFFFBBF24);
+    }
+    return const Color(0xFF67E8F9);
   }
 
   Color _edgeColor(String type) => switch (type) {

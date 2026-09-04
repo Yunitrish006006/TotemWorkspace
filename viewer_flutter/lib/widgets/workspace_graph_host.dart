@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
@@ -20,8 +21,14 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
   LocalWorkspaceClient? _client;
   WorkspaceLiveStatus? _live;
   Timer? _poller;
+  Timer? _activityPoller;
+  ViewerSettings _settings = ViewerSettings.defaults;
+  final List<AgentActivityEvent> _activity = <AgentActivityEvent>[];
+  int _activitySequence = 0;
   bool _probing = true;
   bool _refreshing = false;
+  bool _savingSettings = false;
+  bool _submittingPrompt = false;
   String? _liveError;
 
   @override
@@ -34,6 +41,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
   @override
   void dispose() {
     _poller?.cancel();
+    _activityPoller?.cancel();
     _client?.close();
     super.dispose();
   }
@@ -52,18 +60,28 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
         if (mounted) setState(() => _probing = false);
         return;
       }
-      final status = await client.workspaceStatus();
+      final results = await Future.wait<Object>([
+        client.workspaceStatus(),
+        client.viewerSettings(),
+        client.activity(),
+      ]);
       if (!mounted) {
         client.close();
         return;
       }
+      final status = results[0] as WorkspaceLiveStatus;
+      final settings = results[1] as ViewerSettings;
+      final activity = results[2] as AgentActivityBatch;
       setState(() {
         _client = client;
         _live = status;
+        _settings = settings;
+        _mergeActivity(activity);
         _probing = false;
         _liveError = null;
       });
       _poller = Timer.periodic(const Duration(seconds: 5), (_) => unawaited(_pollStatus()));
+      _activityPoller = Timer.periodic(const Duration(seconds: 1), (_) => unawaited(_pollActivity()));
     } catch (error) {
       client.close();
       if (mounted) {
@@ -88,6 +106,70 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
     } catch (error) {
       if (!mounted) return;
       setState(() => _liveError = error.toString());
+    }
+  }
+
+  void _mergeActivity(AgentActivityBatch batch) {
+    _activitySequence = batch.latestSequence;
+    for (final event in batch.events) {
+      if (_activity.any((existing) => existing.sequence == event.sequence)) continue;
+      _activity.add(event);
+    }
+    if (_activity.length > 80) {
+      _activity.removeRange(0, _activity.length - 80);
+    }
+  }
+
+  Future<void> _pollActivity() async {
+    final client = _client;
+    if (client == null || !_settings.agentActivityEnabled) return;
+    try {
+      final batch = await client.activity(after: _activitySequence);
+      if (!mounted || batch.events.isEmpty) return;
+      setState(() => _mergeActivity(batch));
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _liveError = error.toString());
+    }
+  }
+
+  Future<void> _setPromptEnabled(bool enabled) async {
+    final client = _client;
+    if (client == null || _savingSettings) return;
+    setState(() => _savingSettings = true);
+    try {
+      final next = await client.updateViewerSettings(_settings.copyWith(promptEnabled: enabled));
+      if (!mounted) return;
+      setState(() {
+        _settings = next;
+        _liveError = null;
+      });
+    } catch (error) {
+      if (mounted) setState(() => _liveError = error.toString());
+    } finally {
+      if (mounted) setState(() => _savingSettings = false);
+    }
+  }
+
+  Future<void> _submitPrompt(String prompt) async {
+    final client = _client;
+    final value = prompt.trim();
+    if (client == null || value.isEmpty || _submittingPrompt || !_settings.promptEnabled) return;
+    setState(() => _submittingPrompt = true);
+    try {
+      final event = await client.submitPrompt(value);
+      if (!mounted) return;
+      setState(() {
+        if (!_activity.any((existing) => existing.sequence == event.sequence)) {
+          _activity.add(event);
+          _activitySequence = math.max(_activitySequence, event.sequence);
+        }
+        _liveError = null;
+      });
+    } catch (error) {
+      if (mounted) setState(() => _liveError = error.toString());
+    } finally {
+      if (mounted) setState(() => _submittingPrompt = false);
     }
   }
 
@@ -258,6 +340,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
   Widget build(BuildContext context) {
     final live = _live;
     final isLocal = _client != null && live != null;
+    final latestActivity = _activity.isEmpty ? null : _activity.last;
     return Scaffold(
       backgroundColor: const Color(0xFF050B14),
       body: Column(
@@ -266,17 +349,127 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
             probing: _probing,
             local: isLocal,
             refreshing: _refreshing,
+            savingSettings: _savingSettings,
+            promptEnabled: _settings.promptEnabled,
             live: live,
             error: _liveError,
             onRefresh: isLocal ? _refreshWorkspace : null,
             onStatus: isLocal ? _showWorkspaceStatus : null,
             onInventory: _showCodeInventory,
+            onPromptChanged: isLocal ? _setPromptEnabled : null,
           ),
-          Expanded(child: GraphView(data: _data)),
+          if (isLocal && _settings.agentActivityEnabled && _activity.isNotEmpty)
+            _ActivityStrip(event: _activity.last),
+          if (isLocal && _settings.promptEnabled)
+            _PromptPanel(
+              submitting: _submittingPrompt,
+              onSubmit: _submitPrompt,
+            ),
+          Expanded(
+            child: GraphView(
+              data: _data,
+              activityFeatureId: latestActivity?.featureId,
+              activityModuleId: latestActivity?.moduleId,
+              activityType: latestActivity?.type,
+            ),
+          ),
         ],
       ),
     );
   }
+}
+
+class _ActivityStrip extends StatelessWidget {
+  const _ActivityStrip({required this.event});
+
+  final AgentActivityEvent event;
+
+  @override
+  Widget build(BuildContext context) {
+    final target = event.targetLabel;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      decoration: const BoxDecoration(
+        color: Color(0xFF091827),
+        border: Border(bottom: BorderSide(color: Color(0xFF1F3B53))),
+      ),
+      child: Text(
+        'AGENT · ${event.type}${target.isEmpty ? '' : ' · $target'}${event.summary == null ? '' : ' · ${event.summary}'}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: Color(0xFF67E8F9),
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.25,
+        ),
+      ),
+    );
+  }
+}
+
+class _PromptPanel extends StatefulWidget {
+  const _PromptPanel({required this.submitting, required this.onSubmit});
+
+  final bool submitting;
+  final ValueChanged<String> onSubmit;
+
+  @override
+  State<_PromptPanel> createState() => _PromptPanelState();
+}
+
+class _PromptPanelState extends State<_PromptPanel> {
+  final TextEditingController _controller = TextEditingController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _submit() {
+    final value = _controller.text.trim();
+    if (value.isEmpty || widget.submitting) return;
+    widget.onSubmit(value);
+    _controller.clear();
+  }
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+        decoration: const BoxDecoration(
+          color: Color(0xFF07111D),
+          border: Border(bottom: BorderSide(color: Color(0xFF2B4058))),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: _controller,
+                enabled: !widget.submitting,
+                onSubmitted: (_) => _submit(),
+                decoration: const InputDecoration(
+                  isDense: true,
+                  hintText: '輸入 Prompt（目前送入 Local Bridge；Agent adapter 接手後才會真正執行）',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton.icon(
+              onPressed: widget.submitting ? null : _submit,
+              icon: widget.submitting
+                  ? const SizedBox.square(
+                      dimension: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.send, size: 16),
+              label: Text(widget.submitting ? '送出中' : '送出'),
+            ),
+          ],
+        ),
+      );
 }
 
 class _InventoryModuleTile extends StatelessWidget {
@@ -406,21 +599,27 @@ class _ModeBanner extends StatelessWidget {
     required this.probing,
     required this.local,
     required this.refreshing,
+    required this.savingSettings,
+    required this.promptEnabled,
     required this.live,
     required this.error,
     required this.onRefresh,
     required this.onStatus,
     required this.onInventory,
+    required this.onPromptChanged,
   });
 
   final bool probing;
   final bool local;
   final bool refreshing;
+  final bool savingSettings;
+  final bool promptEnabled;
   final WorkspaceLiveStatus? live;
   final String? error;
   final VoidCallback? onRefresh;
   final VoidCallback? onStatus;
   final VoidCallback onInventory;
+  final ValueChanged<bool>? onPromptChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -462,6 +661,17 @@ class _ModeBanner extends StatelessWidget {
               icon: const Icon(Icons.account_tree_outlined, size: 16),
               label: const Text('程式碼盤點'),
             ),
+            if (onPromptChanged != null)
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Text('Prompt', style: TextStyle(fontSize: 11, color: Color(0xFF9FB4CA))),
+                  Switch.adaptive(
+                    value: promptEnabled,
+                    onChanged: savingSettings ? null : onPromptChanged,
+                  ),
+                ],
+              ),
             if (onStatus != null)
               TextButton.icon(
                 onPressed: onStatus,

@@ -9,8 +9,11 @@ the 11 active Totem repositories. It is not a Minecraft mod.
   consistent.
 - Derive versions, branches, commit SHAs, Fabric dependency ranges, and provider
   protocols from the owning repositories; never infer release or CI state.
-- Keep exactly 11 active Totem modules. DeadRecall is stopped-maintenance legacy
-  compatibility and must not be represented as an active module or dependency.
+- The current audited baseline contains 11 active Totem modules, but the registry is
+  extensible. Adding a normal active Totem repository must be data-driven and must
+  not require module-specific analyzer or viewer code. DeadRecall is
+  stopped-maintenance legacy compatibility and must not be represented as an active
+  module or dependency.
 - Classify Fabric `suggests`, runtime compatibility, external services, and
   EventBus subscriptions separately. An EventBus publisher does not depend on an
   optional subscriber.
@@ -49,6 +52,11 @@ the 11 active Totem repositories. It is not a Minecraft mod.
 - Generated code detail may contain only factual indexed metadata such as
   relative source paths, test files, deterministic categories, and symbol names.
   It must not contain source bodies or infer new dependency contracts.
+- Both maintained Pages viewer surfaces (Flutter production root and `/legacy/`)
+  must stay behaviorally synchronized for settings, local activity, semantic
+  relationships, diff/impact and replay capabilities. Parity must be regression-tested.
+- Prompt visibility is a local viewer setting only. Disabling Prompt must not disable
+  Agent Activity or any graph/diff/impact/replay capability.
 - Normal MCP/CLI `impact` and index-refresh paths may regenerate only the V2 data
   artifact after source changes. Generation is best-effort: viewer-data failure
   must never turn a successful RAG refresh, impact analysis, test plan, build, or

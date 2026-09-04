@@ -13,6 +13,47 @@ const ROOT = path.resolve(HERE, "..");
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 8765;
 const BODY_LIMIT = 64 * 1024;
+const PROMPT_LIMIT = 8 * 1024;
+const ACTIVITY_LIMIT = 500;
+const APPROVED_BROWSER_ORIGINS = new Set([
+  "https://yunitrish006006.github.io"
+]);
+
+const DEFAULT_VIEWER_SETTINGS = Object.freeze({
+  schemaVersion: 1,
+  promptEnabled: false,
+  agentActivityEnabled: true,
+  changeAnimationsEnabled: true,
+  autoExpandAgentFocus: true,
+  replayEnabled: true
+});
+
+const ACTIVITY_TYPES = new Set([
+  "task_started",
+  "task_completed",
+  "prompt_submitted",
+  "feature_selected",
+  "file_read",
+  "file_edit",
+  "symbol_read",
+  "symbol_edit",
+  "dependency_followed",
+  "test_started",
+  "test_passed",
+  "test_failed",
+  "relation_added",
+  "relation_removed",
+  "git_diff_updated",
+  "commit_created",
+  "pr_created",
+  "pr_merged",
+  "deployment_started",
+  "deployment_completed",
+  "deployment_failed"
+]);
+
+let activitySequence = 0;
+const activityEvents = [];
 
 const MIME = Object.freeze({
   ".html": "text/html; charset=utf-8",
@@ -42,13 +83,21 @@ function isLoopbackOrigin(origin) {
   return /^https?:\/\/(?:127\.0\.0\.1|localhost|\[::1\])(?::\d+)?$/i.test(String(origin ?? ""));
 }
 
+function isApprovedBrowserOrigin(origin) {
+  const value = String(origin ?? "");
+  return isLoopbackOrigin(value) || APPROVED_BROWSER_ORIGINS.has(value);
+}
+
 function prepareApiCors(req, res) {
   const origin = req.headers.origin;
   if (!origin) return true;
-  if (!isLoopbackOrigin(origin)) return false;
+  if (!isApprovedBrowserOrigin(origin)) return false;
   res.setHeader("access-control-allow-origin", origin);
   res.setHeader("access-control-allow-methods", "GET, POST, OPTIONS");
   res.setHeader("access-control-allow-headers", "content-type");
+  if (String(req.headers["access-control-request-private-network"] ?? "").toLowerCase() === "true") {
+    res.setHeader("access-control-allow-private-network", "true");
+  }
   res.setHeader("vary", "Origin");
   return true;
 }
@@ -64,6 +113,100 @@ function publicStatus(entry) {
     snapshotMatch: entry.snapshotMatch ?? false,
     expectedCommit: entry.expectedCommit ?? null,
     expectedBranch: entry.expectedBranch ?? null
+  });
+}
+
+function viewerSettingsPath() {
+  return path.join(ROOT, ".totem-index", "viewer-settings.json");
+}
+
+function normalizeViewerSettings(value = {}) {
+  const next = { ...DEFAULT_VIEWER_SETTINGS };
+  for (const key of Object.keys(DEFAULT_VIEWER_SETTINGS)) {
+    if (key === "schemaVersion") continue;
+    if (typeof value[key] === "boolean") next[key] = value[key];
+  }
+  return Object.freeze(next);
+}
+
+function loadViewerSettings() {
+  try {
+    return normalizeViewerSettings(JSON.parse(fs.readFileSync(viewerSettingsPath(), "utf8")));
+  } catch {
+    return DEFAULT_VIEWER_SETTINGS;
+  }
+}
+
+function saveViewerSettings(value) {
+  const next = normalizeViewerSettings(value);
+  const filePath = viewerSettingsPath();
+  fs.mkdirSync(path.dirname(filePath), { recursive: true });
+  const tempPath = `${filePath}.tmp`;
+  fs.writeFileSync(tempPath, `${JSON.stringify(next, null, 2)}\n`, "utf8");
+  fs.renameSync(tempPath, filePath);
+  return next;
+}
+
+function boundedText(value, maxLength) {
+  if (value == null) return null;
+  const text = String(value).trim();
+  if (!text) return null;
+  return text.length <= maxLength ? text : text.slice(0, maxLength);
+}
+
+function relativeCodePath(value) {
+  const text = boundedText(value, 512);
+  if (!text) return null;
+  if (path.isAbsolute(text) || /^[A-Za-z]:[\\/]/.test(text)) {
+    throw new Error("activity file paths must be repository-relative");
+  }
+  return text.replaceAll("\\", "/");
+}
+
+function normalizeActivityEvent(value = {}, { source = "bridge" } = {}) {
+  const type = boundedText(value.type, 64);
+  if (!type || !ACTIVITY_TYPES.has(type)) throw new Error(`unsupported activity type: ${type ?? "missing"}`);
+  const event = {
+    sequence: ++activitySequence,
+    timestamp: new Date().toISOString(),
+    type,
+    source: boundedText(value.source, 64) ?? source
+  };
+  const fields = [
+    ["moduleId", 128],
+    ["featureId", 160],
+    ["componentId", 160],
+    ["symbol", 256],
+    ["summary", 500],
+    ["status", 80],
+    ["from", 200],
+    ["to", 200],
+    ["test", 256],
+    ["taskId", 160]
+  ];
+  for (const [key, max] of fields) {
+    const text = boundedText(value[key], max);
+    if (text) event[key] = text;
+  }
+  const file = relativeCodePath(value.file);
+  if (file) event.file = file;
+  return Object.freeze(event);
+}
+
+function appendActivity(value, options) {
+  const event = normalizeActivityEvent(value, options);
+  activityEvents.push(event);
+  if (activityEvents.length > ACTIVITY_LIMIT) activityEvents.splice(0, activityEvents.length - ACTIVITY_LIMIT);
+  return event;
+}
+
+function activityPayload(after = 0) {
+  const sequence = Number.isFinite(after) && after >= 0 ? Math.floor(after) : 0;
+  return Object.freeze({
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    latestSequence: activitySequence,
+    events: activityEvents.filter((event) => event.sequence > sequence)
   });
 }
 
@@ -128,9 +271,15 @@ function serveStatic(req, res, pathname) {
   }
 }
 
-async function handleApi(req, res, pathname) {
+async function handleApi(req, res, url) {
+  const pathname = url.pathname;
   if (req.method === "GET" && pathname === "/api/health") {
-    json(res, 200, { status: "ok", mode: "local" });
+    json(res, 200, {
+      status: "ok",
+      mode: "local",
+      activitySchemaVersion: 1,
+      promptExecution: "agent-adapter-required"
+    });
     return true;
   }
 
@@ -143,6 +292,63 @@ async function handleApi(req, res, pathname) {
     const knowledge = loadKnowledge();
     const index = loadCodeIndex({ knowledge });
     json(res, 200, buildGraphViewModel({ knowledge, index }));
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/viewer-settings") {
+    json(res, 200, loadViewerSettings());
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/viewer-settings") {
+    const current = loadViewerSettings();
+    const args = await readJsonBody(req);
+    const next = saveViewerSettings({ ...current, ...args });
+    json(res, 200, next);
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/activity") {
+    const rawAfter = Number(url.searchParams.get("after") ?? 0);
+    json(res, 200, activityPayload(rawAfter));
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/activity") {
+    try {
+      const args = await readJsonBody(req);
+      const event = appendActivity(args, { source: "agent-adapter" });
+      json(res, 202, { status: "accepted", event });
+    } catch (error) {
+      json(res, 400, { error: error instanceof Error ? error.message : String(error) });
+    }
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/prompt") {
+    const settings = loadViewerSettings();
+    if (!settings.promptEnabled) {
+      json(res, 403, { error: "prompt is disabled in viewer settings" });
+      return true;
+    }
+    const args = await readJsonBody(req);
+    const prompt = boundedText(args.prompt, PROMPT_LIMIT);
+    if (!prompt) {
+      json(res, 400, { error: "prompt is required" });
+      return true;
+    }
+    const event = appendActivity({
+      type: "prompt_submitted",
+      source: "viewer",
+      moduleId: args.moduleId,
+      featureId: args.featureId,
+      summary: prompt.length <= 220 ? prompt : `${prompt.slice(0, 217)}...`
+    }, { source: "viewer" });
+    json(res, 202, {
+      status: "accepted",
+      execution: "agent-adapter-required",
+      event
+    });
     return true;
   }
 
@@ -176,7 +382,7 @@ export function createLocalViewerServer() {
       const url = new URL(req.url || "/", base);
       if (url.pathname.startsWith("/api/")) {
         if (!prepareApiCors(req, res)) {
-          json(res, 403, { error: "cross-origin access is restricted to loopback clients" });
+          json(res, 403, { error: "cross-origin access is restricted to approved TotemWorkspace or loopback clients" });
           return;
         }
         if (req.method === "OPTIONS") {
@@ -184,7 +390,7 @@ export function createLocalViewerServer() {
           res.end();
           return;
         }
-        if (await handleApi(req, res, url.pathname)) return;
+        if (await handleApi(req, res, url)) return;
         json(res, 404, { error: "unknown api route" });
         return;
       }

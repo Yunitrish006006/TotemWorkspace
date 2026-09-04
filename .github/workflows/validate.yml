@@ -45,3 +45,5 @@ jobs:
         run: node scripts/validate-3d-only-parity.mjs
       - name: Validate localhost live viewer
         run: node scripts/validate-local-viewer.mjs
+      - name: Validate AI development viewer parity
+        run: node scripts/validate-ai-development-viewer.mjs

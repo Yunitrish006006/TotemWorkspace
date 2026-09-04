@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'">
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self'; script-src 'self'; connect-src 'self' http://127.0.0.1:8765 http://localhost:8765">
 <title>TOTEM Architecture V2</title>
 <link rel="stylesheet" href="viewer/graph-v2.css">
 </head>
@@ -17,6 +17,8 @@
     <span class="pill" id="snapshot">loading</span>
     <span class="pill" id="stats">loading</span>
     <span class="pill live-local" id="liveLocal" hidden>LIVE LOCAL</span>
+    <span class="pill agent-activity" id="agentActivity" hidden>AGENT</span>
+    <button id="promptToggle" type="button" hidden>Prompt OFF</button>
     <button id="localStatus" type="button" hidden>本機狀態</button>
     <button id="refreshLocal" type="button" hidden>重新整理本機</button>
     <a class="button-link" href="flutter/">Flutter Preview</a>
@@ -42,6 +44,10 @@
     </div>
     <button id="contracts" type="button">關係</button>
   </header>
+  <div class="prompt-bar" id="promptBar" hidden>
+    <input id="promptInput" type="text" maxlength="8192" autocomplete="off" placeholder="輸入 Prompt（Local Bridge 接收；Agent adapter 接手後才會真正執行）">
+    <button id="promptSubmit" type="button">送出</button>
+  </div>
   <main class="stage">
     <section id="pane3d" class="pane">
       <canvas id="graph3d" class="canvas3d" tabindex="0" role="application" aria-label="TOTEM 3D 架構圖；方向鍵切換節點，Enter 或空白鍵啟動"></canvas>

@@ -33,6 +33,9 @@ jobs:
       - name: Validate localhost live viewer
         run: node scripts/validate-local-viewer.mjs
 
+      - name: Validate maintained viewer parity
+        run: node scripts/validate-ai-development-viewer.mjs
+
       - name: Clone latest active Totem repositories
         shell: bash
         run: |

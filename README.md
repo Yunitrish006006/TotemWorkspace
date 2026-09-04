@@ -4,10 +4,11 @@ TotemWorkspace 是 11 個現役 Totem 模組的公開協作與文件總表。這
 
 目前快照日期為 **2026-09-02**。本次整理 11 個現役模組的正式版本，補齊 Totem 物品配方取得進度、Alchemy 可切換的釀造材料自動登錄，以及 Remnant 回聲碎片結晶途徑；curated 互動圖共有 **58 個**可展開功能分支。
 
-[開啟 GitHub Pages 互動式模組圖](https://yunitrish006006.github.io/TotemWorkspace/)
-｜[Flutter Viewer Preview](https://yunitrish006006.github.io/TotemWorkspace/flutter/)
+[開啟 GitHub Pages Flutter 主介面](https://yunitrish006006.github.io/TotemWorkspace/)
+｜[Legacy 3D 同步介面](https://yunitrish006006.github.io/TotemWorkspace/legacy/)
 ｜[Curated HTML](index.html)
-｜[V2 3D 圖](graph-v2.html)
+｜[本機 V2 3D](graph-v2.html)
+｜[AI Development Graph 計畫](docs/ai-development-graph-plan.md)
 ｜[Flutter Viewer Roadmap](docs/flutter-viewer-roadmap.md)
 
 `index.html` 目前仍是經驗證的 curated 架構來源。V2 則拆成純 renderer 與獨立 generated data：`graph-v2.html` 本身不保存任何 module／feature／contract／code-index 資料；資料只存在 `viewer/generated/graph-data.js`，並由同一套 validated knowledge + 本機 code index 產生，因此不建立第三份人工 dependency graph。
@@ -21,6 +22,7 @@ TotemWorkspace 是 11 個現役 Totem 模組的公開協作與文件總表。這
 - [開發注意事項](docs/development-guidelines.md)
 - [Codex Workspace Intelligence](docs/codex-intelligence.md)
 - [Flutter Viewer Migration](docs/flutter-viewer-roadmap.md)
+- [AI Development Graph](docs/ai-development-graph-plan.md)
 - [發布檢查表](docs/release-checklist.md)
 - [目前原始碼狀態](docs/current-status.md)
 - [機器可讀快照](data/modules.json)
@@ -95,6 +97,22 @@ cd viewer_flutter
 flutter pub get
 flutter run -d chrome
 ```
+
+Local Bridge 固定綁定 `127.0.0.1:8765`。Flutter production root 與 `/legacy/` 使用同一套本機設定／activity contract；公開 Pages 只允許連回 loopback bridge，不會把本機 source、未提交 diff 或絕對路徑打包進 Pages。
+
+Prompt 預設關閉，而且只控制 Prompt 輸入框；Agent Activity 與 Graph 功能保持獨立。連上 Local Bridge 後可直接從 Viewer 切換 Prompt，也可用 CLI：
+
+```sh
+node scripts/totem-activity.mjs prompt on
+node scripts/totem-activity.mjs emit file_edit \
+  --module totem-automata \
+  --feature totem-automata.feature-4 \
+  --file src/client/java/dev/totem/automata/client/CopperGolemVisualizationClient.java \
+  --summary "editing outline rendering"
+node scripts/totem-activity.mjs status
+```
+
+Phase 1 的 Prompt intake 只會寫入本機 activity stream；在 Agent Adapter 完成前不會直接從瀏覽器執行 shell 或假裝 Codex 已開始工作。
 
 WebAssembly build：
 
