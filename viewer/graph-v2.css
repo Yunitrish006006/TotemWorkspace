@@ -13,3 +13,4 @@ button,.button-link{border:1px solid #38506a;border-radius:9px;background:#10253
 .prompt-bar input{flex:1;min-width:120px;background:#0e1b2a;color:#dbeafe;border:1px solid #334b63;border-radius:7px;padding:9px 10px}
 .prompt-bar button{white-space:nowrap}
 .agent-activity{max-width:min(42vw,520px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#67e8f9}
+.change-intelligence{max-width:min(42vw,620px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fbbf24;border-color:#735c22;background:#241b09}
