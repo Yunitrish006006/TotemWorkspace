@@ -41,6 +41,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
   bool _savingSettings = false;
   bool _submittingPrompt = false;
   String? _liveError;
+  String? _liveErrorSource;
 
   @override
   void initState() {
@@ -122,6 +123,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
         setState(() {
           _probing = false;
           _liveError = error.toString();
+          _liveErrorSource = 'connect';
         });
       }
     }
@@ -139,7 +141,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() => _liveError = error.toString());
+      setState(() { _liveError = error.toString(); _liveErrorSource = 'workspace-status'; });
     }
   }
 
@@ -163,7 +165,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
       setState(() => _mergeActivity(batch));
     } catch (error) {
       if (!mounted) return;
-      setState(() => _liveError = error.toString());
+      setState(() { _liveError = error.toString(); _liveErrorSource = 'activity'; });
     }
   }
 
@@ -179,7 +181,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() => _liveError = error.toString());
+      setState(() { _liveError = error.toString(); _liveErrorSource = 'verification'; });
     }
   }
 
@@ -198,7 +200,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() => _liveError = error.toString());
+      setState(() { _liveError = error.toString(); _liveErrorSource = 'agent-adapter'; });
     }
   }
 
@@ -217,7 +219,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() => _liveError = error.toString());
+      setState(() { _liveError = error.toString(); _liveErrorSource = 'replay'; });
     }
   }
 
@@ -243,7 +245,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
         _liveError = null;
       });
     } catch (error) {
-      if (mounted) setState(() => _liveError = error.toString());
+      if (mounted) setState(() { _liveError = error.toString(); _liveErrorSource = 'replay-frame'; });
     } finally {
       if (mounted) setState(() => _replayLoading = false);
     }
@@ -269,7 +271,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
         _liveError = null;
       });
     } catch (error) {
-      if (mounted) setState(() => _liveError = error.toString());
+      if (mounted) setState(() { _liveError = error.toString(); _liveErrorSource = 'viewer-settings'; });
     } finally {
       if (mounted) setState(() => _savingSettings = false);
     }
@@ -293,12 +295,11 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
         _orchestration = submission.orchestration?.summary
             ?? submission.task?.orchestration
             ?? _orchestration;
-        _liveError = submission.execution == 'agent-adapter-unavailable'
-            ? (_adapter?.reason ?? 'Agent adapter unavailable')
-            : null;
+        _liveError = null;
+        _liveErrorSource = null;
       });
     } catch (error) {
-      if (mounted) setState(() => _liveError = error.toString());
+      if (mounted) setState(() { _liveError = error.toString(); _liveErrorSource = 'prompt'; });
     } finally {
       if (mounted) setState(() => _submittingPrompt = false);
     }
@@ -326,7 +327,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
         _change = change;
       });
     } catch (error) {
-      if (mounted) setState(() => _liveError = error.toString());
+      if (mounted) setState(() { _liveError = error.toString(); _liveErrorSource = 'refresh'; });
     } finally {
       if (mounted) setState(() => _refreshing = false);
     }
@@ -492,6 +493,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
             promptEnabled: _settings.promptEnabled,
             live: live,
             error: _liveError,
+            errorSource: _liveErrorSource,
             onRefresh: isLocal ? _refreshWorkspace : null,
             onStatus: isLocal ? _showWorkspaceStatus : null,
             onInventory: _showCodeInventory,
@@ -996,6 +998,7 @@ class _ModeBanner extends StatelessWidget {
     required this.promptEnabled,
     required this.live,
     required this.error,
+    required this.errorSource,
     required this.onRefresh,
     required this.onStatus,
     required this.onInventory,
@@ -1009,6 +1012,7 @@ class _ModeBanner extends StatelessWidget {
   final bool promptEnabled;
   final WorkspaceLiveStatus? live;
   final String? error;
+  final String? errorSource;
   final VoidCallback? onRefresh;
   final VoidCallback? onStatus;
   final VoidCallback onInventory;
@@ -1045,9 +1049,9 @@ class _ModeBanner extends StatelessWidget {
               ),
             ),
             if (error != null)
-              const Tooltip(
-                message: 'Local API temporarily unavailable; the last graph remains usable.',
-                child: Icon(Icons.warning_amber_rounded, size: 16, color: Color(0xFFFBBF24)),
+              Tooltip(
+                message: 'Local API issue · ${errorSource ?? 'unknown'}\n$error\nThe last graph remains usable.',
+                child: const Icon(Icons.warning_amber_rounded, size: 16, color: Color(0xFFFBBF24)),
               ),
             TextButton.icon(
               onPressed: onInventory,

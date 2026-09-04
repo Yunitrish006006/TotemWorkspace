@@ -111,6 +111,8 @@ for (const behavior of [
   "_ActivityStrip(event: displayedActivity)",
   "_AgentAdapterStrip(status: _adapter!)",
   "_OrchestrationStrip(summary: _orchestration!)",
+  "_liveErrorSource",
+  "Local API issue · ${errorSource ?? 'unknown'}",
   "_ReplayScrubber(",
   "historicalEntityIds: historicalEntityIds",
   "if (isLocal && _settings.promptEnabled)",
@@ -134,6 +136,9 @@ for (const behavior of [
 ]) {
   assert.ok(flutterGraph.includes(behavior), `Flutter activity overlay is missing: ${behavior}`);
 }
+assert.ok(!flutterHost.includes("Local API temporarily unavailable"), "Flutter warning must identify the failing subsystem instead of showing a generic Local API message");
+assert.ok(!flutterHost.includes("_liveError = submission.execution == 'agent-adapter-unavailable'"), "agent-adapter unavailable must remain an adapter status, not masquerade as Local API failure");
+
 assert.ok(
   flutterHost.includes("if (isLocal && _settings.agentActivityEnabled && displayedActivity != null)") &&
     flutterHost.includes("if (isLocal && _settings.promptEnabled)"),
