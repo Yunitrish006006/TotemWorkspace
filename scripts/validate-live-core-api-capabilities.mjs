@@ -10,16 +10,18 @@ const coreOutline = featureByTitle("totem-core", /世界輪廓|world\s*outline|o
 const automataArea = featureByTitle("totem-automata", /採集區框線|gathering.*outline|area.*outline/i);
 const automataLinks = featureByTitle("totem-automata", /容器連線|container.*line|container.*link/i);
 const excavationOutline = featureByTitle("totem-excavation", /選區輪廓|selection.*outline/i);
+const nexusDiagnostics = featureByTitle("totem-nexus", /傳送陣診斷|array.*diagnostic|outline/i);
 
 assert.ok(coreOutline, "Core world-outline feature must exist");
 assert.ok(automataArea, "Automata gathering-area outline feature must exist");
 assert.ok(automataLinks, "Automata container-link feature must exist");
 assert.ok(excavationOutline, "Excavation selection-outline feature must exist");
+assert.ok(nexusDiagnostics, "Nexus teleport-array diagnostics feature must exist");
 
 const outlineCaps = graph.sharedCapabilities.filter((capability) => capability.family === "core-api:client.world");
 const byConsumerFeature = new Map(outlineCaps.map((capability) => [capability.consumerFeatureId, capability]));
 
-for (const feature of [automataArea, automataLinks, excavationOutline]) {
+for (const feature of [automataArea, automataLinks, excavationOutline, nexusDiagnostics]) {
   const capability = byConsumerFeature.get(feature.id);
   assert.ok(capability, `missing Core world-outline relation for ${feature.ownerId} / ${feature.title}`);
   assert.equal(capability.providerFeatureId, coreOutline.id);
@@ -30,5 +32,6 @@ for (const feature of [automataArea, automataLinks, excavationOutline]) {
 const consumerModules = new Set(outlineCaps.map((capability) => capability.consumerModuleId));
 assert.ok(consumerModules.has("totem-automata"));
 assert.ok(consumerModules.has("totem-excavation"));
+assert.ok(consumerModules.has("totem-nexus"));
 
 console.log(`Live Core API capability validation passed: ${outlineCaps.length} client.world relations across ${consumerModules.size} consumer modules.`);
