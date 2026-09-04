@@ -100,6 +100,10 @@ selected_backend() {
   esac
 }
 
+render_flutter_graph_asset() {
+  node "$ROOT/scripts/render-flutter-graph.mjs" >/dev/null
+}
+
 flutter_fingerprint() {
   node "$ROOT/scripts/flutter-local-build-fingerprint.mjs"
 }
@@ -154,6 +158,10 @@ flutter_build_ready() {
 ensure_flutter_build() {
   require_command node
   mkdir -p "$(dirname "$FLUTTER_STAMP")"
+
+  # pubspec.yaml declares assets/graph-data.json. Generate it before checking
+  # build freshness so first-run Remote-SSH builds cannot fail on a missing asset.
+  render_flutter_graph_asset
 
   case "$FLUTTER_BUILD_MODE" in
     auto)

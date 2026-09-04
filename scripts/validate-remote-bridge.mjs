@@ -12,6 +12,7 @@ const flutter = fs.readFileSync("viewer_flutter/lib/live/workspace_live.dart", "
 const legacy = fs.readFileSync("viewer/local-live.js", "utf8");
 const legacyHtml = fs.readFileSync("graph-v2.html", "utf8");
 const activityCli = fs.readFileSync("scripts/totem-activity.mjs", "utf8");
+const analysisOptions = fs.readFileSync("viewer_flutter/analysis_options.yaml", "utf8");
 
 for (const fragment of [
   'SESSION="${TOTEM_BRIDGE_SESSION:-totem-workspace-bridge}"',
@@ -31,6 +32,8 @@ for (const fragment of [
   'scripts/serve-local-viewer.mjs --port',
   '.totem-index/remote-bridge.log',
   'Cannot start Totem Bridge: remote port',
+  'render_flutter_graph_asset',
+  'scripts/render-flutter-graph.mjs',
   'ensure_flutter_build',
   '"$flutter_cmd" build web --wasm --base-href /',
   'flutter-local-build-fingerprint.mjs',
@@ -74,6 +77,10 @@ assert.ok(server.includes('const DEFAULT_PORT = 18765;'), "bridge server default
 assert.ok(server.includes('const FLUTTER_WEB_ROOT = path.join(ROOT, "viewer_flutter", "build", "web")'), "local bridge must serve the Flutter build");
 assert.ok(server.includes('decoded === "/legacy" || decoded === "/legacy/"'), "legacy viewer must remain mounted at /legacy/");
 assert.ok(fingerprint.includes('createHash("sha256")'), "local Flutter build freshness must be content-addressed");
+for (const platformExclude of ["build/**", "android/**", "ios/**", "web/**", "windows/**", "macos/**", "linux/**"]) {
+  assert.ok(analysisOptions.includes(`- ${platformExclude}`), `Flutter 3.47 analyzer migration is missing exclude: ${platformExclude}`);
+}
+assert.ok(bridge.indexOf("render_flutter_graph_asset") < bridge.indexOf("case \"$FLUTTER_BUILD_MODE\" in"), "Flutter graph asset must be rendered before build freshness is evaluated");
 assert.ok(flutter.includes("http://127.0.0.1:18765"), "Flutter Pages must discover port 18765");
 assert.ok(legacy.includes('return "http://127.0.0.1:18765"'), "legacy Pages must discover port 18765");
 assert.ok(legacyHtml.includes("http://127.0.0.1:18765"), "legacy CSP must allow port 18765");
