@@ -9,6 +9,7 @@ Usage:
   node scripts/totem-activity.mjs emit <type> [options]
   node scripts/totem-activity.mjs prompt <on|off>
   node scripts/totem-activity.mjs status
+  node scripts/totem-activity.mjs replay [sequence]
 
 Emit options:
   --module <totem-id>
@@ -72,12 +73,13 @@ async function main(argv) {
   }
 
   if (command === "status") {
-    const [health, settings, activity, verification, adapter] = await Promise.all([
+    const [health, settings, activity, verification, adapter, replay] = await Promise.all([
       request("/api/health"),
       request("/api/viewer-settings"),
       request("/api/activity?after=0"),
       request("/api/verification-state"),
-      request("/api/agent-adapter")
+      request("/api/agent-adapter"),
+      request("/api/replay")
     ]);
     process.stdout.write(`${JSON.stringify({
       health,
@@ -85,12 +87,33 @@ async function main(argv) {
       latestSequence: activity.latestSequence,
       latestEvent: activity.events?.at(-1) ?? null,
       agentAdapter: adapter,
+      replay: {
+        earliestSequence: replay.earliestSequence,
+        latestSequence: replay.latestSequence,
+        eventCount: replay.eventCount,
+        sessions: replay.sessions?.length ?? 0,
+        milestones: replay.milestones?.length ?? 0
+      },
       verification: {
         summary: verification.summary,
         activePlan: verification.activePlan,
         latestEntry: verification.entries?.at(-1) ?? null
       }
     }, null, 2)}\n`);
+    return;
+  }
+
+  if (command === "replay") {
+    const raw = rest[0];
+    if (raw == null) {
+      const timeline = await request("/api/replay");
+      process.stdout.write(`${JSON.stringify(timeline, null, 2)}\n`);
+      return;
+    }
+    const sequence = Number(raw);
+    if (!Number.isInteger(sequence) || sequence < 0) throw new Error("replay sequence must be a non-negative integer");
+    const frame = await request(`/api/replay/frame?sequence=${encodeURIComponent(sequence)}`);
+    process.stdout.write(`${JSON.stringify(frame, null, 2)}\n`);
     return;
   }
 
