@@ -547,7 +547,12 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
           if (isLocal && _orchestration != null)
             _OrchestrationStrip(summary: _orchestration!),
           if (isLocal && _adapter != null)
-            _AgentAdapterStrip(status: _adapter!),
+            _AgentAdapterStrip(
+              status: _adapter!,
+              replaySession: _replayTimeline?.sessions.isNotEmpty == true
+                  ? _replayTimeline!.sessions.last
+                  : null,
+            ),
           if (isLocal && displayedChange?.hasChanges == true)
             _ChangeStrip(change: displayedChange!),
           if (isLocal && displayedVerification != null && (displayedVerification.hasState || displayedVerification.activePlan.modules.isNotEmpty))
@@ -689,27 +694,49 @@ class _OrchestrationStrip extends StatelessWidget {
 }
 
 class _AgentAdapterStrip extends StatelessWidget {
-  const _AgentAdapterStrip({required this.status});
+  const _AgentAdapterStrip({
+    required this.status,
+    required this.replaySession,
+  });
 
   final AgentAdapterStatus status;
+  final ReplaySession? replaySession;
 
   @override
   Widget build(BuildContext context) {
-    final task = status.currentTask ?? status.lastTask;
-    final color = !status.configured || !status.available
-        ? const Color(0xFF94A3B8)
-        : status.busy
-            ? const Color(0xFF67E8F9)
-            : task?.state == 'failed'
-                ? const Color(0xFFF87171)
-                : const Color(0xFF86EFAC);
-    final detail = status.busy
-        ? (status.currentTask?.id ?? 'running')
-        : status.lastTask?.state == 'failed'
-            ? 'last failed'
-            : status.available
-                ? (status.version ?? 'ready')
-                : (status.reason ?? 'disabled');
+    final current = status.currentTask;
+    final last = status.lastTask;
+    final replay = replaySession;
+    final state = status.busy && current != null
+        ? 'RUNNING'
+        : last != null
+            ? last.state.toUpperCase()
+            : replay != null
+                ? replay.state == 'running'
+                    ? 'INTERRUPTED'
+                    : replay.state.toUpperCase()
+                : status.available
+                    ? 'READY'
+                    : status.configured
+                        ? 'UNAVAILABLE'
+                        : 'OFF';
+    final taskId = current?.id ?? last?.id ?? replay?.taskId;
+    final summary = current?.summary ?? last?.summary ?? replay?.summary;
+    final endedAt = last?.completedAt ?? replay?.endedAt;
+    final error = last?.error;
+    final color = switch (state) {
+      'RUNNING' => const Color(0xFF67E8F9),
+      'FAILED' || 'INTERRUPTED' => const Color(0xFFF87171),
+      'COMPLETED' => const Color(0xFF86EFAC),
+      _ => const Color(0xFF94A3B8),
+    };
+    final detail = taskId == null ? state : '$state · $taskId';
+    final tooltip = [
+      if (summary != null && summary.isNotEmpty) summary,
+      if (endedAt != null && endedAt.isNotEmpty) 'ended $endedAt',
+      if (error != null && error.isNotEmpty) error,
+      if (state == 'INTERRUPTED') 'Replay still shows a running task, but this Bridge no longer owns an active Codex process.',
+    ].join('\n');
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
@@ -717,15 +744,18 @@ class _AgentAdapterStrip extends StatelessWidget {
         color: Color(0xFF0C1118),
         border: Border(bottom: BorderSide(color: Color(0xFF334155))),
       ),
-      child: Text(
-        'AGENT ADAPTER · ${status.label} · $detail',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.25,
+      child: Tooltip(
+        message: tooltip.isEmpty ? detail : tooltip,
+        child: Text(
+          'AGENT · $detail',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: color,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.25,
+          ),
         ),
       ),
     );
