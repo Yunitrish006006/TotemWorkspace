@@ -16,6 +16,7 @@ import {
   recordVerificationEvent,
   verificationStatePayload
 } from "../intelligence/verification-state.mjs";
+import { createAgentAdapter } from "../intelligence/agent-adapter.mjs";
 import { renderGraphV2 } from "./render-graph-v2.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -42,6 +43,7 @@ const DEFAULT_VIEWER_SETTINGS = Object.freeze({
 const ACTIVITY_TYPES = new Set([
   "task_started",
   "task_completed",
+  "task_failed",
   "prompt_submitted",
   "feature_selected",
   "file_read",
@@ -239,6 +241,45 @@ function statusPayload() {
   });
 }
 
+function refreshWorkspaceChanges(requestedModules = []) {
+  const knowledge = loadKnowledge();
+  const reposRoot = defaultReposRoot(knowledge.root);
+  const requested = (requestedModules ?? []).filter((id) => knowledge.moduleById.has(id));
+  const beforeIndex = loadCodeIndex({ knowledge });
+  const beforeGraph = buildGraphViewModel({ knowledge, index: beforeIndex });
+  const gitChanges = collectGitChanges({ knowledge, reposRoot, modules: requested });
+  const refreshed = refreshCodeIndex({
+    knowledge,
+    reposRoot,
+    modules: requested
+  });
+  const afterGraph = buildGraphViewModel({ knowledge, index: refreshed.index });
+  const changeIntelligence = saveChangeIntelligence(
+    knowledge.root,
+    buildChangeIntelligence({
+      knowledge,
+      beforeGraph,
+      afterGraph,
+      gitChanges
+    })
+  );
+  const rendered = renderGraphV2({ knowledge, index: refreshed.index });
+  if (changeIntelligence.gitChanges.length || changeIntelligence.semanticDiff.changedEntityIds.length) {
+    appendActivity({
+      type: "git_diff_updated",
+      source: "bridge",
+      summary: `${changeIntelligence.gitChanges.length} files · ${changeIntelligence.semanticDiff.changedEntityIds.length} semantic entities · ${changeIntelligence.impact.impactedModules.length} impacted modules`
+    }, { source: "bridge" });
+  }
+  return Object.freeze({
+    knowledge,
+    reposRoot,
+    refreshed,
+    rendered,
+    changeIntelligence
+  });
+}
+
 async function readJsonBody(req) {
   let total = 0;
   const chunks = [];
@@ -331,15 +372,42 @@ function serveStatic(req, res, pathname, { flutterRoot = FLUTTER_WEB_ROOT } = {}
   }
 }
 
-async function handleApi(req, res, url) {
+async function handleApi(req, res, url, { agentAdapter } = {}) {
   const pathname = url.pathname;
   if (req.method === "GET" && pathname === "/api/health") {
+    const adapterStatus = agentAdapter?.status?.() ?? {
+      kind: "off",
+      configured: false,
+      available: false,
+      busy: false
+    };
     json(res, 200, {
       status: "ok",
       mode: "local",
-      activitySchemaVersion: 1,
+      activitySchemaVersion: 2,
       verificationSchemaVersion: 1,
-      promptExecution: "agent-adapter-required"
+      agentAdapterSchemaVersion: 1,
+      promptExecution: adapterStatus.available ? adapterStatus.kind : "agent-adapter-required",
+      agentAdapter: {
+        kind: adapterStatus.kind,
+        configured: adapterStatus.configured,
+        available: adapterStatus.available,
+        busy: adapterStatus.busy
+      }
+    });
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/agent-adapter") {
+    json(res, 200, agentAdapter?.status?.() ?? {
+      schemaVersion: 1,
+      kind: "off",
+      configured: false,
+      available: false,
+      busy: false,
+      reason: "agent adapter is not initialized",
+      currentTask: null,
+      lastTask: null
     });
     return true;
   }
@@ -439,51 +507,56 @@ async function handleApi(req, res, url) {
       featureId: args.featureId,
       summary: prompt.length <= 220 ? prompt : `${prompt.slice(0, 217)}...`
     }, { source: "viewer" });
-    json(res, 202, {
-      status: "accepted",
-      execution: "agent-adapter-required",
-      event
-    });
+
+    const adapterStatus = agentAdapter?.status?.();
+    if (!agentAdapter || !adapterStatus?.available) {
+      json(res, 202, {
+        status: "accepted",
+        execution: "agent-adapter-unavailable",
+        event,
+        task: null,
+        adapter: adapterStatus ?? null
+      });
+      return true;
+    }
+
+    try {
+      const task = agentAdapter.dispatch({
+        prompt,
+        moduleId: args.moduleId,
+        featureId: args.featureId,
+        summary: event.summary
+      });
+      json(res, 202, {
+        status: "accepted",
+        execution: "codex",
+        event,
+        task,
+        adapter: agentAdapter.status()
+      });
+    } catch (error) {
+      const code = error?.code;
+      const status = code === "AGENT_BUSY" ? 409 : code === "INVALID_PROMPT" ? 400 : 503;
+      json(res, status, {
+        error: error instanceof Error ? error.message : String(error),
+        execution: "not-started",
+        event,
+        adapter: agentAdapter.status()
+      });
+    }
     return true;
   }
 
   if (req.method === "POST" && pathname === "/api/refresh") {
     const args = await readJsonBody(req);
-    const knowledge = loadKnowledge();
-    const reposRoot = defaultReposRoot(knowledge.root);
-    const requested = Array.isArray(args.modules) ? args.modules.filter((id) => knowledge.moduleById.has(id)) : [];
-    const beforeIndex = loadCodeIndex({ knowledge });
-    const beforeGraph = buildGraphViewModel({ knowledge, index: beforeIndex });
-    const gitChanges = collectGitChanges({ knowledge, reposRoot, modules: requested });
-    const refreshed = refreshCodeIndex({
-      knowledge,
-      reposRoot,
-      modules: requested
-    });
-    const afterGraph = buildGraphViewModel({ knowledge, index: refreshed.index });
-    const changeIntelligence = saveChangeIntelligence(
-      knowledge.root,
-      buildChangeIntelligence({
-        knowledge,
-        beforeGraph,
-        afterGraph,
-        gitChanges
-      })
-    );
-    const rendered = renderGraphV2({ knowledge, index: refreshed.index });
-    if (changeIntelligence.gitChanges.length || changeIntelligence.semanticDiff.changedEntityIds.length) {
-      appendActivity({
-        type: "git_diff_updated",
-        source: "bridge",
-        summary: `${changeIntelligence.gitChanges.length} files · ${changeIntelligence.semanticDiff.changedEntityIds.length} semantic entities · ${changeIntelligence.impact.impactedModules.length} impacted modules`
-      }, { source: "bridge" });
-    }
+    const requested = Array.isArray(args.modules) ? args.modules : [];
+    const result = refreshWorkspaceChanges(requested);
     json(res, 200, {
       status: "ok",
-      generatedAt: rendered.generatedAt,
-      freshness: refreshed.freshness,
-      graph: rendered,
-      changeIntelligence,
+      generatedAt: result.rendered.generatedAt,
+      freshness: result.refreshed.freshness,
+      graph: result.rendered,
+      changeIntelligence: result.changeIntelligence,
       workspace: statusPayload()
     });
     return true;
@@ -492,8 +565,24 @@ async function handleApi(req, res, url) {
   return false;
 }
 
-export function createLocalViewerServer({ flutterRoot = FLUTTER_WEB_ROOT } = {}) {
-  return http.createServer(async (req, res) => {
+export function createLocalViewerServer({
+  flutterRoot = FLUTTER_WEB_ROOT,
+  agentAdapter: providedAgentAdapter = null,
+  agentEnv = process.env
+} = {}) {
+  const knowledge = loadKnowledge();
+  const reposRoot = defaultReposRoot(knowledge.root);
+  const agentAdapter = providedAgentAdapter ?? createAgentAdapter({
+    workspaceRoot: knowledge.root,
+    reposRoot,
+    knowledge,
+    env: agentEnv,
+    onActivity: (event) => appendActivity(event, { source: "codex-adapter" }),
+    onTaskSettled: async () => {
+      refreshWorkspaceChanges([]);
+    }
+  });
+  const server = http.createServer(async (req, res) => {
     try {
       const base = `http://${req.headers.host || `${DEFAULT_HOST}:${DEFAULT_PORT}`}`;
       const url = new URL(req.url || "/", base);
@@ -507,7 +596,7 @@ export function createLocalViewerServer({ flutterRoot = FLUTTER_WEB_ROOT } = {})
           res.end();
           return;
         }
-        if (await handleApi(req, res, url)) return;
+        if (await handleApi(req, res, url, { agentAdapter })) return;
         json(res, 404, { error: "unknown api route" });
         return;
       }
@@ -520,6 +609,8 @@ export function createLocalViewerServer({ flutterRoot = FLUTTER_WEB_ROOT } = {})
       json(res, 500, { error: error instanceof Error ? error.message : String(error) });
     }
   });
+  server.on("close", () => agentAdapter?.close?.());
+  return server;
 }
 
 function parsePort(argv) {

@@ -38,6 +38,11 @@ Environment:
   TOTEM_FLUTTER_BOOTSTRAP=auto|never
   TOTEM_FLUTTER_VERSION=3.47.0
   TOTEM_FLUTTER_HOME=~/.local/share/totem-workspace/flutter/3.47.0
+  TOTEM_AGENT_ADAPTER=off|codex
+  TOTEM_CODEX_BIN=codex
+  TOTEM_CODEX_CWD=<path inside Totem workspace>
+  TOTEM_CODEX_SANDBOX=workspace-write|read-only
+  TOTEM_CODEX_MODEL=<optional model id>
 EOF
 }
 
@@ -354,6 +359,17 @@ doctor() {
   echo "flutter build mode: $FLUTTER_BUILD_MODE"
   echo "flutter bootstrap: $FLUTTER_BOOTSTRAP"
   echo "flutter user SDK: $FLUTTER_HOME"
+  echo "agent adapter: ${TOTEM_AGENT_ADAPTER:-off}"
+  if [[ "${TOTEM_AGENT_ADAPTER:-off}" == "codex" ]]; then
+    local codex_bin="${TOTEM_CODEX_BIN:-codex}"
+    if command -v "$codex_bin" >/dev/null 2>&1 || [[ -x "$codex_bin" ]]; then
+      echo "codex: OK ($codex_bin)"
+      "$codex_bin" --version 2>/dev/null | head -n 1 || true
+    else
+      echo "codex: MISSING ($codex_bin)"
+      failed=1
+    fi
+  fi
   if flutter_build_ready; then
     echo "flutter viewer: READY"
   elif [[ -f "$ROOT/viewer_flutter/build/web/index.html" ]]; then

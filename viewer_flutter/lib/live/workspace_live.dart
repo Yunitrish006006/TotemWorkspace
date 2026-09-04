@@ -533,6 +533,133 @@ class VerificationState {
   }
 }
 
+class AgentTask {
+  const AgentTask({
+    required this.id,
+    required this.adapter,
+    required this.state,
+    required this.moduleId,
+    required this.featureId,
+    required this.threadId,
+    required this.startedAt,
+    required this.completedAt,
+    required this.summary,
+    required this.error,
+  });
+
+  final String id;
+  final String adapter;
+  final String state;
+  final String? moduleId;
+  final String? featureId;
+  final String? threadId;
+  final String startedAt;
+  final String? completedAt;
+  final String? summary;
+  final String? error;
+
+  factory AgentTask.fromJson(Map<String, dynamic> json) => AgentTask(
+        id: json['id'] as String? ?? '',
+        adapter: json['adapter'] as String? ?? '',
+        state: json['state'] as String? ?? 'unknown',
+        moduleId: json['moduleId'] as String?,
+        featureId: json['featureId'] as String?,
+        threadId: json['threadId'] as String?,
+        startedAt: json['startedAt'] as String? ?? '',
+        completedAt: json['completedAt'] as String?,
+        summary: json['summary'] as String?,
+        error: json['error'] as String?,
+      );
+}
+
+class AgentAdapterStatus {
+  const AgentAdapterStatus({
+    required this.schemaVersion,
+    required this.kind,
+    required this.configured,
+    required this.available,
+    required this.busy,
+    required this.version,
+    required this.sandbox,
+    required this.model,
+    required this.reason,
+    required this.currentTask,
+    required this.lastTask,
+  });
+
+  final int schemaVersion;
+  final String kind;
+  final bool configured;
+  final bool available;
+  final bool busy;
+  final String? version;
+  final String? sandbox;
+  final String? model;
+  final String? reason;
+  final AgentTask? currentTask;
+  final AgentTask? lastTask;
+
+  String get label {
+    if (!configured) return 'ADAPTER OFF';
+    if (!available) return 'CODEX UNAVAILABLE';
+    if (busy) return 'CODEX BUSY';
+    return 'CODEX READY';
+  }
+
+  factory AgentAdapterStatus.fromJson(Map<String, dynamic> json) {
+    AgentTask? task(String key) {
+      final raw = json[key];
+      return raw is Map ? AgentTask.fromJson(Map<String, dynamic>.from(raw)) : null;
+    }
+
+    return AgentAdapterStatus(
+      schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 1,
+      kind: json['kind'] as String? ?? 'off',
+      configured: json['configured'] as bool? ?? false,
+      available: json['available'] as bool? ?? false,
+      busy: json['busy'] as bool? ?? false,
+      version: json['version'] as String?,
+      sandbox: json['sandbox'] as String?,
+      model: json['model'] as String?,
+      reason: json['reason'] as String?,
+      currentTask: task('currentTask'),
+      lastTask: task('lastTask'),
+    );
+  }
+}
+
+class PromptSubmission {
+  const PromptSubmission({
+    required this.status,
+    required this.execution,
+    required this.event,
+    required this.task,
+    required this.adapter,
+  });
+
+  final String status;
+  final String execution;
+  final AgentActivityEvent event;
+  final AgentTask? task;
+  final AgentAdapterStatus? adapter;
+
+  factory PromptSubmission.fromJson(Map<String, dynamic> json) {
+    final rawTask = json['task'];
+    final rawAdapter = json['adapter'];
+    return PromptSubmission(
+      status: json['status'] as String? ?? 'accepted',
+      execution: json['execution'] as String? ?? 'unknown',
+      event: AgentActivityEvent.fromJson(
+        Map<String, dynamic>.from(json['event'] as Map? ?? const <String, dynamic>{}),
+      ),
+      task: rawTask is Map ? AgentTask.fromJson(Map<String, dynamic>.from(rawTask)) : null,
+      adapter: rawAdapter is Map
+          ? AgentAdapterStatus.fromJson(Map<String, dynamic>.from(rawAdapter))
+          : null,
+    );
+  }
+}
+
 class LocalWorkspaceClient {
   LocalWorkspaceClient(this.baseUrl, {http.Client? client}) : _client = client ?? http.Client();
 
@@ -590,6 +717,12 @@ class LocalWorkspaceClient {
     return AgentActivityBatch.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
+  Future<AgentAdapterStatus> agentAdapterStatus() async {
+    final response = await _client.get(_uri('/api/agent-adapter')).timeout(const Duration(seconds: 4));
+    _requireSuccess(response, 'agent adapter status');
+    return AgentAdapterStatus.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
   Future<ChangeIntelligence> changeIntelligence() async {
     final response = await _client.get(_uri('/api/change-intelligence')).timeout(const Duration(seconds: 6));
     _requireSuccess(response, 'change intelligence');
@@ -602,7 +735,7 @@ class LocalWorkspaceClient {
     return VerificationState.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
-  Future<AgentActivityEvent> submitPrompt(
+  Future<PromptSubmission> submitPrompt(
     String prompt, {
     String? moduleId,
     String? featureId,
@@ -619,10 +752,7 @@ class LocalWorkspaceClient {
         )
         .timeout(const Duration(seconds: 8));
     _requireSuccess(response, 'prompt submission');
-    final payload = jsonDecode(response.body) as Map<String, dynamic>;
-    return AgentActivityEvent.fromJson(
-      Map<String, dynamic>.from(payload['event'] as Map? ?? const <String, dynamic>{}),
-    );
+    return PromptSubmission.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   Future<ChangeIntelligence> refresh({List<String> modules = const <String>[]}) async {

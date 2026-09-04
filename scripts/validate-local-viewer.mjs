@@ -19,6 +19,7 @@ assert.ok(serverSource.includes('pathname === "/api/refresh"'), "refresh endpoin
 assert.ok(serverSource.includes('pathname === "/api/viewer-settings"'), "viewer settings endpoint is required");
 assert.ok(serverSource.includes('pathname === "/api/activity"'), "agent activity endpoint is required");
 assert.ok(serverSource.includes('pathname === "/api/change-intelligence"'), "Phase 3 change-intelligence endpoint is required");
+assert.ok(serverSource.includes('pathname === "/api/agent-adapter"'), "Phase 5 agent-adapter endpoint is required");
 assert.ok(serverSource.includes('pathname === "/api/verification-state"'), "Phase 4 verification-state endpoint is required");
 assert.ok(serverSource.includes('pathname === "/api/prompt"'), "prompt intake endpoint is required");
 assert.ok(serverSource.includes('"https://yunitrish006006.github.io"'), "official TotemWorkspace Pages origin must be explicitly allowlisted");
@@ -61,7 +62,42 @@ fs.writeFileSync(path.join(flutterFixture, "index.html"), "<!doctype html><title
 fs.writeFileSync(path.join(flutterFixture, "main.dart.js"), "window.__TOTEM_FLUTTER_FIXTURE__ = true;", "utf8");
 fs.writeFileSync(path.join(flutterFixture, "main.dart.wasm"), Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]));
 
-const server = createLocalViewerServer({ flutterRoot: flutterFixture });
+const dispatchedPrompts = [];
+const fakeAgentAdapter = {
+  status() {
+    return {
+      schemaVersion: 1,
+      kind: "codex",
+      configured: true,
+      available: true,
+      busy: false,
+      version: "codex-cli fixture",
+      sandbox: "workspace-write",
+      model: null,
+      reason: null,
+      currentTask: null,
+      lastTask: null
+    };
+  },
+  dispatch(request) {
+    dispatchedPrompts.push(request);
+    return {
+      schemaVersion: 1,
+      id: "task:http-fixture:1",
+      adapter: "codex",
+      state: "running",
+      moduleId: request.moduleId ?? null,
+      featureId: request.featureId ?? null,
+      threadId: null,
+      startedAt: "now",
+      completedAt: null,
+      summary: request.summary ?? null,
+      error: null
+    };
+  },
+  close() {}
+};
+const server = createLocalViewerServer({ flutterRoot: flutterFixture, agentAdapter: fakeAgentAdapter });
 await new Promise((resolve, reject) => {
   server.once("error", reject);
   server.listen(0, "127.0.0.1", resolve);
@@ -77,9 +113,11 @@ try {
   const healthPayload = await health.json();
   assert.equal(healthPayload.status, "ok");
   assert.equal(healthPayload.mode, "local");
-  assert.equal(healthPayload.activitySchemaVersion, 1);
+  assert.equal(healthPayload.activitySchemaVersion, 2);
   assert.equal(healthPayload.verificationSchemaVersion, 1);
-  assert.equal(healthPayload.promptExecution, "agent-adapter-required");
+  assert.equal(healthPayload.agentAdapterSchemaVersion, 1);
+  assert.equal(healthPayload.promptExecution, "codex");
+  assert.equal(healthPayload.agentAdapter.available, true);
 
   const flutterHealth = await fetch(`${base}/api/health`, {
     headers: { Origin: "http://localhost:54321" }
@@ -97,6 +135,12 @@ try {
     "https://yunitrish006006.github.io",
     "published TotemWorkspace Pages must be able to reach the loopback bridge"
   );
+
+  const adapterStatus = await fetch(`${base}/api/agent-adapter`);
+  assert.equal(adapterStatus.status, 200);
+  const adapterPayload = await adapterStatus.json();
+  assert.equal(adapterPayload.kind, "codex");
+  assert.equal(adapterPayload.available, true);
 
   const preflight = await fetch(`${base}/api/refresh`, {
     method: "OPTIONS",
@@ -149,8 +193,11 @@ try {
   });
   assert.equal(prompt.status, 202);
   const promptPayload = await prompt.json();
-  assert.equal(promptPayload.execution, "agent-adapter-required");
+  assert.equal(promptPayload.execution, "codex");
   assert.equal(promptPayload.event.type, "prompt_submitted");
+  assert.equal(promptPayload.task.id, "task:http-fixture:1");
+  assert.equal(dispatchedPrompts.length, 1);
+  assert.equal(dispatchedPrompts[0].prompt, "inspect TotemAutomata gathering outline");
 
   const activityPost = await fetch(`${base}/api/activity`, {
     method: "POST",
@@ -286,4 +333,4 @@ try {
   }
 }
 
-console.log("Local live viewer validation passed: Flutter owns /, legacy JS stays under /legacy/, and loopback-only API/settings/activity/change/verification/refresh behavior remains intact.");
+console.log("Local live viewer validation passed: Flutter owns /, legacy JS stays under /legacy/, and loopback-only API/settings/activity/change/verification/agent-dispatch/refresh behavior remains intact.");

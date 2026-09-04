@@ -53,6 +53,8 @@ jobs:
         run: node scripts/validate-change-intelligence.mjs
       - name: Validate Phase 4 Verification Graph
         run: node scripts/validate-verification-graph.mjs
+      - name: Validate Phase 5 Codex agent adapter
+        run: node scripts/validate-agent-adapter.mjs
       - name: Validate remote bridge shell syntax
         run: bash -n tools/remote/bridge.sh
       - name: Validate remote tmux bridge tooling
