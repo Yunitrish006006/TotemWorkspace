@@ -52,6 +52,7 @@ if (fs.existsSync(settingsPath)) fs.rmSync(settingsPath);
 const flutterFixture = fs.mkdtempSync(path.join(os.tmpdir(), "totem-flutter-root-"));
 fs.writeFileSync(path.join(flutterFixture, "index.html"), "<!doctype html><title>TOTEM Flutter fixture</title><script src=\"main.dart.js\"></script>", "utf8");
 fs.writeFileSync(path.join(flutterFixture, "main.dart.js"), "window.__TOTEM_FLUTTER_FIXTURE__ = true;", "utf8");
+fs.writeFileSync(path.join(flutterFixture, "main.dart.wasm"), Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]));
 
 const server = createLocalViewerServer({ flutterRoot: flutterFixture });
 await new Promise((resolve, reject) => {
@@ -184,11 +185,21 @@ try {
 
   const flutterRoot = await fetch(`${base}/`);
   assert.equal(flutterRoot.status, 200);
+  assert.equal(flutterRoot.headers.get("cross-origin-opener-policy"), "same-origin");
+  assert.equal(flutterRoot.headers.get("cross-origin-embedder-policy"), "credentialless");
   assert.match(await flutterRoot.text(), /TOTEM Flutter fixture/, "local bridge root must serve Flutter");
 
   const flutterAsset = await fetch(`${base}/main.dart.js`);
   assert.equal(flutterAsset.status, 200);
   assert.match(await flutterAsset.text(), /TOTEM_FLUTTER_FIXTURE/, "Flutter assets must be served from the local build root");
+
+  const flutterWasm = await fetch(`${base}/main.dart.wasm`);
+  assert.equal(flutterWasm.status, 200);
+  assert.equal(
+    flutterWasm.headers.get("content-type"),
+    "application/wasm",
+    "Flutter Wasm must be served with application/wasm under nosniff"
+  );
 
   const legacyPage = await fetch(`${base}/legacy/`);
   assert.equal(legacyPage.status, 200);
