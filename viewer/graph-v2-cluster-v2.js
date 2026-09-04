@@ -729,6 +729,7 @@
     if (edge.type === "fabric-suggests") return "#fbbf24";
     if (edge.type === "external-service") return "#22d3ee";
     if (edge.type === "shared-capability") return "#f472b6";
+    if (edge.type === "validated-by") return "#4ade80";
     if (edge.type === "detail") return "#34d399";
     if (edge.type === "feature-detail") return "#64748b";
     return "#a78bfa";
@@ -842,6 +843,29 @@
     ctx.lineWidth = 2.2 + pulse * 1.6;
     ctx.shadowColor = color;
     ctx.shadowBlur = 10 + pulse * 8;
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  function verificationColor(status) {
+    if (status === "failed") return "#f87171";
+    if (status === "running") return "#67e8f9";
+    if (status === "passed") return "#86efac";
+    return "#94a3b8";
+  }
+
+  function drawVerificationHalo(ctx, projected, radius, status) {
+    var phase = status === "passed" ? 0.35 : (Date.now() % 1200) / 1200;
+    var pulse = status === "passed" ? phase : (Math.sin(phase * Math.PI * 2) + 1) / 2;
+    var color = verificationColor(status);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(projected.x, projected.y, radius + 10 + pulse * 5, 0, Math.PI * 2);
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = status === "passed" ? 0.72 : 0.72 + pulse * 0.24;
+    ctx.lineWidth = status === "failed" ? 3 + pulse * 1.5 : 2.2 + pulse;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = status === "failed" ? 12 + pulse * 8 : 8 + pulse * 5;
     ctx.stroke();
     ctx.restore();
   }
@@ -969,8 +993,16 @@
     var changeIntelligence = window.__TOTEM_CHANGE_INTELLIGENCE__ || null;
     var changeDiff = changeIntelligence && changeIntelligence.semanticDiff ? changeIntelligence.semanticDiff : {};
     var changeImpact = changeIntelligence && changeIntelligence.impact ? changeIntelligence.impact : {};
-    var changedEntityIds = new Set(Array.isArray(changeDiff.changedEntityIds) ? changeDiff.changedEntityIds : []);
+    var changedEntityIds = new Set(
+      changeIntelligence && Array.isArray(changeIntelligence.affectedEntityIds)
+        ? changeIntelligence.affectedEntityIds
+        : Array.isArray(changeDiff.changedEntityIds) ? changeDiff.changedEntityIds : []
+    );
     var impactedModules = new Set(Array.isArray(changeImpact.impactedModules) ? changeImpact.impactedModules : []);
+    var verificationState = window.__TOTEM_VERIFICATION_STATE__ || {};
+    var runningVerificationTargets = new Set(Array.isArray(verificationState.runningTargetIds) ? verificationState.runningTargetIds : []);
+    var passedVerificationTargets = new Set(Array.isArray(verificationState.passedTargetIds) ? verificationState.passedTargetIds : []);
+    var failedVerificationTargets = new Set(Array.isArray(verificationState.failedTargetIds) ? verificationState.failedTargetIds : []);
     var agentActivityNodeId = null;
     if (agentActivity) {
       if (agentActivity.componentId && byId.has(agentActivity.componentId)) agentActivityNodeId = agentActivity.componentId;
@@ -994,10 +1026,26 @@
       var internal = edge.type === "detail" || edge.type === "feature-detail";
 
       var changedRelation = relationChanged(edge, changedEntityIds);
+      var verificationStatus = failedVerificationTargets.has(edge.from) || failedVerificationTargets.has(edge.to)
+        ? "failed"
+        : runningVerificationTargets.has(edge.from) || runningVerificationTargets.has(edge.to)
+          ? "running"
+          : passedVerificationTargets.has(edge.from) || passedVerificationTargets.has(edge.to)
+            ? "passed"
+            : null;
       var changePhase = window.__TOTEM_CHANGE_ANIMATIONS__ === false ? 0.5 : (Math.sin((Date.now() % 1200) / 1200 * Math.PI * 2) + 1) / 2;
-      var edgeAlpha = changedRelation ? 0.74 + changePhase * 0.24 : spotlightId ? (active ? 1 : 0.055) : (relation ? 0.82 : internal ? 0.16 : 0.34);
-      var edgeWidth = changedRelation ? 2.8 + changePhase * 1.8 : spotlightId && active ? 4.6 : relation ? 2.6 : internal ? 1.15 : 1.45;
-      var color = changedRelation ? "#fbbf24" : edgeColor(edge);
+      var verificationEdge = edge.type === "validated-by" && verificationStatus;
+      var edgeAlpha = changedRelation
+        ? 0.74 + changePhase * 0.24
+        : verificationEdge
+          ? 0.92
+          : spotlightId ? (active ? 1 : 0.055) : (relation ? 0.82 : internal ? 0.16 : 0.34);
+      var edgeWidth = changedRelation
+        ? 2.8 + changePhase * 1.8
+        : verificationEdge
+          ? 2.8
+          : spotlightId && active ? 4.6 : relation ? 2.6 : internal ? 1.15 : 1.45;
+      var color = changedRelation ? "#fbbf24" : verificationEdge ? verificationColor(verificationStatus) : edgeColor(edge);
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
