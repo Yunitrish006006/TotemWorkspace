@@ -2,6 +2,7 @@
   "use strict";
 
   var liveBadge = document.getElementById("liveLocal");
+  var changeBadge = document.getElementById("changeIntelligence");
   var activityBadge = document.getElementById("agentActivity");
   var promptToggle = document.getElementById("promptToggle");
   var promptBar = document.getElementById("promptBar");
@@ -10,7 +11,7 @@
   var statusButton = document.getElementById("localStatus");
   var refreshButton = document.getElementById("refreshLocal");
   var info = document.getElementById("info");
-  if (!liveBadge || !activityBadge || !promptToggle || !promptBar || !promptInput || !promptSubmit || !statusButton || !refreshButton || !info) return;
+  if (!liveBadge || !changeBadge || !activityBadge || !promptToggle || !promptBar || !promptInput || !promptSubmit || !statusButton || !refreshButton || !info) return;
 
   var latest = null;
   var settings = null;
@@ -18,6 +19,7 @@
   var polling = null;
   var activityPolling = null;
   var activityAnimation = null;
+  var changeAnimation = null;
   var activitySequence = 0;
   var localApiBase = null;
 
@@ -88,6 +90,11 @@
 
   function renderSettings(value) {
     settings = value || {};
+    window.__TOTEM_CHANGE_ANIMATIONS__ = settings.changeAnimationsEnabled !== false;
+    if (settings.changeAnimationsEnabled === false && changeAnimation) {
+      window.clearInterval(changeAnimation);
+      changeAnimation = null;
+    }
     var enabled = settings.promptEnabled === true;
     promptToggle.textContent = enabled ? "Prompt ON" : "Prompt OFF";
     promptToggle.setAttribute("aria-pressed", enabled ? "true" : "false");
@@ -116,6 +123,35 @@
   function requestAgentDraw() {
     var renderer = window.__TOTEM_CLUSTER_3D_V2__;
     if (renderer && typeof renderer.draw === "function") renderer.draw();
+  }
+
+  function renderChangeIntelligence(payload) {
+    window.__TOTEM_CHANGE_INTELLIGENCE__ = payload || null;
+    var gitChanges = payload && Array.isArray(payload.gitChanges) ? payload.gitChanges : [];
+    var diff = payload && payload.semanticDiff ? payload.semanticDiff : {};
+    var changedIds = payload && Array.isArray(payload.affectedEntityIds)
+      ? payload.affectedEntityIds
+      : Array.isArray(diff.changedEntityIds) ? diff.changedEntityIds : [];
+    var impact = payload && payload.impact ? payload.impact : {};
+    var impacted = Array.isArray(impact.impactedModules) ? impact.impactedModules : [];
+    var hasChanges = gitChanges.length > 0 || changedIds.length > 0;
+    changeBadge.hidden = !hasChanges;
+    if (hasChanges) {
+      changeBadge.textContent = "CHANGE · " + gitChanges.length + " files · " + changedIds.length + " entities" + (impacted.length ? " · impact " + impacted.length : "");
+      changeBadge.title = impacted.length ? "Impacted modules: " + impacted.join(", ") : "Semantic change detected";
+    }
+    requestAgentDraw();
+    if (hasChanges && (!settings || settings.changeAnimationsEnabled !== false) && !changeAnimation) {
+      changeAnimation = window.setInterval(requestAgentDraw, 80);
+    }
+  }
+
+  async function fetchChangeIntelligence() {
+    var response = await fetch(apiUrl("/api/change-intelligence"), { cache: "no-store" });
+    if (!response.ok) throw new Error("change intelligence unavailable");
+    var payload = await response.json();
+    renderChangeIntelligence(payload);
+    return payload;
   }
 
   function renderActivity(event) {
@@ -202,6 +238,7 @@
   async function poll() {
     try {
       await fetchStatus();
+      await fetchChangeIntelligence();
     } catch {
       if (!active && polling) {
         window.clearInterval(polling);

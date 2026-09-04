@@ -5,6 +5,12 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { buildGraphViewModel } from "../intelligence/code-graph.mjs";
 import { loadCodeIndex, refreshCodeIndex } from "../intelligence/code-index.mjs";
+import {
+  buildChangeIntelligence,
+  collectGitChanges,
+  loadChangeIntelligence,
+  saveChangeIntelligence
+} from "../intelligence/change-intelligence.mjs";
 import { defaultReposRoot, loadKnowledge, workspaceStatus } from "../intelligence/workspace-knowledge.mjs";
 import { renderGraphV2 } from "./render-graph-v2.mjs";
 
@@ -356,6 +362,26 @@ async function handleApi(req, res, url) {
     return true;
   }
 
+  if (req.method === "GET" && pathname === "/api/change-intelligence") {
+    const knowledge = loadKnowledge();
+    const reposRoot = defaultReposRoot(knowledge.root);
+    const saved = loadChangeIntelligence(knowledge.root);
+    if (saved) {
+      json(res, 200, saved);
+      return true;
+    }
+    const index = loadCodeIndex({ knowledge });
+    const graph = buildGraphViewModel({ knowledge, index });
+    const gitChanges = collectGitChanges({ knowledge, reposRoot });
+    json(res, 200, buildChangeIntelligence({
+      knowledge,
+      beforeGraph: graph,
+      afterGraph: graph,
+      gitChanges
+    }));
+    return true;
+  }
+
   if (req.method === "GET" && pathname === "/api/activity") {
     const rawAfter = Number(url.searchParams.get("after") ?? 0);
     json(res, 200, activityPayload(rawAfter));
@@ -403,18 +429,40 @@ async function handleApi(req, res, url) {
   if (req.method === "POST" && pathname === "/api/refresh") {
     const args = await readJsonBody(req);
     const knowledge = loadKnowledge();
+    const reposRoot = defaultReposRoot(knowledge.root);
     const requested = Array.isArray(args.modules) ? args.modules.filter((id) => knowledge.moduleById.has(id)) : [];
+    const beforeIndex = loadCodeIndex({ knowledge });
+    const beforeGraph = buildGraphViewModel({ knowledge, index: beforeIndex });
+    const gitChanges = collectGitChanges({ knowledge, reposRoot, modules: requested });
     const refreshed = refreshCodeIndex({
       knowledge,
-      reposRoot: defaultReposRoot(knowledge.root),
+      reposRoot,
       modules: requested
     });
+    const afterGraph = buildGraphViewModel({ knowledge, index: refreshed.index });
+    const changeIntelligence = saveChangeIntelligence(
+      knowledge.root,
+      buildChangeIntelligence({
+        knowledge,
+        beforeGraph,
+        afterGraph,
+        gitChanges
+      })
+    );
     const rendered = renderGraphV2({ knowledge, index: refreshed.index });
+    if (changeIntelligence.gitChanges.length || changeIntelligence.semanticDiff.changedEntityIds.length) {
+      appendActivity({
+        type: "git_diff_updated",
+        source: "bridge",
+        summary: `${changeIntelligence.gitChanges.length} files · ${changeIntelligence.semanticDiff.changedEntityIds.length} semantic entities · ${changeIntelligence.impact.impactedModules.length} impacted modules`
+      }, { source: "bridge" });
+    }
     json(res, 200, {
       status: "ok",
       generatedAt: rendered.generatedAt,
       freshness: refreshed.freshness,
       graph: rendered,
+      changeIntelligence,
       workspace: statusPayload()
     });
     return true;

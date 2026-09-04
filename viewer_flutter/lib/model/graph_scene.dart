@@ -364,7 +364,7 @@ GraphScene buildGraphScene(
     final radius = math.min(132, 62 + math.sqrt(math.max(1, paths.length)) * 18).toDouble();
     for (var index = 0; index < paths.length; index += 1) {
       final implementationPath = paths[index];
-      final id = 'implementation:${component.id}:$index';
+      final id = 'implementation:${component.id}:$implementationPath';
       final position = _scatter(parent.position, id, 'implementation', radius);
       nodes.add(VisualNode(
         id: id,
@@ -377,7 +377,7 @@ GraphScene buildGraphScene(
         implementationPath: implementationPath,
       ));
       edges.add(VisualEdge(
-        id: 'contains-implementation:${component.id}:$index',
+        id: 'contains-implementation:${component.id}:$implementationPath',
         from: component.id,
         to: id,
         type: 'detail',

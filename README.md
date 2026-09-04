@@ -116,6 +116,8 @@ Phase 1 的 Prompt intake 只會寫入本機 activity stream；在 Agent Adapter
 
 Phase 2 加入 progressive semantic LOD：`Module → Feature → Component / Responsibility → Implementation`。Component 從 production-code-only package/class/symbol/surface evidence 泛用推導，只有高信心才掛到 curated Feature；弱或模糊證據保留在 module-level。Implementation files 只在 Component 展開或 Agent Activity 聚焦該 Component 時顯示，不做全域展開。
 
+Phase 3 加入 change intelligence：Local Bridge 在重新索引前後建立 semantic snapshot，將 sibling repositories 的 Git working-tree diff 映射到 Module / Feature / Component / Implementation，再用既有 impact analysis 傳播跨模組影響。Flutter 與 legacy 3D 使用同一份 `/api/change-intelligence`，變更 entity／relation 以 change animation 顯示，受影響 module 顯示 impact halo；本機結果只保存於 `.totem-index/change-intelligence.json`。
+
 ### VS Code Remote-SSH / tmux Bridge
 
 遠端開發時，Bridge 預設使用 `127.0.0.1:18765`，並可由 repository 內的 background controller 執行；有 tmux 時優先使用 tmux，否則 fallback 到 nohup：

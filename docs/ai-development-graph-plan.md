@@ -301,3 +301,49 @@ Module
 Agent Activity focus priority is Component → Feature → Module. Symbol-level L5 is
 explicitly deferred until Component responsibilities and file ownership are
 stable enough to support it without graph explosion.
+
+
+## Phase 3 — Change Intelligence implementation
+
+Phase 3 uses the persisted local code index as the semantic before-state and the
+refreshed code index as the after-state. This avoids treating agent prose as
+architecture evidence and avoids reconstructing uncommitted source from Git.
+
+The local refresh pipeline is:
+
+```text
+current .totem-index code index
+  → before semantic snapshot
+  → collect sibling-repository Git working-tree changes
+  → refresh production-code index
+  → after semantic snapshot
+  → semantic entity/relation diff
+  → Git file → Module / Feature / Component / Implementation mapping
+  → existing impactAnalysis() propagation
+  → .totem-index/change-intelligence.json
+```
+
+The Bridge exposes the latest result at `GET /api/change-intelligence`.
+`POST /api/refresh` also returns the same change-intelligence payload and emits
+a `git_diff_updated` Agent Activity event when either Git files or semantic
+entities changed.
+
+Phase 3 semantic snapshots include Module, Feature, Component, Implementation
+and relation identities. Full before/after snapshot identities and fingerprints
+are persisted locally. Test entities remain deferred to Phase 4.
+
+`affectedEntityIds` is the union of structural semantic diff IDs and
+Git-to-semantic mappings, so a method-body-only edit still highlights its Module,
+Feature, Component and Implementation even when the architecture shape itself did
+not change.
+
+Both maintained viewer surfaces consume the same payload:
+- Flutter renders a CHANGE strip, animated changed entity/relation rings, and
+  impacted-module halos.
+- Legacy 3D renders the same changed IDs, relation transitions and impacted-module
+  halos through the local live adapter.
+- `changeAnimationsEnabled = false` disables pulsing while retaining static
+  change/impact indication.
+
+All Git paths exposed to the browser are repository-relative; absolute local paths
+are never included.
