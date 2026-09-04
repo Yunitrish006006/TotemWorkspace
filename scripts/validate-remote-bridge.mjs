@@ -3,6 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 
 const bridge = fs.readFileSync("tools/remote/bridge.sh", "utf8");
+const bootstrap = fs.readFileSync("tools/remote/bootstrap-flutter.sh", "utf8");
 const remoteGuide = fs.readFileSync("tools/remote/README.md", "utf8");
 const tasks = JSON.parse(fs.readFileSync(".vscode/tasks.json", "utf8"));
 const server = fs.readFileSync("scripts/serve-local-viewer.mjs", "utf8");
@@ -17,6 +18,10 @@ for (const fragment of [
   'PORT="${TOTEM_BRIDGE_PORT:-18765}"',
   'BACKEND="${TOTEM_BRIDGE_BACKEND:-auto}"',
   'FLUTTER_BUILD_MODE="${TOTEM_FLUTTER_BUILD_MODE:-auto}"',
+  'FLUTTER_BOOTSTRAP="${TOTEM_FLUTTER_BOOTSTRAP:-auto}"',
+  'FLUTTER_VERSION="${TOTEM_FLUTTER_VERSION:-3.47.0}"',
+  'ensure_flutter_toolchain',
+  'bootstrap-flutter.sh',
   'HOST="127.0.0.1"',
   'tmux new-session -d',
   'tmux kill-session',
@@ -44,7 +49,18 @@ assert.ok(remoteGuide.includes("nohup"), "remote guide must document the no-sudo
 assert.ok(remoteGuide.includes("sudo is not required"), "remote guide must explain that Bridge background execution does not require sudo");
 
 const labels = new Set((tasks.tasks ?? []).map((task) => task.label));
+for (const fragment of [
+  'FLUTTER_VERSION="${TOTEM_FLUTTER_VERSION:-3.47.0}"',
+  '.local/share',
+  'git clone --depth 1 --branch "$FLUTTER_VERSION"',
+  'precache --web',
+  'No sudo or system PATH change was required.'
+]) {
+  assert.ok(bootstrap.includes(fragment), `Flutter bootstrap is missing: ${fragment}`);
+}
+
 for (const label of [
+  "Totem: Bootstrap Flutter",
   "Totem: Start Bridge",
   "Totem: Bridge Status",
   "Totem: Bridge Logs",
@@ -73,4 +89,4 @@ for (const [label, source] of [
   assert.ok(!source.includes("127.0.0.1:8765"), `${label} still contains the retired bridge port 8765`);
 }
 
-console.log("Remote bridge validation passed: Flutter root build lifecycle, /legacy/ rollback surface, tmux/nohup lifecycle, VS Code tasks, and shared 18765 port contract are consistent.");
+console.log("Remote bridge validation passed: no-sudo Flutter bootstrap, Flutter root build lifecycle, /legacy/ rollback surface, tmux/nohup lifecycle, VS Code tasks, and shared 18765 port contract are consistent.");
