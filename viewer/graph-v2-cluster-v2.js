@@ -126,7 +126,7 @@
       return n.moduleId === moduleId && n.type === "code-category";
     }).length;
     var syntheticCapabilityCount = capabilities.filter(function (capability) {
-      return capability.consumerModuleId === moduleId && !manualFeatureFor(moduleId);
+      return capability.consumerModuleId === moduleId && !capabilityConsumerFeature(capability);
     }).length;
     var count = Math.max(1, featureCount + categoryCount + syntheticCapabilityCount);
     return Math.min(245, 118 + Math.sqrt(count) * 27);
@@ -223,8 +223,7 @@
     });
 
     capabilities.forEach(function (capability) {
-      var consumerFeature = capability.consumerFeatureId && featureMap.get(capability.consumerFeatureId);
-      consumerFeature = consumerFeature || manualFeatureFor(capability.consumerModuleId);
+      var consumerFeature = capabilityConsumerFeature(capability);
       if (capability.providerFeatureId === featureId && capability.providerModuleId === ownerId) {
         add(capability.consumerModuleId, relationWeight("shared-capability"), "shared-capability");
       }
@@ -411,9 +410,15 @@
     });
   }
 
-  function capabilityConsumerEndpoint(capability) {
+  function capabilityConsumerFeature(capability) {
     var explicit = capability.consumerFeatureId && featureMap.get(capability.consumerFeatureId);
-    var inferred = explicit || manualFeatureFor(capability.consumerModuleId);
+    if (explicit) return explicit;
+    if (capability.family === "manual") return manualFeatureFor(capability.consumerModuleId);
+    return null;
+  }
+
+  function capabilityConsumerEndpoint(capability) {
+    var inferred = capabilityConsumerFeature(capability);
     if (expanded.has(capability.consumerModuleId) && inferred) return inferred.id;
     return "capability-node:" + capability.id;
   }
@@ -518,7 +523,7 @@
         var position = relationAwareScatter(parent, id, "capability", radius, moduleId, nodes, [{ targetId: capability.providerModuleId, weight: relationWeight("shared-capability"), kinds: ["shared-capability"] }]);
         nodes.push({
           id: id,
-          label: moduleShort(moduleId) + " · SHARED MANUAL",
+          label: moduleShort(moduleId) + " · " + String(capability.label || "SHARED CAPABILITY").toUpperCase(),
           type: "capability",
           ownerId: moduleId,
           x: position.x,
@@ -914,10 +919,9 @@
     info.hidden = false;
   }
 
-  function manualLinksForFeature(featureId) {
+  function sharedCapabilityLinksForFeature(featureId) {
     return capabilities.filter(function (capability) {
-      var consumerFeature = capability.consumerFeatureId && featureMap.get(capability.consumerFeatureId);
-      consumerFeature = consumerFeature || manualFeatureFor(capability.consumerModuleId);
+      var consumerFeature = capabilityConsumerFeature(capability);
       return capability.providerFeatureId === featureId || (consumerFeature && consumerFeature.id === featureId);
     });
   }
@@ -982,11 +986,11 @@
       var hard = contracts.filter(function (contract) {
         return contract.type === "hard-core" && (contract.featureIds || []).includes(feature.id);
       });
-      var manualLinks = manualLinksForFeature(feature.id);
+      var capabilityLinks = sharedCapabilityLinksForFeature(feature.id);
       setInfo(node.label, feature.summary || "", [
         {
-          title: "Shared Manual links",
-          items: manualLinks.map(function (capability) {
+          title: "Shared capability links",
+          items: capabilityLinks.map(function (capability) {
             return moduleShort(capability.consumerModuleId) + " ↔ " + moduleShort(capability.providerModuleId) + "｜" + capability.label;
           })
         },
