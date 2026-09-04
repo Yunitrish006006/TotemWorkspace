@@ -45,6 +45,7 @@ Useful CLI checks:
 ```sh
 node scripts/totem-intelligence.mjs summary
 node scripts/totem-intelligence.mjs resolve "死亡背包跟 Nexus 同步有問題"
+node scripts/totem-intelligence.mjs orchestrate "死亡背包跟 Nexus 同步有問題"
 node scripts/totem-intelligence.mjs graph totem-remnant 2
 node scripts/totem-intelligence.mjs context "銅魁儡背包防巢狀" primary
 node scripts/totem-intelligence.mjs search "death node snapshot" totem-remnant,totem-nexus
@@ -140,6 +141,7 @@ Restart Codex/CodexDiscord after changing MCP configuration. In Codex TUI, `/mcp
 The server exposes:
 
 - `resolve_task`
+- `orchestration_plan`
 - `graph`
 - `search`
 - `context_pack`
@@ -166,8 +168,11 @@ When Codex is started from TotemWorkspace, it can discover the skill directly. I
 ```text
 Discord request
   -> resolve_task
+  -> orchestration_plan
+       -> primary-only | assisted | bounded-parallel | guarded-parallel
+       -> bounded role/module/write assignments
   -> context_pack(primary)
-  -> optional explorer / architect
+  -> planned explorer / architect wave
   -> context_pack(worker, module)
   -> bounded implementation
   -> impact
@@ -202,6 +207,49 @@ This is lazy/proactive incremental freshness rather than a background daemon.
 - TotemWorkspace remains authoritative for documented cross-module ownership and contracts until deliberately refreshed.
 - Generated V2 code-detail nodes describe discovered code structure but do not promote a relationship into an architecture contract.
 - Never reset newer local source merely to match the snapshot.
+
+## Adaptive orchestration
+
+TotemWorkspace is the orchestration policy owner; Codex is the execution harness.
+
+Every non-trivial task can be scored deterministically from graph/test evidence:
+
+- module span,
+- contract surface and critical contract types,
+- TotemCore/shared surface,
+- risk breadth and high-risk tags,
+- verification breadth,
+- routing uncertainty.
+
+The planner returns one of four modes:
+
+```text
+primary-only      no subagents
+assisted          one bounded discovery/architecture role, optional reviewer
+bounded-parallel  discovery → up to two module workers → reviewer
+guarded-parallel  architect → bounded workers → independent reviewer
+```
+
+The current policy caps planned subagents at four and parallel workers at two.
+Explorer/Architect/Reviewer are read-only; each write Worker owns one module.
+If multi-agent execution is unavailable, Primary must execute the same waves
+sequentially instead of inventing a different workflow.
+
+Use:
+
+```sh
+node scripts/totem-intelligence.mjs orchestrate "<task>"
+```
+
+or MCP `orchestration_plan` to inspect the decision and score factors.
+
+The Bridge runs the same planner for Viewer Prompt submissions and emits
+`orchestration_planned` before starting Codex. The Codex adapter receives the
+same plan in its prompt envelope. Viewer surfaces display mode/score/roles.
+
+The plan describes intended delegation. It is deliberately not treated as proof
+that a child agent actually spawned when the Codex JSON event stream does not
+provide reliable structured spawn telemetry.
 
 ## Validation
 
