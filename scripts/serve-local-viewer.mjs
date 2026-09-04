@@ -14,8 +14,18 @@ import {
 import { defaultReposRoot, loadKnowledge, workspaceStatus } from "../intelligence/workspace-knowledge.mjs";
 import {
   recordVerificationEvent,
-  verificationStatePayload
+  verificationStatePayload,
+  verificationStatePayloadFromState
 } from "../intelligence/verification-state.mjs";
+import {
+  appendReplayEvent,
+  loadDevelopmentReplay,
+  recordReplayCheckpoint,
+  replayActivityTail,
+  replayFramePayload,
+  replayTimelinePayload,
+  replayVerificationStateAt
+} from "../intelligence/development-replay.mjs";
 import { createAgentAdapter } from "../intelligence/agent-adapter.mjs";
 import { renderGraphV2 } from "./render-graph-v2.mjs";
 
@@ -65,8 +75,9 @@ const ACTIVITY_TYPES = new Set([
   "deployment_failed"
 ]);
 
-let activitySequence = 0;
-const activityEvents = [];
+const replayBootstrap = replayActivityTail(ROOT, { limit: ACTIVITY_LIMIT });
+let activitySequence = replayBootstrap.latestSequence;
+const activityEvents = [...replayBootstrap.events];
 
 const MIME = Object.freeze({
   ".html": "text/html; charset=utf-8",
@@ -213,10 +224,11 @@ function normalizeActivityEvent(value = {}, { source = "bridge" } = {}) {
 
 function appendActivity(value, options) {
   const event = normalizeActivityEvent(value, options);
-  activityEvents.push(event);
+  const recorded = appendReplayEvent(ROOT, event);
+  activityEvents.push(recorded);
   if (activityEvents.length > ACTIVITY_LIMIT) activityEvents.splice(0, activityEvents.length - ACTIVITY_LIMIT);
-  recordVerificationEvent(ROOT, event);
-  return event;
+  recordVerificationEvent(ROOT, recorded);
+  return recorded;
 }
 
 function activityPayload(after = 0) {
@@ -241,12 +253,70 @@ function statusPayload() {
   });
 }
 
+function graphReplayState(graph) {
+  const ids = [
+    ...(graph?.modules ?? []).map((entry) => entry.id),
+    ...(graph?.features ?? []).map((entry) => entry.id),
+    ...(graph?.components ?? []).map((entry) => entry.id),
+    ...(graph?.verification?.tests ?? []).map((entry) => entry.id),
+    ...(graph?.code?.nodes ?? []).map((entry) => entry.id)
+  ].filter(Boolean);
+  const relations = [
+    ...(graph?.contracts ?? []).map((entry) => ({
+      id: entry.id,
+      from: entry.from,
+      to: entry.to,
+      type: entry.type
+    })),
+    ...(graph?.sharedCapabilities ?? []).map((entry) => ({
+      id: entry.id,
+      from: entry.providerFeatureId ?? entry.providerModuleId,
+      to: entry.consumerFeatureId ?? entry.consumerModuleId,
+      type: "shared-capability"
+    })),
+    ...(graph?.verification?.relations ?? []).map((entry) => ({
+      id: entry.id,
+      from: entry.from,
+      to: entry.to,
+      type: entry.type
+    }))
+  ].filter((entry) => entry.id && entry.from && entry.to);
+  return Object.freeze({
+    schemaVersion: graph?.schemaVersion ?? null,
+    generatedAt: graph?.generatedAt ?? null,
+    entityIds: Object.freeze([...new Set(ids)].sort()),
+    relations: Object.freeze(relations)
+  });
+}
+
+function replayFrame(sequence) {
+  const knowledge = loadKnowledge();
+  const index = loadCodeIndex({ knowledge });
+  const graph = buildGraphViewModel({ knowledge, index });
+  const frame = replayFramePayload(knowledge.root, sequence);
+  const historicalVerification = replayVerificationStateAt(knowledge.root, frame.sequence);
+  return Object.freeze({
+    ...frame,
+    verificationState: verificationStatePayloadFromState({
+      state: historicalVerification,
+      knowledge,
+      verification: graph.verification,
+      changeIntelligence: frame.changeIntelligence
+    })
+  });
+}
+
 function refreshWorkspaceChanges(requestedModules = []) {
   const knowledge = loadKnowledge();
   const reposRoot = defaultReposRoot(knowledge.root);
   const requested = (requestedModules ?? []).filter((id) => knowledge.moduleById.has(id));
   const beforeIndex = loadCodeIndex({ knowledge });
   const beforeGraph = buildGraphViewModel({ knowledge, index: beforeIndex });
+  recordReplayCheckpoint(knowledge.root, {
+    sequence: activitySequence,
+    changeIntelligence: loadChangeIntelligence(knowledge.root),
+    graphState: graphReplayState(beforeGraph)
+  });
   const gitChanges = collectGitChanges({ knowledge, reposRoot, modules: requested });
   const refreshed = refreshCodeIndex({
     knowledge,
@@ -265,11 +335,23 @@ function refreshWorkspaceChanges(requestedModules = []) {
   );
   const rendered = renderGraphV2({ knowledge, index: refreshed.index });
   if (changeIntelligence.gitChanges.length || changeIntelligence.semanticDiff.changedEntityIds.length) {
-    appendActivity({
+    const event = appendActivity({
       type: "git_diff_updated",
       source: "bridge",
       summary: `${changeIntelligence.gitChanges.length} files · ${changeIntelligence.semanticDiff.changedEntityIds.length} semantic entities · ${changeIntelligence.impact.impactedModules.length} impacted modules`
     }, { source: "bridge" });
+    recordReplayCheckpoint(knowledge.root, {
+      sequence: event.sequence,
+      timestamp: event.timestamp,
+      changeIntelligence,
+      graphState: graphReplayState(afterGraph)
+    });
+  } else {
+    recordReplayCheckpoint(knowledge.root, {
+      sequence: activitySequence,
+      changeIntelligence,
+      graphState: graphReplayState(afterGraph)
+    });
   }
   return Object.freeze({
     knowledge,
@@ -384,8 +466,9 @@ async function handleApi(req, res, url, { agentAdapter } = {}) {
     json(res, 200, {
       status: "ok",
       mode: "local",
-      activitySchemaVersion: 2,
+      activitySchemaVersion: 3,
       verificationSchemaVersion: 1,
+      replaySchemaVersion: 1,
       agentAdapterSchemaVersion: 1,
       promptExecution: adapterStatus.available ? adapterStatus.kind : "agent-adapter-required",
       agentAdapter: {
@@ -454,6 +537,17 @@ async function handleApi(req, res, url, { agentAdapter } = {}) {
       afterGraph: graph,
       gitChanges
     }));
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/replay") {
+    json(res, 200, replayTimelinePayload(ROOT));
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/replay/frame") {
+    const rawSequence = Number(url.searchParams.get("sequence"));
+    json(res, 200, replayFrame(rawSequence));
     return true;
   }
 
@@ -582,6 +676,19 @@ export function createLocalViewerServer({
       refreshWorkspaceChanges([]);
     }
   });
+  const currentGraph = buildGraphViewModel({
+    knowledge,
+    index: loadCodeIndex({ knowledge })
+  });
+  const replayState = loadDevelopmentReplay(knowledge.root);
+  if (!replayState.checkpoints.length) {
+    recordReplayCheckpoint(knowledge.root, {
+      sequence: replayState.latestSequence,
+      changeIntelligence: loadChangeIntelligence(knowledge.root),
+      graphState: graphReplayState(currentGraph)
+    });
+  }
+
   const server = http.createServer(async (req, res) => {
     try {
       const base = `http://${req.headers.host || `${DEFAULT_HOST}:${DEFAULT_PORT}`}`;
