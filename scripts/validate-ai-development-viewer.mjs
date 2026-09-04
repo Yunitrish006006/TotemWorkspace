@@ -9,8 +9,10 @@ const server = read("scripts/serve-local-viewer.mjs");
 const localValidation = read("scripts/validate-local-viewer.mjs");
 const legacyHtml = read("graph-v2.html");
 const legacyLive = read("viewer/local-live.js");
+const legacyRenderer = read("viewer/graph-v2-cluster-v2.js");
 const flutterLive = read("viewer_flutter/lib/live/workspace_live.dart");
 const flutterHost = read("viewer_flutter/lib/widgets/workspace_graph_host.dart");
+const flutterGraph = read("viewer_flutter/lib/widgets/graph_view.dart");
 const pages = read(".github/workflows/pages.yml");
 const workspaceValidation = read("scripts/validate-workspace.mjs");
 const agents = read("AGENTS.md");
@@ -55,9 +57,21 @@ for (const behavior of [
   'apiUrl("/api/prompt")',
   'settings.agentActivityEnabled === false',
   'settings.promptEnabled === true',
-  'host === "yunitrish006006.github.io"'
+  'host === "yunitrish006006.github.io"',
+  'window.__TOTEM_AGENT_ACTIVITY__ = event',
+  'window.setInterval(requestAgentDraw, 80)'
 ]) {
   assert.ok(legacyLive.includes(behavior), `legacy local adapter parity is missing: ${behavior}`);
+}
+
+for (const behavior of [
+  "function drawAgentActivityHalo",
+  "function agentActivityColor",
+  "agentActivity.featureId && byId.has(agentActivity.featureId)",
+  "agentActivity.moduleId && byId.has(agentActivity.moduleId)",
+  "drawAgentActivityHalo(ctx, p, activityRadius"
+]) {
+  assert.ok(legacyRenderer.includes(behavior), `legacy activity overlay is missing: ${behavior}`);
 }
 
 for (const behavior of [
@@ -79,6 +93,18 @@ for (const behavior of [
   "onPromptChanged"
 ]) {
   assert.ok(flutterHost.includes(behavior), `Flutter maintained surface is missing: ${behavior}`);
+}
+
+for (const behavior of [
+  "with SingleTickerProviderStateMixin",
+  "activityFeatureId",
+  "activityModuleId",
+  "activityType",
+  "activityPulse: _activityPulse",
+  "if (agentActive)",
+  "Color _activityColor"
+]) {
+  assert.ok(flutterGraph.includes(behavior), `Flutter activity overlay is missing: ${behavior}`);
 }
 assert.ok(
   flutterHost.includes("if (isLocal && _settings.agentActivityEnabled && _activity.isNotEmpty)") &&
