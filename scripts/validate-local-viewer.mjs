@@ -15,19 +15,29 @@ assert.ok(serverSource.includes('host !== DEFAULT_HOST && host !== "::1"'), "non
 assert.ok(serverSource.includes('pathname === "/api/workspace-status"'), "workspace-status endpoint is required");
 assert.ok(serverSource.includes('pathname === "/api/graph-data"'), "graph-data endpoint is required");
 assert.ok(serverSource.includes('pathname === "/api/refresh"'), "refresh endpoint is required");
+assert.ok(serverSource.includes('pathname === "/api/viewer-settings"'), "viewer settings endpoint is required");
+assert.ok(serverSource.includes('pathname === "/api/activity"'), "agent activity endpoint is required");
+assert.ok(serverSource.includes('pathname === "/api/prompt"'), "prompt intake endpoint is required");
+assert.ok(serverSource.includes('"https://yunitrish006006.github.io"'), "official TotemWorkspace Pages origin must be explicitly allowlisted");
+assert.ok(serverSource.includes('"agent-adapter-required"'), "prompt intake must not claim direct agent execution");
+assert.ok(serverSource.includes("activity file paths must be repository-relative"), "activity ingestion must reject absolute local file paths");
 assert.ok(serverSource.includes("workspaceStatus({ knowledge, reposRoot })"), "status endpoint must reuse workspaceStatus");
 assert.ok(serverSource.includes("refreshCodeIndex({"), "refresh endpoint must reuse incremental code-index refresh");
 assert.ok(serverSource.includes("renderGraphV2({ knowledge, index: refreshed.index })"), "refresh endpoint must regenerate graph data");
 assert.ok(serverSource.includes("prepareApiCors(req, res)"), "Flutter dev access must pass through loopback-only CORS validation");
-assert.ok(serverSource.includes("cross-origin access is restricted to loopback clients"), "non-loopback browser origins must be rejected");
+assert.ok(serverSource.includes("approved TotemWorkspace or loopback clients"), "browser CORS must be restricted to approved Pages or loopback origins");
 assert.ok(!serverSource.includes('const DEFAULT_HOST = "0.0.0.0"'), "local viewer must not expose LAN by default");
 
 assert.ok(html.includes('id="liveLocal"'), "viewer must expose LIVE LOCAL badge");
 assert.ok(html.includes('id="localStatus"'), "viewer must expose local status button");
 assert.ok(html.includes('id="refreshLocal"'), "viewer must expose local refresh button");
 assert.ok(html.includes('<script src="viewer/local-live.js"></script>'), "viewer must load the local-live adapter");
-assert.ok(liveSource.includes('fetch("api/workspace-status"'), "local adapter must poll workspace status");
-assert.ok(liveSource.includes('fetch("api/refresh"'), "local adapter must trigger index refresh");
+assert.ok(liveSource.includes('apiUrl("/api/workspace-status")'), "legacy local adapter must poll workspace status through the local bridge base");
+assert.ok(liveSource.includes('apiUrl("/api/refresh")'), "legacy local adapter must trigger index refresh through the local bridge base");
+assert.ok(liveSource.includes('apiUrl("/api/viewer-settings")'), "legacy viewer must use shared local viewer settings");
+assert.ok(liveSource.includes('apiUrl("/api/activity?after="'), "legacy viewer must poll shared agent activity");
+assert.ok(liveSource.includes('apiUrl("/api/prompt")'), "legacy prompt surface must submit through the bridge");
+assert.ok(liveSource.includes('host === "yunitrish006006.github.io"'), "legacy Pages must discover the loopback bridge");
 assert.ok(liveSource.includes("window.setInterval(poll, 5000)"), "local status must refresh periodically");
 assert.ok(liveSource.includes("window.location.reload()"), "successful local refresh must reload regenerated graph data");
 
@@ -44,7 +54,11 @@ try {
 
   const health = await fetch(`${base}/api/health`);
   assert.equal(health.status, 200);
-  assert.deepEqual(await health.json(), { status: "ok", mode: "local" });
+  const healthPayload = await health.json();
+  assert.equal(healthPayload.status, "ok");
+  assert.equal(healthPayload.mode, "local");
+  assert.equal(healthPayload.activitySchemaVersion, 1);
+  assert.equal(healthPayload.promptExecution, "agent-adapter-required");
 
   const flutterHealth = await fetch(`${base}/api/health`, {
     headers: { Origin: "http://localhost:54321" }
@@ -52,6 +66,16 @@ try {
   assert.equal(flutterHealth.status, 200);
   assert.equal(flutterHealth.headers.get("access-control-allow-origin"), "http://localhost:54321");
   assert.match(flutterHealth.headers.get("access-control-allow-methods") ?? "", /POST/);
+
+  const pagesHealth = await fetch(`${base}/api/health`, {
+    headers: { Origin: "https://yunitrish006006.github.io" }
+  });
+  assert.equal(pagesHealth.status, 200);
+  assert.equal(
+    pagesHealth.headers.get("access-control-allow-origin"),
+    "https://yunitrish006006.github.io",
+    "published TotemWorkspace Pages must be able to reach the loopback bridge"
+  );
 
   const preflight = await fetch(`${base}/api/refresh`, {
     method: "OPTIONS",
@@ -68,6 +92,75 @@ try {
   });
   assert.equal(blocked.status, 403);
 
+  const defaults = await fetch(`${base}/api/viewer-settings`);
+  assert.equal(defaults.status, 200);
+  const defaultSettings = await defaults.json();
+  assert.equal(defaultSettings.promptEnabled, false, "Prompt must default to OFF");
+  assert.equal(defaultSettings.agentActivityEnabled, true, "Agent Activity must remain independent of Prompt");
+
+  const blockedPrompt = await fetch(`${base}/api/prompt`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ prompt: "do not execute this" })
+  });
+  assert.equal(blockedPrompt.status, 403, "Prompt submission must be rejected while Prompt is disabled");
+
+  const enablePrompt = await fetch(`${base}/api/viewer-settings`, {
+    method: "POST",
+    headers: {
+      Origin: "https://yunitrish006006.github.io",
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({ promptEnabled: true })
+  });
+  assert.equal(enablePrompt.status, 200);
+  assert.equal((await enablePrompt.json()).promptEnabled, true);
+
+  const prompt = await fetch(`${base}/api/prompt`, {
+    method: "POST",
+    headers: {
+      Origin: "https://yunitrish006006.github.io",
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({ prompt: "inspect TotemAutomata gathering outline" })
+  });
+  assert.equal(prompt.status, 202);
+  const promptPayload = await prompt.json();
+  assert.equal(promptPayload.execution, "agent-adapter-required");
+  assert.equal(promptPayload.event.type, "prompt_submitted");
+
+  const activityPost = await fetch(`${base}/api/activity`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      type: "file_edit",
+      moduleId: "totem-automata",
+      featureId: "totem-automata.feature-4",
+      file: "src/client/java/dev/totem/automata/client/CopperGolemVisualizationClient.java",
+      summary: "editing outline rendering"
+    })
+  });
+  assert.equal(activityPost.status, 202);
+  const editEvent = (await activityPost.json()).event;
+  assert.equal(editEvent.type, "file_edit");
+  assert.equal(editEvent.moduleId, "totem-automata");
+
+  const activity = await fetch(`${base}/api/activity?after=0`);
+  assert.equal(activity.status, 200);
+  const activityPayload = await activity.json();
+  assert.ok(activityPayload.latestSequence >= 2);
+  assert.deepEqual(
+    activityPayload.events.slice(-2).map((event) => event.type),
+    ["prompt_submitted", "file_edit"]
+  );
+
+  const absolutePathEvent = await fetch(`${base}/api/activity`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ type: "file_read", file: "/Users/example/private.java" })
+  });
+  assert.equal(absolutePathEvent.status, 500, "absolute local paths must be rejected rather than stored");
+
   const status = await fetch(`${base}/api/workspace-status`);
   assert.equal(status.status, 200);
   const payload = await status.json();
@@ -82,4 +175,4 @@ try {
   await new Promise((resolve) => server.close(resolve));
 }
 
-console.log("Local live viewer validation passed: loopback-only server, restricted Flutter dev CORS, live repo status polling, static viewer serving, and refresh wiring are present.");
+console.log("Local live viewer validation passed: loopback-only bind, approved Pages CORS, shared settings, prompt gating, activity ingestion/polling, local-path redaction, repo status, and refresh wiring are present.");
