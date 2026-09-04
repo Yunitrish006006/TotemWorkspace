@@ -246,7 +246,7 @@ assert.ok(graphSource.includes("verification,"), "graph payload must publish ver
 
 for (const fragment of [
   'pathname === "/api/verification-state"',
-  "recordVerificationEvent(ROOT, event)",
+  "recordVerificationEvent(ROOT, recorded)",
   "verificationStatePayload",
 ]) {
   assert.ok(serverSource.includes(fragment), `Bridge verification API missing: ${fragment}`);
@@ -268,7 +268,7 @@ for (const fragment of [
   assert.ok(flutterLive.includes(fragment), `Flutter live verification client missing: ${fragment}`);
 }
 for (const fragment of [
-  "_VerificationStrip(state: _verification!)",
+  "_VerificationStrip(state: displayedVerification)",
   "runningVerificationTargetIds",
   "failedVerificationTargetIds",
 ]) {

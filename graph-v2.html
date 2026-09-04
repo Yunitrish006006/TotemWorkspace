@@ -52,6 +52,12 @@
     <input id="promptInput" type="text" maxlength="8192" autocomplete="off" placeholder="輸入 Prompt（CODEX READY 時直接建立 task；OFF/UNAVAILABLE 不會假裝執行）">
     <button id="promptSubmit" type="button">送出</button>
   </div>
+  <div class="replay-bar" id="replayBar" hidden>
+    <b id="replayLabel">REPLAY · LIVE</b>
+    <input id="replaySlider" type="range" min="0" max="1" value="1" step="1" aria-label="Development replay sequence">
+    <small id="replayMeta">0 events</small>
+    <button id="replayLive" type="button" disabled>LIVE</button>
+  </div>
   <main class="stage">
     <section id="pane3d" class="pane">
       <canvas id="graph3d" class="canvas3d" tabindex="0" role="application" aria-label="TOTEM 3D 架構圖；方向鍵切換節點，Enter 或空白鍵啟動"></canvas>

@@ -22,3 +22,10 @@ button,.button-link{border:1px solid #38506a;border-radius:9px;background:#10253
 .agent-adapter[data-status="ready"]{color:#86efac;border-color:#28503f;background:#081b13}
 .agent-adapter[data-status="busy"]{color:#67e8f9;border-color:#27566a;background:#071821}
 .agent-adapter[data-status="failed"],.agent-adapter[data-status="unavailable"]{color:#f87171;border-color:#713b3b;background:#241010}
+
+.replay-bar{display:flex;align-items:center;gap:9px;padding:6px 12px;background:#120d1b;border-bottom:1px solid #4c3566}
+.replay-bar[hidden]{display:none}
+.replay-bar b{min-width:94px;color:#c4b5fd;font-size:11px;letter-spacing:.3px}
+.replay-bar input[type="range"]{flex:1;min-width:120px}
+.replay-bar small{color:#9fb4ca;white-space:nowrap}
+.replay-bar button{padding:5px 9px}

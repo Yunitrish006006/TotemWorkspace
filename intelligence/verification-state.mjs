@@ -112,14 +112,14 @@ function semanticTargets(test) {
   ].filter(Boolean);
 }
 
-export function verificationStatePayload({
-  workspaceRoot,
+export function verificationStatePayloadFromState({
+  state,
   knowledge,
   verification,
   changeIntelligence = null
 } = {}) {
-  const state = loadVerificationState(workspaceRoot);
-  const entries = state.entries.map((entry) => {
+  const safeState = state?.schemaVersion === 1 && Array.isArray(state.entries) ? state : emptyState();
+  const entries = safeState.entries.map((entry) => {
     const test = resolveTest(entry, verification);
     return Object.freeze({
       target: entry.target,
@@ -142,7 +142,7 @@ export function verificationStatePayload({
     passed: new Set(),
     failed: new Set()
   };
-  for (const entry of state.entries) {
+  for (const entry of safeState.entries) {
     const test = resolveTest(entry, verification);
     if (!targetsByStatus[entry.status]) continue;
     for (const target of semanticTargets(test)) targetsByStatus[entry.status].add(target);
@@ -158,12 +158,26 @@ export function verificationStatePayload({
   return Object.freeze({
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
-    updatedAt: state.updatedAt,
+    updatedAt: safeState.updatedAt,
     entries: Object.freeze(entries),
     summary: Object.freeze(counts),
     runningTargetIds: Object.freeze([...targetsByStatus.running].sort()),
     passedTargetIds: Object.freeze([...targetsByStatus.passed].sort()),
     failedTargetIds: Object.freeze([...targetsByStatus.failed].sort()),
     activePlan: activeVerificationPlan({ knowledge, changeIntelligence })
+  });
+}
+
+export function verificationStatePayload({
+  workspaceRoot,
+  knowledge,
+  verification,
+  changeIntelligence = null
+} = {}) {
+  return verificationStatePayloadFromState({
+    state: loadVerificationState(workspaceRoot),
+    knowledge,
+    verification,
+    changeIntelligence
   });
 }

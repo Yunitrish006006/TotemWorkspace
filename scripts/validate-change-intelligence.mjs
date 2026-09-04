@@ -167,9 +167,9 @@ for (const fragment of [
   assert.ok(flutterLive.includes(fragment), `Flutter Phase 3 client is missing: ${fragment}`);
 }
 for (const fragment of [
-  "_ChangeStrip(change: _change!)",
-  "changedEntityIds: _change?.changedEntityIds",
-  "impactedModuleIds: _change?.impactedModuleIds",
+  "_ChangeStrip(change: displayedChange!)",
+  "changedEntityIds: displayedChange?.changedEntityIds",
+  "impactedModuleIds: displayedChange?.impactedModuleIds",
   "changeAnimationsEnabled: _settings.changeAnimationsEnabled",
 ]) {
   assert.ok(flutterHost.includes(fragment), `Flutter Phase 3 host is missing: ${fragment}`);

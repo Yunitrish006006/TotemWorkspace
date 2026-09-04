@@ -32,7 +32,9 @@ for (const endpoint of [
   "/api/viewer-settings",
   "/api/activity",
   "/api/prompt",
-  "/api/agent-adapter"
+  "/api/agent-adapter",
+  "/api/replay",
+  "/api/replay/frame"
 ]) {
   assert.ok(server.includes(endpoint), `local bridge is missing ${endpoint}`);
 }
@@ -46,6 +48,9 @@ assert.ok(!server.includes('node:child_process'), "Phase 1 browser prompt intake
 for (const id of [
   'id="agentActivity"',
   'id="agentAdapter"',
+  'id="replayBar"',
+  'id="replaySlider"',
+  'id="replayLive"',
   'id="promptToggle"',
   'id="promptBar"',
   'id="promptInput"',
@@ -60,6 +65,9 @@ for (const behavior of [
   'apiUrl("/api/activity?after="',
   'apiUrl("/api/prompt")',
   'apiUrl("/api/agent-adapter")',
+  'apiUrl("/api/replay")',
+  'apiUrl("/api/replay/frame?sequence=" +',
+  'window.__TOTEM_REPLAY_GRAPH_STATE__ = frame.graphState || null',
   'settings.agentActivityEnabled === false',
   'settings.promptEnabled === true',
   'host === "yunitrish006006.github.io"',
@@ -85,17 +93,21 @@ for (const behavior of [
   "Future<ViewerSettings> updateViewerSettings",
   "Future<AgentActivityBatch> activity",
   "Future<PromptSubmission> submitPrompt",
-  "Future<AgentAdapterStatus> agentAdapterStatus()"
+  "Future<AgentAdapterStatus> agentAdapterStatus()",
+  "Future<DevelopmentReplayTimeline> replayTimeline()",
+  "Future<DevelopmentReplayFrame> replayFrame(int sequence)"
 ]) {
   assert.ok(flutterLive.includes(behavior), `Flutter bridge parity is missing: ${behavior}`);
 }
 
 for (const behavior of [
   "ViewerSettings _settings = ViewerSettings.defaults",
-  "_ActivityStrip(event: _activity.last)",
+  "_ActivityStrip(event: displayedActivity)",
   "_AgentAdapterStrip(status: _adapter!)",
+  "_ReplayScrubber(",
+  "historicalEntityIds: historicalEntityIds",
   "if (isLocal && _settings.promptEnabled)",
-  "if (isLocal && _settings.agentActivityEnabled && _activity.isNotEmpty)",
+  "if (isLocal && _settings.agentActivityEnabled && displayedActivity != null)",
   "Switch.adaptive",
   "onPromptChanged"
 ]) {
@@ -109,12 +121,13 @@ for (const behavior of [
   "activityType",
   "activityPulse: _activityPulse",
   "if (agentActive)",
-  "Color _activityColor"
+  "Color _activityColor",
+  "historicalEntityIds"
 ]) {
   assert.ok(flutterGraph.includes(behavior), `Flutter activity overlay is missing: ${behavior}`);
 }
 assert.ok(
-  flutterHost.includes("if (isLocal && _settings.agentActivityEnabled && _activity.isNotEmpty)") &&
+  flutterHost.includes("if (isLocal && _settings.agentActivityEnabled && displayedActivity != null)") &&
     flutterHost.includes("if (isLocal && _settings.promptEnabled)"),
   "Prompt visibility and Agent Activity visibility must remain independent"
 );
@@ -139,4 +152,4 @@ assert.ok(localValidation.includes("published TotemWorkspace Pages must be able 
 assert.ok(localValidation.includes("Prompt must default to OFF"), "local bridge regression must protect Prompt default-off behavior");
 assert.ok(localValidation.includes("Agent Activity must remain independent of Prompt"), "local bridge regression must protect Prompt/Activity independence");
 
-console.log("AI development viewer validation passed: Flutter owns both Pages and local Bridge roots, /legacy/ remains synchronized, prompt/activity/agent-adapter semantics stay shared, and the Bridge remains loopback-only and explicitly adapter-gated.");
+console.log("AI development viewer validation passed: Flutter owns both Pages and local Bridge roots, /legacy/ remains synchronized, prompt/activity/agent-adapter/replay semantics stay shared, and the Bridge remains loopback-only and explicitly adapter-gated.");

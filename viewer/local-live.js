@@ -10,10 +10,15 @@
   var promptBar = document.getElementById("promptBar");
   var promptInput = document.getElementById("promptInput");
   var promptSubmit = document.getElementById("promptSubmit");
+  var replayBar = document.getElementById("replayBar");
+  var replaySlider = document.getElementById("replaySlider");
+  var replayLabel = document.getElementById("replayLabel");
+  var replayMeta = document.getElementById("replayMeta");
+  var replayLive = document.getElementById("replayLive");
   var statusButton = document.getElementById("localStatus");
   var refreshButton = document.getElementById("refreshLocal");
   var info = document.getElementById("info");
-  if (!liveBadge || !changeBadge || !adapterBadge || !verificationBadge || !activityBadge || !promptToggle || !promptBar || !promptInput || !promptSubmit || !statusButton || !refreshButton || !info) return;
+  if (!liveBadge || !changeBadge || !adapterBadge || !verificationBadge || !activityBadge || !promptToggle || !promptBar || !promptInput || !promptSubmit || !replayBar || !replaySlider || !replayLabel || !replayMeta || !replayLive || !statusButton || !refreshButton || !info) return;
 
   var latest = null;
   var settings = null;
@@ -22,6 +27,10 @@
   var activityPolling = null;
   var verificationPolling = null;
   var adapterPolling = null;
+  var replayPolling = null;
+  var replayTimeline = null;
+  var replayActive = false;
+  var latestLiveActivity = null;
   var activityAnimation = null;
   var changeAnimation = null;
   var verificationAnimation = null;
@@ -188,11 +197,11 @@
     }
   }
 
-  async function fetchChangeIntelligence() {
+  async function fetchChangeIntelligence(render) {
     var response = await fetch(apiUrl("/api/change-intelligence"), { cache: "no-store" });
     if (!response.ok) throw new Error("change intelligence unavailable");
     var payload = await response.json();
-    renderChangeIntelligence(payload);
+    if (render !== false) renderChangeIntelligence(payload);
     return payload;
   }
 
@@ -230,7 +239,7 @@
   }
 
   async function pollVerification() {
-    if (!active) return;
+    if (!active || replayActive) return;
     try {
       await fetchVerificationState();
     } catch {
@@ -266,7 +275,10 @@
       var payload = await response.json();
       activitySequence = Number(payload.latestSequence || activitySequence);
       var events = Array.isArray(payload.events) ? payload.events : [];
-      if (events.length) renderActivity(events[events.length - 1]);
+      if (events.length) {
+        latestLiveActivity = events[events.length - 1];
+        if (!replayActive) renderActivity(latestLiveActivity);
+      }
     } catch {
       // Workspace status polling owns connection-state reporting.
     }
@@ -308,6 +320,78 @@
     }
   }
 
+  function renderReplayTimeline(payload) {
+    replayTimeline = payload || null;
+    var hasEvents = payload && Number(payload.eventCount || 0) > 0;
+    replayBar.hidden = !hasEvents || !settings || settings.replayEnabled === false;
+    if (!hasEvents) return;
+    replaySlider.min = String(payload.earliestSequence || 0);
+    replaySlider.max = String(Math.max(Number(payload.latestSequence || 0), Number(payload.earliestSequence || 0) + 1));
+    replaySlider.step = "1";
+    if (!replayActive) replaySlider.value = String(payload.latestSequence || 0);
+    replayMeta.textContent = Number(payload.eventCount || 0) + " events · " +
+      (Array.isArray(payload.sessions) ? payload.sessions.length : 0) + " sessions · " +
+      (Array.isArray(payload.milestones) ? payload.milestones.length : 0) + " milestones";
+    replayLabel.textContent = replayActive ? "REPLAY · #" + replaySlider.value : "REPLAY · LIVE";
+    replayLive.disabled = !replayActive;
+  }
+
+  async function fetchReplayTimeline() {
+    var response = await fetch(apiUrl("/api/replay"), { cache: "no-store" });
+    if (!response.ok) throw new Error("development replay unavailable");
+    var payload = await response.json();
+    renderReplayTimeline(payload);
+    return payload;
+  }
+
+  async function fetchReplayFrame(sequence) {
+    var response = await fetch(apiUrl("/api/replay/frame?sequence=" + encodeURIComponent(sequence)), { cache: "no-store" });
+    if (!response.ok) throw new Error("replay frame unavailable");
+    return response.json();
+  }
+
+  async function selectReplay(sequence) {
+    if (!replayTimeline) return;
+    var latest = Number(replayTimeline.latestSequence || 0);
+    if (Number(sequence) >= latest) {
+      await goReplayLive();
+      return;
+    }
+    var frame = await fetchReplayFrame(sequence);
+    replayActive = frame.live !== true;
+    replaySlider.value = String(frame.sequence || sequence);
+    replayLabel.textContent = replayActive ? "REPLAY · #" + replaySlider.value : "REPLAY · LIVE";
+    replayLive.disabled = !replayActive;
+    window.__TOTEM_REPLAY_GRAPH_STATE__ = frame.graphState || null;
+    renderChangeIntelligence(frame.changeIntelligence || null);
+    renderVerificationState(frame.verificationState || null);
+    renderActivity(frame.activity || null);
+    requestAgentDraw();
+  }
+
+  async function goReplayLive() {
+    replayActive = false;
+    window.__TOTEM_REPLAY_GRAPH_STATE__ = null;
+    if (replayTimeline) {
+      replaySlider.value = String(replayTimeline.latestSequence || 0);
+      replayLabel.textContent = "REPLAY · LIVE";
+    }
+    replayLive.disabled = true;
+    var results = await Promise.all([
+      fetchChangeIntelligence(false),
+      fetchVerificationState(),
+      fetch(apiUrl("/api/activity?after=0"), { cache: "no-store" }).then(function (response) {
+        if (!response.ok) throw new Error("activity unavailable");
+        return response.json();
+      })
+    ]);
+    renderChangeIntelligence(results[0]);
+    var events = Array.isArray(results[2].events) ? results[2].events : [];
+    latestLiveActivity = events.length ? events[events.length - 1] : null;
+    renderActivity(latestLiveActivity);
+    requestAgentDraw();
+  }
+
   async function fetchStatus() {
     var response = await fetch(apiUrl("/api/workspace-status"), { cache: "no-store" });
     if (!response.ok) throw new Error("local api unavailable");
@@ -326,7 +410,7 @@
   async function poll() {
     try {
       await fetchStatus();
-      await fetchChangeIntelligence();
+      if (!replayActive) await fetchChangeIntelligence();
     } catch {
       if (!active && polling) {
         window.clearInterval(polling);
@@ -343,9 +427,31 @@
           window.clearInterval(adapterPolling);
           adapterPolling = null;
         }
+        if (replayPolling) {
+          window.clearInterval(replayPolling);
+          replayPolling = null;
+        }
       }
     }
   }
+
+  replaySlider.addEventListener("input", function () {
+    replayLabel.textContent = Number(replaySlider.value) >= Number(replaySlider.max)
+      ? "REPLAY · LIVE"
+      : "REPLAY · #" + replaySlider.value;
+  });
+
+  replaySlider.addEventListener("change", function () {
+    selectReplay(Number(replaySlider.value)).catch(function (error) {
+      liveBadge.textContent = "LIVE LOCAL · " + (error && error.message ? error.message : "replay failed");
+    });
+  });
+
+  replayLive.addEventListener("click", function () {
+    goReplayLive().catch(function (error) {
+      liveBadge.textContent = "LIVE LOCAL · " + (error && error.message ? error.message : "replay live failed");
+    });
+  });
 
   promptToggle.addEventListener("click", async function () {
     if (!active || !settings) return;
@@ -416,6 +522,12 @@
   activityPolling = window.setInterval(pollActivity, 1000);
   verificationPolling = window.setInterval(pollVerification, 2000);
   adapterPolling = window.setInterval(pollAgentAdapter, 2000);
+  replayPolling = window.setInterval(function () {
+    if (active && settings && settings.replayEnabled !== false) {
+      fetchReplayTimeline().catch(function () {});
+    }
+  }, 3000);
   pollVerification();
   pollAgentAdapter();
+  fetchReplayTimeline().catch(function () {});
 }());

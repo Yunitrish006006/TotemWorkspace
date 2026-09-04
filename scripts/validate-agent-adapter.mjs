@@ -158,6 +158,28 @@ try {
       status: "completed"
     }
   }) + "\n");
+  child.stdout.write(JSON.stringify({
+    type: "item.completed",
+    item: {
+      id: "command-commit",
+      type: "command_execution",
+      command: "git commit -m \"replay fixture\"",
+      aggregated_output: "[main abc1234] replay fixture",
+      exit_code: 0,
+      status: "completed"
+    }
+  }) + "\n");
+  child.stdout.write(JSON.stringify({
+    type: "item.completed",
+    item: {
+      id: "command-pr",
+      type: "command_execution",
+      command: "gh pr create --title \"fixture\"",
+      aggregated_output: "https://github.com/example/repo/pull/1",
+      exit_code: 0,
+      status: "completed"
+    }
+  }) + "\n");
   child.stdout.write('{"type":"turn.completed","usage":{"input_tokens":10,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":3,"reasoning_output_tokens":1}}\n');
 
   await tick();
@@ -176,6 +198,8 @@ try {
   assert.equal(fileEdit.moduleId, "totem-alchemy");
   assert.equal(fileEdit.file, "src/main/java/example/Brewing.java");
   assert.ok(!fileEdit.file.includes(root), "activity must never expose absolute workspace paths");
+  assert.ok(activity.some((event) => event.type === "commit_created" && event.taskId === task.id));
+  assert.ok(activity.some((event) => event.type === "pr_created" && event.taskId === task.id));
   assert.ok(activity.some((event) => event.type === "task_completed" && event.taskId === task.id));
 
   child.emit("close", 0, null);
@@ -244,6 +268,10 @@ for (const fragment of [
   'child.stdin?.end?.(promptEnvelope',
   'item.type === "file_change"',
   'item.type === "mcp_tool_call"',
+  'item.type === "command_execution"',
+  '"commit_created"',
+  '"pr_created"',
+  '"pr_merged"',
   'type: finalState === "completed" ? "task_completed" : "task_failed"',
 ]) {
   assert.ok(adapterSource.includes(fragment), `Codex adapter core missing: ${fragment}`);

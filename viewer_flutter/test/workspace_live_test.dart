@@ -196,6 +196,138 @@ void main() {
           200,
         );
       }
+      if (request.url.path == '/api/replay') {
+        return http.Response(
+          jsonEncode(<String, Object>{
+            'schemaVersion': 1,
+            'generatedAt': 'now',
+            'updatedAt': 'now',
+            'earliestSequence': 1,
+            'latestSequence': 9,
+            'eventCount': 9,
+            'sessions': <Object>[
+              <String, Object?>{
+                'id': 'session:task:flutter-fixture:1',
+                'taskId': 'task:flutter-fixture:1',
+                'state': 'completed',
+                'startedSequence': 2,
+                'endedSequence': 8,
+                'startedAt': 'now',
+                'endedAt': 'now',
+                'moduleId': 'totem-core',
+                'featureId': 'totem-core.feature-5',
+                'summary': 'fixture task',
+                'eventCount': 7,
+                'milestoneCount': 1,
+                'milestones': <Object>[
+                  <String, Object?>{
+                    'sequence': 7,
+                    'timestamp': 'now',
+                    'type': 'commit_created',
+                    'taskId': 'task:flutter-fixture:1',
+                    'sessionId': 'session:task:flutter-fixture:1',
+                    'moduleId': 'totem-core',
+                    'summary': 'abc1234',
+                  },
+                ],
+              },
+            ],
+            'milestones': <Object>[
+              <String, Object?>{
+                'sequence': 7,
+                'timestamp': 'now',
+                'type': 'commit_created',
+                'taskId': 'task:flutter-fixture:1',
+                'sessionId': 'session:task:flutter-fixture:1',
+                'moduleId': 'totem-core',
+                'summary': 'abc1234',
+              },
+            ],
+          }),
+          200,
+        );
+      }
+      if (request.url.path == '/api/replay/frame') {
+        return http.Response(
+          jsonEncode(<String, Object?>{
+            'schemaVersion': 1,
+            'generatedAt': 'now',
+            'sequence': int.tryParse(request.url.queryParameters['sequence'] ?? '') ?? 5,
+            'latestSequence': 9,
+            'live': false,
+            'activity': <String, Object>{
+              'sequence': 5,
+              'timestamp': 'now',
+              'type': 'test_failed',
+              'source': 'agent-adapter',
+              'moduleId': 'totem-core',
+              'featureId': 'totem-core.feature-5',
+              'test': 'test:totem-core:src/test/CoreTest.java',
+              'summary': 'fixture failed',
+            },
+            'changeIntelligence': <String, Object>{
+              'schemaVersion': 1,
+              'generatedAt': 'now',
+              'before': <String, Object>{'entityCount': 10},
+              'after': <String, Object>{'entityCount': 12},
+              'gitChanges': <Object>[],
+              'semanticDiff': <String, Object>{
+                'added': <Object>[],
+                'modified': <Object>[],
+                'removed': <Object>[],
+                'changedEntityIds': <String>['component:totem-core:api'],
+              },
+              'affectedEntityIds': <String>['totem-core', 'component:totem-core:api'],
+              'impact': <String, Object>{
+                'touchedModules': <String>['totem-core'],
+                'impactedModules': <String>['totem-core'],
+                'contractIds': <String>[],
+                'risks': <String>[],
+                'requiresIndependentReview': false,
+              },
+            },
+            'graphState': <String, Object>{
+              'schemaVersion': 5,
+              'generatedAt': 'now',
+              'entityIds': <String>['totem-core', 'totem-core.feature-5', 'component:totem-core:api'],
+              'relations': <Object>[],
+            },
+            'verificationState': <String, Object>{
+              'schemaVersion': 1,
+              'generatedAt': 'now',
+              'updatedAt': 'now',
+              'entries': <Object>[],
+              'summary': <String, Object>{
+                'running': 0,
+                'passed': 0,
+                'failed': 1,
+                'unresolved': 0,
+              },
+              'runningTargetIds': <String>[],
+              'passedTargetIds': <String>[],
+              'failedTargetIds': <String>['totem-core', 'totem-core.feature-5'],
+              'activePlan': <String, Object>{
+                'modules': <String>['totem-core'],
+                'risks': <String>[],
+                'requiredCategories': <String>['unit-tests'],
+                'requirementIds': <String>[],
+              },
+            },
+            'milestones': <Object>[
+              <String, Object?>{
+                'sequence': 7,
+                'timestamp': 'now',
+                'type': 'commit_created',
+                'taskId': 'task:flutter-fixture:1',
+                'sessionId': 'session:task:flutter-fixture:1',
+                'moduleId': 'totem-core',
+                'summary': 'abc1234',
+              },
+            ],
+          }),
+          200,
+        );
+      }
       if (request.url.path == '/api/agent-adapter') {
         return http.Response(
           jsonEncode(<String, Object?>{
@@ -388,6 +520,21 @@ void main() {
     expect(adapter.available, isTrue);
     expect(adapter.label, 'CODEX READY');
 
+    final replayTimeline = await client.replayTimeline();
+    expect(replayTimeline.eventCount, 9);
+    expect(replayTimeline.latestSequence, 9);
+    expect(replayTimeline.sessions.single.state, 'completed');
+    expect(replayTimeline.sessions.single.milestones.single.type, 'commit_created');
+
+    final replayFrame = await client.replayFrame(5);
+    expect(replayFrame.sequence, 5);
+    expect(replayFrame.live, isFalse);
+    expect(replayFrame.activity?.type, 'test_failed');
+    expect(replayFrame.changeIntelligence?.changedEntityIds, contains('component:totem-core:api'));
+    expect(replayFrame.verificationState.failedCount, 1);
+    expect(replayFrame.historicalEntityIds, contains('totem-core.feature-5'));
+    expect(replayFrame.milestones.single.type, 'commit_created');
+
     final promptSubmission = await client.submitPrompt('inspect outline api');
     expect(promptSubmission.event.type, 'prompt_submitted');
     expect(promptSubmission.execution, 'codex');
@@ -423,6 +570,12 @@ void main() {
 
     final promptRequest = requests.singleWhere((request) => request.url.path == '/api/prompt');
     expect((jsonDecode(promptRequest.body) as Map<String, dynamic>)['prompt'], 'inspect outline api');
+
+    final replayRequest = requests.singleWhere((request) => request.url.path == '/api/replay');
+    expect(replayRequest.method, 'GET');
+
+    final replayFrameRequest = requests.singleWhere((request) => request.url.path == '/api/replay/frame');
+    expect(replayFrameRequest.url.queryParameters['sequence'], '5');
 
     final refresh = requests.singleWhere((request) => request.url.path == '/api/refresh');
     expect(refresh.method, 'POST');
