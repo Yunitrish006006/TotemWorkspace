@@ -4,6 +4,14 @@ on:
   push:
     paths:
       - "viewer_flutter/**"
+      - "viewer/**"
+      - "graph-v2.html"
+      - "docs/ai-development-graph-plan.md"
+      - "scripts/validate-ai-development-viewer.mjs"
+      - "viewer/**"
+      - "graph-v2.html"
+      - "docs/ai-development-graph-plan.md"
+      - "scripts/validate-ai-development-viewer.mjs"
       - "scripts/render-flutter-graph.mjs"
       - "scripts/serve-local-viewer.mjs"
       - "scripts/validate-local-viewer.mjs"
@@ -41,6 +49,9 @@ jobs:
 
       - name: Validate loopback local API
         run: node scripts/validate-local-viewer.mjs
+
+      - name: Validate maintained viewer parity
+        run: node scripts/validate-ai-development-viewer.mjs
 
       - name: Set up Flutter 3.47.0
         uses: subosito/flutter-action@v2
