@@ -843,7 +843,7 @@ export function createLocalViewerServer({
   });
   server.on("close", () => {
     if (liveRefreshTimer) clearTimeout(liveRefreshTimer);
-    agentAdapter?.close?.();
+    agentAdapter?.close?.("Bridge shutdown interrupted active Codex task");
   });
   return server;
 }
@@ -873,5 +873,16 @@ export function startLocalViewer({ host = DEFAULT_HOST, port = DEFAULT_PORT } = 
 }
 
 if (path.resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
-  startLocalViewer({ port: parsePort(process.argv.slice(2)) });
+  const server = startLocalViewer({ port: parsePort(process.argv.slice(2)) });
+  let shuttingDown = false;
+  const shutdown = (signal) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    server.close(() => process.exit(0));
+    const timeout = setTimeout(() => process.exit(1), 3000);
+    timeout.unref?.();
+  };
+  for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"]) {
+    process.once(signal, () => shutdown(signal));
+  }
 }
