@@ -74,11 +74,24 @@ if (data) {
 
   const modules = Array.isArray(data.modules) ? data.modules : [];
   const ids = modules.map((module) => module.id);
-  check(modules.length === 11, "必須恰好有 11 個現役 Totem 模組");
-  check(new Set(ids).size === 11, "現役模組 ID 必須唯一");
-  check(modules.every((module) => module.active === true), "11 個模組都必須明確標示 active=true");
-  check(modules.every((module) => module.id.startsWith("totem-")), "所有現役模組 ID 必須是 totem-* mod ID");
-  check(!modules.some((module) => /deadrecall/i.test(`${module.id} ${module.name} ${module.repository}`)), "DeadRecall 不得列為現役模組");
+  const activeModules = modules.filter((module) => module.active === true);
+  check(activeModules.length >= expectedModules.length, "現役 Totem 模組不得少於目前已稽核基線；新增模組應由 registry 資料驅動");
+  check(new Set(ids).size === ids.length, "模組 ID 必須唯一");
+  check(modules.every((module) => typeof module.active === "boolean"), "每個模組都必須明確標示 active");
+  check(activeModules.every((module) => module.id.startsWith("totem-")), "所有現役模組 ID 必須是 totem-* mod ID");
+  check(!activeModules.some((module) => /deadrecall/i.test(`${module.id} ${module.name} ${module.repository}`)), "DeadRecall 不得列為現役模組");
+
+  for (const module of activeModules) {
+    check(typeof module.name === "string" && module.name.length > 0, `${module.id} 缺少名稱`);
+    check(typeof module.repository === "string" && /^https:\/\/github\.com\//.test(module.repository), `${module.id} 缺少 GitHub repository URL`);
+    check(typeof module.defaultBranch === "string" && module.defaultBranch.length > 0, `${module.id} 缺少預設分支`);
+    check(typeof module.commit === "string" && /^[0-9a-f]{40}$/.test(module.commit), `${module.id} commit 必須是完整 SHA`);
+    check(typeof module.role === "string" && module.role.length >= 12, `${module.id} 缺少清楚的現行定位`);
+    check(Array.isArray(module.featureGroups), `${module.id} featureGroups 必須是陣列`);
+    check(Array.isArray(module.declaredSuggests), `${module.id} declaredSuggests 必須是陣列`);
+    check(Array.isArray(module.runtimeOptionalIntegrationIds), `${module.id} runtimeOptionalIntegrationIds 必須是陣列`);
+    check(Array.isArray(module.observerProviders), `${module.id} observerProviders 必須是陣列`);
+  }
 
   for (const expected of expectedModules) {
     const actual = modules.find((module) => module.id === expected.id);
@@ -201,7 +214,7 @@ if (fs.existsSync(indexPath)) {
     const details = evaluateLiteral(detailMatch[1], "index.html moduleDetails");
     const activeIds = evaluateLiteral(activeMatch[1], "index.html activeModuleIds");
     if (details && activeIds) {
-      check(activeIds.length === 11 && new Set(activeIds).size === 11, "index.html 必須恰好包含 11 個現役模組");
+      check(activeIds.length === expectedModules.length && new Set(activeIds).size === activeIds.length, "curated index.html 必須保留目前已稽核基線模組；新增 registry 模組可先由 generated viewers 自動呈現");
       const branchCount = activeIds.reduce((total, id) => total + (details[id]?.branches?.length ?? 0), 0);
       check(branchCount === 58, "index.html 必須包含 58 個功能分支");
       check(details.core?.version === "0.7.16" && details.core.branches.some((branch) => branch.startsWith("世界輪廓 API：")), "index.html TotemCore 版本或世界輪廓分支不正確");
