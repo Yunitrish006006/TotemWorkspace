@@ -196,6 +196,24 @@ void main() {
           200,
         );
       }
+      if (request.url.path == '/api/agent-adapter') {
+        return http.Response(
+          jsonEncode(<String, Object>{
+            'schemaVersion': 1,
+            'kind': 'codex',
+            'configured': true,
+            'available': true,
+            'busy': false,
+            'version': 'codex-cli fixture',
+            'sandbox': 'workspace-write',
+            'model': 'fixture-model',
+            'reason': '',
+            'currentTask': null,
+            'lastTask': null,
+          }),
+          200,
+        );
+      }
       if (request.url.path == '/api/change-intelligence') {
         return http.Response(jsonEncode(<String, Object>{
             'schemaVersion': 1,
@@ -265,13 +283,36 @@ void main() {
         return http.Response(
           jsonEncode(<String, Object>{
             'status': 'accepted',
-            'execution': 'agent-adapter-required',
+            'execution': 'codex',
             'event': <String, Object>{
               'sequence': 4,
               'timestamp': 'now',
               'type': 'prompt_submitted',
               'source': 'viewer',
               'summary': 'inspect outline api',
+            },
+            'task': <String, Object>{
+              'schemaVersion': 1,
+              'id': 'task:flutter-fixture:1',
+              'adapter': 'codex',
+              'state': 'running',
+              'startedAt': 'now',
+            },
+            'adapter': <String, Object>{
+              'schemaVersion': 1,
+              'kind': 'codex',
+              'configured': true,
+              'available': true,
+              'busy': true,
+              'version': 'codex-cli fixture',
+              'sandbox': 'workspace-write',
+              'currentTask': <String, Object>{
+                'schemaVersion': 1,
+                'id': 'task:flutter-fixture:1',
+                'adapter': 'codex',
+                'state': 'running',
+                'startedAt': 'now',
+              },
             },
           }),
           202,
@@ -342,8 +383,17 @@ void main() {
     expect(activity.events.single.type, 'file_edit');
     expect(activity.events.single.targetLabel, 'totem-core.feature-5');
 
-    final promptEvent = await client.submitPrompt('inspect outline api');
-    expect(promptEvent.type, 'prompt_submitted');
+    final adapter = await client.agentAdapterStatus();
+    expect(adapter.kind, 'codex');
+    expect(adapter.available, isTrue);
+    expect(adapter.label, 'CODEX READY');
+
+    final promptSubmission = await client.submitPrompt('inspect outline api');
+    expect(promptSubmission.event.type, 'prompt_submitted');
+    expect(promptSubmission.execution, 'codex');
+    expect(promptSubmission.task?.id, 'task:flutter-fixture:1');
+    expect(promptSubmission.adapter?.busy, isTrue);
+    expect(promptSubmission.adapter?.currentTask?.state, 'running');
 
     final verification = await client.verificationState();
     expect(verification.failedCount, 1);
