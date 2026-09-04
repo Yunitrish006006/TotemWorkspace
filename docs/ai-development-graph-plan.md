@@ -247,3 +247,57 @@ The remote controller fingerprints `viewer_flutter/` and rebuilds the local
 Flutter Wasm output only when the source changes. tmux is preferred for the
 background process, with nohup + PID state under `.totem-index/` as the
 no-sudo fallback.
+
+
+## Phase 2 — Semantic LOD implementation
+
+Phase 2 implements the first code-aware drill-down beneath curated Features:
+
+```text
+L0 Workspace
+L1 Module
+L2 Feature
+L3 Component / Responsibility       ✅ Phase 2
+L4 Implementation (File/Class)      ✅ controlled Phase 2
+L5 Symbol (Method/Field/API Symbol)  planned
+```
+
+### Component inference
+
+Components are inferred generically from production-code-only package, class,
+symbol, import, and surface evidence. Stable IDs use:
+
+```text
+component:<module-id>:<semantic-area-key>
+```
+
+No module-specific inference branches are allowed. A shared bilingual semantic
+concept lexicon is permitted only for domain concepts and must remain independent
+of repository identity.
+
+### Confidence-gated Feature mapping
+
+A Component is attached to a curated Feature only when its best semantic score is
+strong enough and clearly exceeds the runner-up. Ambiguous or weak evidence is
+kept as a module-level Component rather than inventing an architectural
+relationship.
+
+### Controlled implementation detail
+
+Implementation files are not globally rendered. They appear only when their
+Component is selected/expanded, or when Agent Activity targets that Component and
+`autoExpandAgentFocus` is enabled. The current L4 display is capped per Component
+to keep the graph legible.
+
+Both maintained surfaces use the same progression:
+
+```text
+Module
+  → Feature
+    → Component
+      → Implementation
+```
+
+Agent Activity focus priority is Component → Feature → Module. Symbol-level L5 is
+explicitly deferred until Component responsibilities and file ownership are
+stable enough to support it without graph explosion.
