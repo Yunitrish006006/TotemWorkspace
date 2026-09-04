@@ -72,6 +72,32 @@ public final class RuntimeHooks {
     {
       moduleId: "totem-a",
       repoName: "TotemA",
+      path: "src/main/java/dev/example/totema/runtime/EntityLoadHook.java",
+      startLine: 1,
+      symbols: ["EntityLoadHook", "register"],
+      text: `package dev.example.totema.runtime;
+public final class EntityLoadHook {
+  void register() { ServerEntityEvents.ENTITY_LOAD.register((entity, level) -> {}); }
+}
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
+      path: "src/main/java/dev/example/totema/runtime/DataReloadDefinitions.java",
+      startLine: 1,
+      symbols: ["DataReloadDefinitions", "register"],
+      text: `package dev.example.totema.runtime;
+public final class DataReloadDefinitions {
+  void register() {
+    ResourceManagerHelper.get(PackType.SERVER_DATA).registerReloadListener(new SimpleSynchronousResourceReloadListener() {});
+  }
+}
+`
+    },
+    {
+      moduleId: "totem-a",
+      repoName: "TotemA",
       path: "src/main/java/dev/example/totema/runtime/ConnectionSync.java",
       startLine: 1,
       symbols: ["ConnectionSync", "register"],
@@ -608,6 +634,22 @@ index.chunks.push(
   {
     moduleId: "totem-a",
     repoName: "TotemA",
+    path: "src/main/resources/data/totema/worldgen/structure/example_structure.json",
+    startLine: 1,
+    symbols: [],
+    text: '{ "type": "minecraft:jigsaw" }'
+  },
+  {
+    moduleId: "totem-a",
+    repoName: "TotemA",
+    path: "src/main/resources/data/totema/worldgen/template_pool/example_pool.json",
+    startLine: 1,
+    symbols: [],
+    text: '{ "fallback": "minecraft:empty" }'
+  },
+  {
+    moduleId: "totem-a",
+    repoName: "TotemA",
     path: "src/main/resources/assets/totema/models/item/example.json",
     startLine: 1,
     symbols: [],
@@ -634,15 +676,19 @@ assert.equal(inventory.modules.length, 7);
 
 const moduleA = inventory.modules.find((entry) => entry.moduleId === "totem-a");
 assert.ok(moduleA);
-assert.equal(moduleA.productionFileCount, 23);
+assert.equal(moduleA.productionFileCount, 25);
 assert.equal(moduleA.resourceEvidence.sourceScope, "production-resource-evidence");
-assert.equal(moduleA.resourceEvidence.fileCount, 3);
+assert.equal(moduleA.resourceEvidence.fileCount, 5);
 const baneResources = moduleA.resourceEvidence.families.find((entry) => entry.key === "tags/entity_type");
 const advancementResources = moduleA.resourceEvidence.families.find((entry) => entry.key === "advancement");
 const localizationResources = moduleA.resourceEvidence.families.find((entry) => entry.key === "localization");
+const worldgenStructureResources = moduleA.resourceEvidence.families.find((entry) => entry.key === "worldgen/structure");
+const worldgenTemplatePoolResources = moduleA.resourceEvidence.families.find((entry) => entry.key === "worldgen/template_pool");
 assert.ok(baneResources);
 assert.ok(advancementResources);
 assert.ok(localizationResources);
+assert.ok(worldgenStructureResources);
+assert.ok(worldgenTemplatePoolResources);
 assert.ok(baneResources.representativePaths.some((entry) => entry.endsWith("sensitive_to_bane_of_arthropods.json")));
 assert.equal(JSON.stringify(moduleA.resourceEvidence).includes("/models/"), false);
 assert.equal(JSON.stringify(moduleA.resourceEvidence).includes("gametest"), false);
@@ -652,6 +698,8 @@ assert.ok(moduleA.surfaces.commands.some((entry) => entry.label === "RuntimeHook
 assert.ok(moduleA.surfaces.registries.some((entry) => entry.label === "RuntimeHooks"));
 assert.ok(moduleA.surfaces.events.some((entry) => entry.label === "RuntimeHooks"));
 assert.ok(moduleA.surfaces.events.some((entry) => entry.label === "ConnectionSync"));
+assert.ok(moduleA.surfaces.events.some((entry) => entry.label === "EntityLoadHook"));
+assert.ok(moduleA.surfaces.events.some((entry) => entry.label === "DataReloadDefinitions"));
 assert.ok(moduleA.surfaces.persistence.some((entry) => entry.label === "MixtureState"));
 assert.ok(moduleA.surfaces.persistence.some((entry) => entry.label === "AlchemyBlockEntity"));
 assert.ok(moduleA.surfaces.persistence.some((entry) => entry.label === "CustomDataStore"));
