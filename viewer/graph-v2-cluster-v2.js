@@ -1059,21 +1059,32 @@
     keyboardFocusId = node.id;
     if (node.type === "module") {
       spotlightId = null;
-      if (expanded.has(node.id)) expanded.delete(node.id);
-      else expanded.add(node.id);
+      if (expanded.has(node.id)) {
+        expanded.delete(node.id);
+        features.filter(function (feature) { return feature.ownerId === node.id; }).forEach(function (feature) {
+          expanded.delete(feature.id);
+        });
+        components.filter(function (component) { return component.moduleId === node.id; }).forEach(function (component) {
+          expanded.delete(component.id);
+        });
+      } else {
+        expanded.add(node.id);
+      }
       var moduleFeatures = features.filter(function (feature) { return feature.ownerId === node.id; });
-      var moduleCategories = (code.nodes || []).filter(function (entry) { return entry.moduleId === node.id && entry.type === "code-category"; });
+      var moduleComponents = components.filter(function (component) { return component.moduleId === node.id; });
       var moduleCapabilities = capabilities.filter(function (capability) { return capability.consumerModuleId === node.id || capability.providerModuleId === node.id; });
+      var expandedModules = modules.filter(function (module) { return expanded.has(module.id); }).length;
       setInfo((node.source && node.source.name) || node.label, (node.source && node.source.role) || "", [
         {
           title: "Feature groups",
           items: (node.source && node.source.featureGroups) || []
         },
         {
-          title: "Summary",
+          title: "Semantic LOD",
           items: [
-            "Curated features: " + moduleFeatures.length,
-            "Generated categories: " + moduleCategories.length,
+            "L2 curated features: " + moduleFeatures.length,
+            "L3 inferred components: " + moduleComponents.length,
+            "Mapped components: " + moduleComponents.filter(function (component) { return (component.featureIds || []).length; }).length,
             "Shared capabilities: " + moduleCapabilities.length
           ]
         },
@@ -1082,8 +1093,8 @@
           items: [
             expanded.has(node.id) ? "Expanded cluster" : "Collapsed",
             "Cluster radius: " + Math.round(clusterRadius(node.id)),
-            "Module orbit radius: " + Math.round(moduleOrbitRadius(expanded.size)),
-            "Expanded modules: " + expanded.size
+            "Module orbit radius: " + Math.round(moduleOrbitRadius(expandedModules)),
+            "Expanded modules: " + expandedModules
           ]
         }
       ]);
@@ -1094,12 +1105,31 @@
     spotlightId = node.id;
     if (node.type === "feature") {
       var feature = node.source || {};
+      if (expanded.has(node.id)) {
+        expanded.delete(node.id);
+        components.filter(function (component) {
+          return (component.featureIds || []).includes(node.id);
+        }).forEach(function (component) { expanded.delete(component.id); });
+      } else {
+        expanded.add(node.id);
+      }
       var soft = (feature.softContractIds || []).map(function (id) { return contractMap.get(id); }).filter(Boolean);
       var hard = contracts.filter(function (contract) {
         return contract.type === "hard-core" && (contract.featureIds || []).includes(feature.id);
       });
       var capabilityLinks = sharedCapabilityLinksForFeature(feature.id);
+      var featureComponents = components.filter(function (component) {
+        return (component.featureIds || []).includes(feature.id);
+      });
       setInfo(node.label, feature.summary || "", [
+        {
+          title: "L3 Components",
+          items: featureComponents.length
+            ? featureComponents.map(function (component) {
+                return component.label + "｜" + component.mappingConfidence + "｜" + component.fileCount + " files";
+              })
+            : ["No strongly mapped component evidence"]
+        },
         {
           title: "Shared capability links",
           items: capabilityLinks.map(function (capability) {
@@ -1119,19 +1149,60 @@
           })
         }
       ]);
+    } else if (node.type === "component") {
+      var component = node.source || {};
+      if (expanded.has(node.id)) expanded.delete(node.id);
+      else expanded.add(node.id);
+      setInfo(node.label, component.responsibility || "Inferred production-code responsibility", [
+        {
+          title: "Semantic mapping",
+          items: [
+            "confidence: " + (component.mappingConfidence || "unmapped"),
+            "score: " + Number(component.mappingScore || 0),
+            (component.featureIds || []).length ? "features: " + component.featureIds.join(", ") : "module-level component · no strong Feature mapping"
+          ]
+        },
+        {
+          title: "L4 Implementation",
+          items: (component.implementationPaths || []).slice(0, 10)
+        },
+        {
+          title: "Surface evidence",
+          items: (component.surfaceKinds || []).concat((component.symbols || []).slice(0, 8))
+        }
+      ]);
+    } else if (node.type === "implementation") {
+      setInfo(node.label, "L4 production implementation evidence", [{
+        title: "Path",
+        items: [node.source && node.source.path ? node.source.path : node.label]
+      }]);
     } else if (node.type === "capability") {
       var capability = node.source || {};
       setInfo(node.label, capability.consumerLabel + " → " + capability.providerLabel, [{
         title: "Live code evidence",
         items: capability.evidencePaths || []
       }]);
-    } else if (node.type === "category") {
-      setInfo(node.label, "Generated code category", [{
-        title: "Metadata",
-        items: ["files: " + ((node.source && node.source.count) || 0)]
-      }]);
     } else {
       setInfo(node.label, "External node", []);
+    }
+    draw();
+  }
+
+  function focusActivity(event, autoExpand) {
+    if (!event) return;
+    if (autoExpand !== false) {
+      var component = event.componentId ? componentMap.get(event.componentId) : null;
+      if (component) {
+        expanded.add(component.moduleId);
+        if ((component.featureIds || []).length) expanded.add(component.featureIds[0]);
+        expanded.add(component.id);
+      } else if (event.featureId && featureMap.has(event.featureId)) {
+        var feature = featureMap.get(event.featureId);
+        expanded.add(feature.ownerId);
+        expanded.add(feature.id);
+      } else if (event.moduleId && moduleMap.has(event.moduleId)) {
+        expanded.add(event.moduleId);
+      }
     }
     draw();
   }
@@ -1410,6 +1481,7 @@
     drawArrowhead: drawArrowhead,
     keyboardNodes: keyboardNodes,
     showContracts: showContracts,
+    focusActivity: focusActivity,
     draw: draw
   };
 }());
