@@ -62,6 +62,10 @@ const MIME = Object.freeze({
   ".mjs": "text/javascript; charset=utf-8",
   ".css": "text/css; charset=utf-8",
   ".json": "application/json; charset=utf-8",
+  ".wasm": "application/wasm",
+  ".ttf": "font/ttf",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
   ".svg": "image/svg+xml",
   ".png": "image/png",
   ".jpg": "image/jpeg",
@@ -282,7 +286,9 @@ function serveStatic(req, res, pathname, { flutterRoot = FLUTTER_WEB_ROOT } = {}
           "content-type": "text/html; charset=utf-8",
           "content-length": body.length,
           "cache-control": "no-store",
-          "x-content-type-options": "nosniff"
+          "x-content-type-options": "nosniff",
+          "cross-origin-opener-policy": "same-origin",
+          "cross-origin-embedder-policy": "credentialless"
         });
         res.end(body);
         return;
@@ -296,12 +302,17 @@ function serveStatic(req, res, pathname, { flutterRoot = FLUTTER_WEB_ROOT } = {}
   try {
     const body = fs.readFileSync(finalPath);
     const type = MIME[path.extname(finalPath).toLowerCase()] ?? "application/octet-stream";
-    res.writeHead(200, {
+    const headers = {
       "content-type": type,
       "content-length": body.length,
       "cache-control": "no-store",
       "x-content-type-options": "nosniff"
-    });
+    };
+    if (!pathname.startsWith("/legacy") && pathname !== "/graph-v2.html") {
+      headers["cross-origin-opener-policy"] = "same-origin";
+      headers["cross-origin-embedder-policy"] = "credentialless";
+    }
+    res.writeHead(200, headers);
     res.end(body);
   } catch {
     json(res, 404, { error: "not found" });
