@@ -467,6 +467,7 @@ function isEventSurface(record) {
   if (pathHas(record, "event") || pathHas(record, "events")) return true;
   if (/(?:Event|Events|Callback|Callbacks|Hook|Hooks|Listener|Subscriber)$/.test(record.label)) return true;
   return /\b(?:ServerTickEvents|ClientTickEvents|ServerLifecycleEvents|ServerPlayConnectionEvents|UseBlockCallback|AttackBlockCallback|CommandRegistrationCallback)\b[\s\S]*?\.register\s*\(/.test(record.text) ||
+    /\bGameRuleEvents\s*\.\s*changeCallback\s*\([^)]*\)\s*\.\s*register\s*\(/.test(record.text) ||
     /\.EVENT\.register\s*\(/.test(record.text);
 }
 
