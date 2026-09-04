@@ -893,7 +893,7 @@ class _GraphPainter extends CustomPainter {
 
   Color _activityColor(String? type) {
     final value = type ?? '';
-    if (value == 'test_failed' || value == 'deployment_failed') return const Color(0xFFF87171);
+    if (value == 'task_failed' || value == 'test_failed' || value == 'deployment_failed') return const Color(0xFFF87171);
     if (value == 'test_passed' || value == 'task_completed' || value == 'deployment_completed') {
       return const Color(0xFF86EFAC);
     }
