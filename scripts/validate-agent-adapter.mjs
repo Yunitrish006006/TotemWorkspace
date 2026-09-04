@@ -196,6 +196,7 @@ try {
   assert.match(stdin, /Fix the brewing flow/);
 
   child.stdout.write('{"type":"thread.started","thread_id":"thread-fixture"}\n');
+  child.stdout.write('{"type":"turn.started"}\n');
   child.stdout.write(JSON.stringify({
     type: "item.started",
     item: {
@@ -204,6 +205,17 @@ try {
       server: "totemWorkspace",
       tool: "context_pack",
       status: "in_progress"
+    }
+  }) + "\n");
+  child.stdout.write(JSON.stringify({
+    type: "item.completed",
+    item: {
+      id: "mcp-1",
+      type: "mcp_tool_call",
+      server: "totemWorkspace",
+      tool: "context_pack",
+      status: "completed",
+      result: { ok: true, nodes: 3 }
     }
   }) + "\n");
   child.stdout.write(JSON.stringify({
@@ -218,6 +230,15 @@ try {
         }
       ],
       status: "completed"
+    }
+  }) + "\n");
+  child.stdout.write(JSON.stringify({
+    type: "item.started",
+    item: {
+      id: "command-commit",
+      type: "command_execution",
+      command: "git commit -m \"replay fixture\"",
+      status: "in_progress"
     }
   }) + "\n");
   child.stdout.write(JSON.stringify({
@@ -242,7 +263,15 @@ try {
       status: "completed"
     }
   }) + "\n");
-  child.stdout.write('{"type":"turn.completed","usage":{"input_tokens":10,"cached_input_tokens":0,"cache_write_input_tokens":0,"output_tokens":3,"reasoning_output_tokens":1}}\n');
+  child.stdout.write(JSON.stringify({
+    type: "item.completed",
+    item: {
+      id: "message-1",
+      type: "agent_message",
+      text: "Implemented the brewing flow and validated the changed surface."
+    }
+  }) + "\n");
+  child.stdout.write('{"type":"turn.completed","usage":{"input_tokens":10,"cached_input_tokens":2,"cache_write_input_tokens":1,"output_tokens":3,"reasoning_output_tokens":1}}\n');
 
   await tick();
   await tick();
@@ -251,10 +280,22 @@ try {
   assert.equal(completedStatus.busy, false);
   assert.equal(completedStatus.lastTask?.state, "completed");
   assert.equal(completedStatus.lastTask?.threadId, "thread-fixture");
+  assert.match(completedStatus.lastTask?.finalMessage ?? "", /Implemented the brewing flow/);
+  assert.equal(completedStatus.lastTask?.usage?.inputTokens, 10);
+  assert.equal(completedStatus.lastTask?.usage?.cachedInputTokens, 2);
+  assert.equal(completedStatus.lastTask?.usage?.outputTokens, 3);
   assert.equal(settled.length, 1);
   assert.equal(settled[0].state, "completed");
   assert.ok(activity.some((event) => event.type === "task_started" && event.taskId === task.id));
+  assert.ok(activity.some((event) => event.type === "thread_started" && /thread-fixture/.test(event.summary)));
+  assert.ok(activity.some((event) => event.type === "turn_started"));
   assert.ok(activity.some((event) => event.type === "dependency_followed" && /context_pack/.test(event.summary)));
+  assert.ok(activity.some((event) => event.type === "tool_started" && event.tool === "totemWorkspace/context_pack"));
+  assert.ok(activity.some((event) => event.type === "tool_completed" && /nodes/.test(event.detail ?? "")));
+  assert.ok(activity.some((event) => event.type === "command_started" && /git commit/.test(event.command ?? "")));
+  assert.ok(activity.some((event) => event.type === "command_completed" && /replay fixture/.test(event.detail ?? "")));
+  assert.ok(activity.some((event) => event.type === "agent_message" && /validated/.test(event.detail ?? "")));
+  assert.ok(activity.some((event) => event.type === "usage_updated" && event.usage?.inputTokens === 10));
   const fileEdit = activity.find((event) => event.type === "file_edit");
   assert.ok(fileEdit, "Codex file_change must become file_edit activity");
   assert.equal(fileEdit.moduleId, "totem-alchemy");
@@ -367,6 +408,14 @@ for (const fragment of [
   'item.type === "file_change"',
   'item.type === "mcp_tool_call"',
   'item.type === "command_execution"',
+  'item.type === "agent_message"',
+  'if (item.type === "reasoning") return',
+  '"command_started"',
+  '"command_completed"',
+  '"tool_started"',
+  '"tool_completed"',
+  '"agent_message"',
+  '"usage_updated"',
   '"commit_created"',
   '"pr_created"',
   '"pr_merged"',
@@ -399,6 +448,10 @@ for (const fragment of [
   "class AgentAdapterStatus",
   "class AgentTask",
   "class PromptSubmission",
+  "class CodexUsage",
+  "detail: json['detail'] as String?",
+  "command: json['command'] as String?",
+  "tool: json['tool'] as String?",
   "Future<AgentAdapterStatus> agentAdapterStatus()",
   "Future<PromptSubmission> submitPrompt(",
 ]) {
@@ -408,6 +461,9 @@ for (const fragment of [
   "_AgentAdapterStrip(",
   "replaySession: _replayTimeline?.sessions.isNotEmpty == true",
   "'INTERRUPTED'",
+  "'CODEX CONSOLE · ${widget.taskId} · ${taskEvents.length} events'",
+  "events: _activity",
+  "SelectableText(",
   "client.agentAdapterStatus()",
   "if (submission.adapter != null) _adapter = submission.adapter",
 ]) {
@@ -419,6 +475,9 @@ for (const fragment of [
   'payload.execution === "agent-adapter-unavailable"',
   'latestAdapterStatus',
   'replaySession.state === "running" ? "INTERRUPTED"',
+  'appendCodexTranscript(events)',
+  'codexEventLabel(event)',
+  'codexConsoleBody.scrollTop = codexConsoleBody.scrollHeight',
 ]) {
   assert.ok(legacyLive.includes(fragment), `legacy Phase 5 live adapter missing: ${fragment}`);
 }

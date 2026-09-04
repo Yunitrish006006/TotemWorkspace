@@ -159,6 +159,33 @@ class ViewerSettings {
       );
 }
 
+class CodexUsage {
+  const CodexUsage({
+    required this.inputTokens,
+    required this.cachedInputTokens,
+    required this.cacheWriteInputTokens,
+    required this.outputTokens,
+    required this.reasoningOutputTokens,
+    required this.totalTokens,
+  });
+
+  final int inputTokens;
+  final int cachedInputTokens;
+  final int cacheWriteInputTokens;
+  final int outputTokens;
+  final int reasoningOutputTokens;
+  final int totalTokens;
+
+  factory CodexUsage.fromJson(Map<String, dynamic> json) => CodexUsage(
+        inputTokens: (json['inputTokens'] as num?)?.toInt() ?? 0,
+        cachedInputTokens: (json['cachedInputTokens'] as num?)?.toInt() ?? 0,
+        cacheWriteInputTokens: (json['cacheWriteInputTokens'] as num?)?.toInt() ?? 0,
+        outputTokens: (json['outputTokens'] as num?)?.toInt() ?? 0,
+        reasoningOutputTokens: (json['reasoningOutputTokens'] as num?)?.toInt() ?? 0,
+        totalTokens: (json['totalTokens'] as num?)?.toInt() ?? 0,
+      );
+}
+
 class AgentActivityEvent {
   const AgentActivityEvent({
     required this.sequence,
@@ -171,6 +198,10 @@ class AgentActivityEvent {
     this.file,
     this.symbol,
     this.summary,
+    this.detail,
+    this.command,
+    this.tool,
+    this.usage,
     this.status,
     this.from,
     this.to,
@@ -188,6 +219,10 @@ class AgentActivityEvent {
   final String? file;
   final String? symbol;
   final String? summary;
+  final String? detail;
+  final String? command;
+  final String? tool;
+  final CodexUsage? usage;
   final String? status;
   final String? from;
   final String? to;
@@ -208,6 +243,12 @@ class AgentActivityEvent {
         file: json['file'] as String?,
         symbol: json['symbol'] as String?,
         summary: json['summary'] as String?,
+        detail: json['detail'] as String?,
+        command: json['command'] as String?,
+        tool: json['tool'] as String?,
+        usage: json['usage'] is Map
+            ? CodexUsage.fromJson(Map<String, dynamic>.from(json['usage'] as Map))
+            : null,
         status: json['status'] as String?,
         from: json['from'] as String?,
         to: json['to'] as String?,

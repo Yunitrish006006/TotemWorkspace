@@ -11,6 +11,9 @@
   var promptBar = document.getElementById("promptBar");
   var promptInput = document.getElementById("promptInput");
   var promptSubmit = document.getElementById("promptSubmit");
+  var codexConsole = document.getElementById("codexConsole");
+  var codexConsoleHeader = document.getElementById("codexConsoleHeader");
+  var codexConsoleBody = document.getElementById("codexConsoleBody");
   var replayBar = document.getElementById("replayBar");
   var replaySlider = document.getElementById("replaySlider");
   var replayLabel = document.getElementById("replayLabel");
@@ -19,7 +22,7 @@
   var statusButton = document.getElementById("localStatus");
   var refreshButton = document.getElementById("refreshLocal");
   var info = document.getElementById("info");
-  if (!liveBadge || !changeBadge || !adapterBadge || !orchestrationBadge || !verificationBadge || !activityBadge || !promptToggle || !promptBar || !promptInput || !promptSubmit || !replayBar || !replaySlider || !replayLabel || !replayMeta || !replayLive || !statusButton || !refreshButton || !info) return;
+  if (!liveBadge || !changeBadge || !adapterBadge || !orchestrationBadge || !verificationBadge || !activityBadge || !promptToggle || !promptBar || !promptInput || !promptSubmit || !codexConsole || !codexConsoleHeader || !codexConsoleBody || !replayBar || !replaySlider || !replayLabel || !replayMeta || !replayLive || !statusButton || !refreshButton || !info) return;
 
   var latest = null;
   var settings = null;
@@ -34,6 +37,7 @@
   var replayActive = false;
   var latestLiveActivity = null;
   var latestLiveSemanticActivity = null;
+  var codexTranscript = [];
   var activityAnimation = null;
   var changeAnimation = null;
   var verificationAnimation = null;
@@ -166,6 +170,74 @@
       " · benefit " + (summary.estimatedBenefit || "none");
   }
 
+  function codexEventLabel(event) {
+    switch (event.type) {
+      case "command_started": return "$";
+      case "command_completed": return event.status === "failed" ? "[CMD FAIL]" : "[CMD OK]";
+      case "tool_started": return "[MCP →]";
+      case "tool_completed": return "[MCP ✓]";
+      case "file_edit": return "[EDIT]";
+      case "web_search_started": return "[WEB →]";
+      case "web_search_completed": return "[WEB ✓]";
+      case "todo_updated": return "[PLAN]";
+      case "agent_message": return "[CODEX]";
+      case "usage_updated": return "[TOKENS]";
+      case "task_started": return "[START]";
+      case "task_completed": return "[DONE]";
+      case "task_failed": return "[FAILED]";
+      default: return "[" + event.type + "]";
+    }
+  }
+
+  function activeConsoleTaskId() {
+    var adapter = latestAdapterStatus || {};
+    if (adapter.currentTask && adapter.currentTask.id) return adapter.currentTask.id;
+    if (adapter.lastTask && adapter.lastTask.id) return adapter.lastTask.id;
+    var sessions = replayTimeline && Array.isArray(replayTimeline.sessions) ? replayTimeline.sessions : [];
+    return sessions.length ? (sessions[sessions.length - 1].taskId || null) : null;
+  }
+
+  function renderCodexConsole() {
+    var taskId = activeConsoleTaskId();
+    if (!taskId) {
+      codexConsole.hidden = true;
+      codexConsoleBody.replaceChildren();
+      return;
+    }
+    var events = codexTranscript.filter(function (event) { return event.taskId === taskId; });
+    if (events.length > 80) events = events.slice(events.length - 80);
+    codexConsole.hidden = false;
+    codexConsoleHeader.textContent = "CODEX CONSOLE · " + taskId + " · " + events.length + " events";
+    codexConsoleBody.replaceChildren();
+    events.forEach(function (event) {
+      var entry = document.createElement("div");
+      entry.className = "codex-console-entry" +
+        (event.type === "agent_message" ? " agent-message" : "") +
+        (event.type === "task_failed" || event.status === "failed" ? " failed" : "");
+      var headline = event.command || event.tool || event.summary || event.file || event.type;
+      var lines = [codexEventLabel(event) + " " + headline];
+      if (event.detail) lines.push(event.detail);
+      if (event.usage) {
+        lines.push("input " + (event.usage.inputTokens || 0) +
+          " · cached " + (event.usage.cachedInputTokens || 0) +
+          " · output " + (event.usage.outputTokens || 0) +
+          " · total " + (event.usage.totalTokens || 0));
+      }
+      entry.textContent = lines.join("\n");
+      codexConsoleBody.appendChild(entry);
+    });
+    codexConsoleBody.scrollTop = codexConsoleBody.scrollHeight;
+  }
+
+  function appendCodexTranscript(events) {
+    (events || []).forEach(function (event) {
+      if (!event || !event.taskId) return;
+      codexTranscript.push(event);
+    });
+    if (codexTranscript.length > 500) codexTranscript.splice(0, codexTranscript.length - 500);
+    renderCodexConsole();
+  }
+
   function renderAgentAdapter(payload) {
     var adapter = payload || {};
     latestAdapterStatus = adapter;
@@ -198,6 +270,7 @@
     adapterBadge.title = detail.join("\n") || adapter.reason || adapter.version || adapter.kind || "";
     var orchestrationTask = adapter.currentTask || adapter.lastTask;
     if (orchestrationTask && orchestrationTask.orchestration) renderOrchestrationSummary(orchestrationTask.orchestration);
+    renderCodexConsole();
   }
 
   async function fetchAgentAdapter() {
@@ -344,6 +417,7 @@
       activitySequence = Number(payload.latestSequence || activitySequence);
       var events = Array.isArray(payload.events) ? payload.events : [];
       if (events.length) {
+        appendCodexTranscript(events);
         events.forEach(function (event) {
           if (isSemanticEdit(event) && hasSemanticTarget(event)) latestLiveSemanticActivity = event;
           if ((event.type === "task_completed" || event.type === "task_failed") &&
@@ -380,6 +454,7 @@
       var payload = await response.json();
       if (payload.event) {
         activitySequence = Math.max(activitySequence, Number(payload.event.sequence || 0));
+        appendCodexTranscript([payload.event]);
         renderActivity(payload.event);
       }
       if (payload.orchestration) renderOrchestration(payload.orchestration);
@@ -399,6 +474,7 @@
   function renderReplayTimeline(payload) {
     replayTimeline = payload || null;
     if (latestAdapterStatus) renderAgentAdapter(latestAdapterStatus);
+    else renderCodexConsole();
     var hasEvents = payload && Number(payload.eventCount || 0) > 0;
     replayBar.hidden = !hasEvents || !settings || settings.replayEnabled === false;
     if (!hasEvents) return;
@@ -547,7 +623,7 @@
   });
 
   promptInput.addEventListener("keydown", function (event) {
-    if (event.key !== "Enter" || event.shiftKey) return;
+    if (!(event.ctrlKey || event.metaKey) || event.key !== "Enter") return;
     event.preventDefault();
     submitPrompt();
   });

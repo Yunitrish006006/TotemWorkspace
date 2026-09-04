@@ -59,6 +59,17 @@ const ACTIVITY_TYPES = new Set([
   "task_started",
   "task_completed",
   "task_failed",
+  "thread_started",
+  "turn_started",
+  "command_started",
+  "command_completed",
+  "tool_started",
+  "tool_completed",
+  "web_search_started",
+  "web_search_completed",
+  "todo_updated",
+  "agent_message",
+  "usage_updated",
   "prompt_submitted",
   "orchestration_planned",
   "feature_selected",
@@ -212,6 +223,9 @@ function normalizeActivityEvent(value = {}, { source = "bridge" } = {}) {
     ["componentId", 160],
     ["symbol", 256],
     ["summary", 500],
+    ["detail", 12000],
+    ["command", 1200],
+    ["tool", 300],
     ["status", 80],
     ["from", 200],
     ["to", 200],
@@ -227,6 +241,20 @@ function normalizeActivityEvent(value = {}, { source = "bridge" } = {}) {
   if (file) event.file = file;
   const test = relativeCodePath(value.test);
   if (test) event.test = test;
+  if (value.usage && typeof value.usage === "object") {
+    const numeric = (key) => {
+      const number = Number(value.usage[key]);
+      return Number.isFinite(number) ? Math.max(0, Math.floor(number)) : 0;
+    };
+    event.usage = Object.freeze({
+      inputTokens: numeric("inputTokens"),
+      cachedInputTokens: numeric("cachedInputTokens"),
+      cacheWriteInputTokens: numeric("cacheWriteInputTokens"),
+      outputTokens: numeric("outputTokens"),
+      reasoningOutputTokens: numeric("reasoningOutputTokens"),
+      totalTokens: numeric("totalTokens")
+    });
+  }
   return Object.freeze(event);
 }
 
@@ -242,7 +270,7 @@ function appendActivity(value, options) {
 function activityPayload(after = 0) {
   const sequence = Number.isFinite(after) && after >= 0 ? Math.floor(after) : 0;
   return Object.freeze({
-    schemaVersion: 3,
+    schemaVersion: 4,
     generatedAt: new Date().toISOString(),
     latestSequence: activitySequence,
     events: activityEvents.filter((event) => event.sequence > sequence)

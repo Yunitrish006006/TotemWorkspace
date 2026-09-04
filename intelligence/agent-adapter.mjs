@@ -53,6 +53,8 @@ function publicTask(task) {
     completedAt: task.completedAt ?? null,
     summary: task.summary ?? null,
     error: task.error ?? null,
+    finalMessage: task.finalMessage ?? null,
+    usage: task.usage ?? null,
     orchestration: task.orchestration ?? null
   });
 }
@@ -134,6 +136,30 @@ function eventItem(event) {
   if (!event || typeof event !== "object") return null;
   if (event.type !== "item.started" && event.type !== "item.updated" && event.type !== "item.completed") return null;
   return event.item && typeof event.item === "object" ? event.item : null;
+}
+
+function jsonDetail(value, limit = 6000) {
+  if (value == null) return null;
+  let text;
+  try {
+    text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
+  } catch {
+    text = String(value);
+  }
+  return boundedText(text, limit);
+}
+
+function normalizedUsage(raw = {}) {
+  const number = (value) => Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0;
+  const usage = {
+    inputTokens: number(raw.input_tokens ?? raw.inputTokens),
+    cachedInputTokens: number(raw.cached_input_tokens ?? raw.cachedInputTokens),
+    cacheWriteInputTokens: number(raw.cache_write_input_tokens ?? raw.cacheWriteInputTokens),
+    outputTokens: number(raw.output_tokens ?? raw.outputTokens),
+    reasoningOutputTokens: number(raw.reasoning_output_tokens ?? raw.reasoningOutputTokens)
+  };
+  usage.totalTokens = usage.inputTokens + usage.outputTokens;
+  return Object.freeze(usage);
 }
 
 export function createAgentAdapter({
@@ -255,14 +281,47 @@ export function createAgentAdapter({
 
   function handleCodexEvent(task, event) {
     if (!event || typeof event !== "object") return;
+
     if (event.type === "thread.started" && typeof event.thread_id === "string") {
       task.threadId = event.thread_id;
+      emit({
+        type: "thread_started",
+        source: "codex-adapter",
+        taskId: task.id,
+        moduleId: task.moduleId,
+        featureId: task.featureId,
+        summary: `Codex thread ${event.thread_id}`
+      });
       return;
     }
+
+    if (event.type === "turn.started") {
+      emit({
+        type: "turn_started",
+        source: "codex-adapter",
+        taskId: task.id,
+        moduleId: task.moduleId,
+        featureId: task.featureId,
+        summary: "Codex turn started"
+      });
+      return;
+    }
+
     if (event.type === "turn.completed") {
+      task.usage = normalizedUsage(event.usage ?? {});
+      emit({
+        type: "usage_updated",
+        source: "codex-adapter",
+        taskId: task.id,
+        moduleId: task.moduleId,
+        featureId: task.featureId,
+        summary: `Tokens · in ${task.usage.inputTokens} · cached ${task.usage.cachedInputTokens} · out ${task.usage.outputTokens}`,
+        usage: task.usage
+      });
       void settle(task, "completed");
       return;
     }
+
     if (event.type === "turn.failed") {
       const message = event.error?.message ?? "Codex turn failed";
       void settle(task, "failed", message);
@@ -275,6 +334,27 @@ export function createAgentAdapter({
 
     const item = eventItem(event);
     if (!item) return;
+
+    if (item.type === "agent_message" && event.type === "item.completed") {
+      const message = boundedText(item.text, 12000);
+      if (message) {
+        task.finalMessage = message;
+        emit({
+          type: "agent_message",
+          source: "codex-adapter",
+          taskId: task.id,
+          moduleId: task.moduleId,
+          featureId: task.featureId,
+          summary: boundedText(message.replace(/\s+/g, " "), 500),
+          detail: message
+        });
+      }
+      return;
+    }
+
+    // Codex reasoning items are intentionally not mirrored to the browser.
+    // The console exposes observable work and final messages, not hidden chain-of-thought.
+    if (item.type === "reasoning") return;
 
     if (item.type === "file_change" && event.type === "item.completed") {
       for (const change of item.changes ?? []) {
@@ -292,31 +372,84 @@ export function createAgentAdapter({
           moduleId: mapped.moduleId ?? task.moduleId,
           featureId: task.featureId,
           file: mapped.file,
-          summary: `Codex ${boundedText(change.kind, 40) ?? "changed"} ${path.posix.basename(mapped.file)}`
+          summary: `Codex ${boundedText(change.kind, 40) ?? "changed"} ${path.posix.basename(mapped.file)}`,
+          detail: boundedText(change.diff, 6000)
         });
       }
       return;
     }
 
-    if (item.type === "mcp_tool_call" && event.type === "item.started") {
+    if (item.type === "mcp_tool_call") {
+      const tool = [boundedText(item.server, 80), boundedText(item.tool, 120)].filter(Boolean).join("/");
+      if (event.type === "item.started") {
+        emit({
+          type: "tool_started",
+          source: "codex-adapter",
+          taskId: task.id,
+          moduleId: task.moduleId,
+          featureId: task.featureId,
+          tool,
+          summary: `MCP ${tool || "tool"} started`,
+          detail: jsonDetail(item.arguments ?? item.tool_arguments ?? item.input, 4000)
+        });
+        emit({
+          type: "dependency_followed",
+          source: "codex-adapter",
+          taskId: task.id,
+          moduleId: task.moduleId,
+          featureId: task.featureId,
+          summary: `MCP ${tool || "tool"}`
+        });
+      } else if (event.type === "item.completed") {
+        emit({
+          type: "tool_completed",
+          source: "codex-adapter",
+          taskId: task.id,
+          moduleId: task.moduleId,
+          featureId: task.featureId,
+          tool,
+          status: boundedText(item.status, 80) ?? "completed",
+          summary: `MCP ${tool || "tool"} completed`,
+          detail: jsonDetail(item.result ?? item.tool_result ?? item.output, 6000)
+        });
+      }
+      return;
+    }
+
+    if (item.type === "command_execution") {
+      const command = boundedText(item.command, 1200) ?? "";
+      if (event.type === "item.started") {
+        emit({
+          type: "command_started",
+          source: "codex-adapter",
+          taskId: task.id,
+          moduleId: task.moduleId,
+          featureId: task.featureId,
+          command,
+          summary: command ? `$ ${command}` : "Command started"
+        });
+        return;
+      }
+      if (event.type !== "item.completed") return;
+
+      const successful = item.exit_code == null
+        ? item.status === "completed"
+        : Number(item.exit_code) === 0;
       emit({
-        type: "dependency_followed",
+        type: "command_completed",
         source: "codex-adapter",
         taskId: task.id,
         moduleId: task.moduleId,
         featureId: task.featureId,
-        summary: `MCP ${boundedText(item.server, 80) ?? "server"}/${boundedText(item.tool, 120) ?? "tool"}`
+        command,
+        status: successful ? "success" : "failed",
+        summary: command
+          ? `Command ${successful ? "completed" : "failed"} · ${command}`
+          : `Command ${successful ? "completed" : "failed"}`,
+        detail: boundedText(item.aggregated_output ?? item.aggregatedOutput ?? item.output, 6000)
       });
-      return;
-    }
 
-    if (item.type === "command_execution" && event.type === "item.completed") {
-      const command = boundedText(item.command, 500) ?? "";
-      const successful = item.exit_code == null
-        ? item.status === "completed"
-        : Number(item.exit_code) === 0;
       if (!successful || !command) return;
-
       const milestoneType = /(^|\s)gh\s+pr\s+merge(?:\s|$)/i.test(command)
         ? "pr_merged"
         : /(^|\s)gh\s+pr\s+create(?:\s|$)/i.test(command)
@@ -338,9 +471,35 @@ export function createAgentAdapter({
             ? "GitHub pull request created"
             : "GitHub pull request merged"
       });
+      return;
+    }
+
+    if (item.type === "web_search") {
+      const query = boundedText(item.query, 800);
+      emit({
+        type: event.type === "item.started" ? "web_search_started" : "web_search_completed",
+        source: "codex-adapter",
+        taskId: task.id,
+        moduleId: task.moduleId,
+        featureId: task.featureId,
+        summary: query ? `Web search · ${query}` : "Web search",
+        detail: event.type === "item.completed" ? jsonDetail(item.results, 6000) : null
+      });
+      return;
+    }
+
+    if (item.type === "todo_list" && event.type === "item.completed") {
+      emit({
+        type: "todo_updated",
+        source: "codex-adapter",
+        taskId: task.id,
+        moduleId: task.moduleId,
+        featureId: task.featureId,
+        summary: "Codex plan updated",
+        detail: jsonDetail(item.items, 6000)
+      });
     }
   }
-
   function dispatch(request = {}) {
     if (!state.available) {
       const error = new Error(state.reason || "agent adapter is unavailable");
@@ -370,6 +529,8 @@ export function createAgentAdapter({
       completedAt: null,
       summary: boundedText(request.summary ?? prompt, 220),
       error: null,
+      finalMessage: null,
+      usage: null,
       orchestration: request.orchestrationPlan
         ? orchestrationPlanSummary(request.orchestrationPlan)
         : null,

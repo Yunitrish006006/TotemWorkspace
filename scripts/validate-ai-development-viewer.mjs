@@ -56,7 +56,10 @@ for (const id of [
   'id="promptToggle"',
   'id="promptBar"',
   'id="promptInput"',
-  'id="promptSubmit"'
+  'id="promptSubmit"',
+  'id="codexConsole"',
+  'id="codexConsoleHeader"',
+  'id="codexConsoleBody"'
 ]) {
   assert.ok(legacyHtml.includes(id), `legacy maintained surface is missing ${id}`);
 }
@@ -78,6 +81,9 @@ for (const behavior of [
   'host === "yunitrish006006.github.io"',
   'window.__TOTEM_AGENT_ACTIVITY__ = hasSemanticTarget(semanticFocus) ? semanticFocus : event',
   'latestLiveSemanticActivity',
+  'appendCodexTranscript(events)',
+  'codexEventLabel(event)',
+  'codexConsoleBody.scrollTop = codexConsoleBody.scrollHeight',
   'window.setInterval(requestAgentDraw, 80)'
 ]) {
   assert.ok(legacyLive.includes(behavior), `legacy local adapter parity is missing: ${behavior}`);
@@ -103,6 +109,10 @@ for (const behavior of [
   "Future<OrchestrationPlan> orchestrationPlan(",
   "class OrchestrationSummary",
   "class OrchestrationPlan",
+  "class CodexUsage",
+  "detail: json['detail'] as String?",
+  "command: json['command'] as String?",
+  "tool: json['tool'] as String?",
   "Future<DevelopmentReplayTimeline> replayTimeline()",
   "Future<DevelopmentReplayFrame> replayFrame(int sequence)"
 ]) {
@@ -121,6 +131,11 @@ for (const behavior of [
   "_ReplayScrubber(",
   "historicalEntityIds: historicalEntityIds",
   "if (isLocal && _settings.promptEnabled)",
+  "events: _activity",
+  "'CODEX CONSOLE · ${widget.taskId} · ${taskEvents.length} events'",
+  "minLines: 1",
+  "maxLines: 6",
+  "SelectableText(",
   "if (isLocal && _settings.agentActivityEnabled && displayedActivity != null)",
   "Switch.adaptive",
   "onPromptChanged"
