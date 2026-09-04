@@ -95,6 +95,9 @@ function prepareApiCors(req, res) {
   res.setHeader("access-control-allow-origin", origin);
   res.setHeader("access-control-allow-methods", "GET, POST, OPTIONS");
   res.setHeader("access-control-allow-headers", "content-type");
+  if (String(req.headers["access-control-request-private-network"] ?? "").toLowerCase() === "true") {
+    res.setHeader("access-control-allow-private-network", "true");
+  }
   res.setHeader("vary", "Origin");
   return true;
 }
@@ -312,9 +315,13 @@ async function handleApi(req, res, url) {
   }
 
   if (req.method === "POST" && pathname === "/api/activity") {
-    const args = await readJsonBody(req);
-    const event = appendActivity(args, { source: "agent-adapter" });
-    json(res, 202, { status: "accepted", event });
+    try {
+      const args = await readJsonBody(req);
+      const event = appendActivity(args, { source: "agent-adapter" });
+      json(res, 202, { status: "accepted", event });
+    } catch (error) {
+      json(res, 400, { error: error instanceof Error ? error.message : String(error) });
+    }
     return true;
   }
 
