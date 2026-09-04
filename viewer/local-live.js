@@ -2,14 +2,37 @@
   "use strict";
 
   var liveBadge = document.getElementById("liveLocal");
+  var activityBadge = document.getElementById("agentActivity");
+  var promptToggle = document.getElementById("promptToggle");
+  var promptBar = document.getElementById("promptBar");
+  var promptInput = document.getElementById("promptInput");
+  var promptSubmit = document.getElementById("promptSubmit");
   var statusButton = document.getElementById("localStatus");
   var refreshButton = document.getElementById("refreshLocal");
   var info = document.getElementById("info");
-  if (!liveBadge || !statusButton || !refreshButton || !info) return;
+  if (!liveBadge || !activityBadge || !promptToggle || !promptBar || !promptInput || !promptSubmit || !statusButton || !refreshButton || !info) return;
 
   var latest = null;
+  var settings = null;
   var active = false;
   var polling = null;
+  var activityPolling = null;
+  var activitySequence = 0;
+  var localApiBase = null;
+
+  function discoverLocalApiBase() {
+    var host = window.location.hostname.toLowerCase();
+    var loopback = host === "127.0.0.1" || host === "localhost" || host === "::1";
+    var approvedPages = host === "yunitrish006006.github.io";
+    if (!loopback && !approvedPages) return null;
+    if (loopback && window.location.port === "8765") return window.location.origin;
+    return "http://127.0.0.1:8765";
+  }
+
+  function apiUrl(path) {
+    if (!localApiBase) throw new Error("local api unavailable");
+    return localApiBase + path;
+  }
 
   function shortSha(value) {
     return value ? String(value).slice(0, 8) : "—";
@@ -35,6 +58,7 @@
   function renderBadge(payload) {
     var counts = summary(payload);
     liveBadge.hidden = false;
+    promptToggle.hidden = false;
     statusButton.hidden = false;
     refreshButton.hidden = false;
     liveBadge.textContent = "LIVE LOCAL · " + counts.dirty + " dirty · " + counts.drift + " drift" + (counts.missing ? " · " + counts.missing + " missing" : "");
@@ -61,8 +85,92 @@
     info.hidden = false;
   }
 
+  function renderSettings(value) {
+    settings = value || {};
+    var enabled = settings.promptEnabled === true;
+    promptToggle.textContent = enabled ? "Prompt ON" : "Prompt OFF";
+    promptToggle.setAttribute("aria-pressed", enabled ? "true" : "false");
+    promptBar.hidden = !enabled;
+  }
+
+  async function fetchSettings() {
+    var response = await fetch(apiUrl("/api/viewer-settings"), { cache: "no-store" });
+    if (!response.ok) throw new Error("viewer settings unavailable");
+    var payload = await response.json();
+    renderSettings(payload);
+    return payload;
+  }
+
+  async function updatePromptSetting(enabled) {
+    var response = await fetch(apiUrl("/api/viewer-settings"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ promptEnabled: enabled }),
+      cache: "no-store"
+    });
+    if (!response.ok) throw new Error("viewer settings update failed");
+    renderSettings(await response.json());
+  }
+
+  function renderActivity(event) {
+    if (!event || !settings || settings.agentActivityEnabled === false) {
+      activityBadge.hidden = true;
+      return;
+    }
+    var target = event.featureId || event.componentId || event.moduleId || event.file || event.symbol || event.test || "";
+    activityBadge.hidden = false;
+    activityBadge.textContent = "AGENT · " + event.type + (target ? " · " + target : "") + (event.summary ? " · " + event.summary : "");
+    activityBadge.title = event.timestamp || "";
+  }
+
+  async function pollActivity() {
+    if (!active || (settings && settings.agentActivityEnabled === false)) return;
+    try {
+      var response = await fetch(apiUrl("/api/activity?after=" + encodeURIComponent(activitySequence)), { cache: "no-store" });
+      if (!response.ok) throw new Error("activity unavailable");
+      var payload = await response.json();
+      activitySequence = Number(payload.latestSequence || activitySequence);
+      var events = Array.isArray(payload.events) ? payload.events : [];
+      if (events.length) renderActivity(events[events.length - 1]);
+    } catch {
+      // Workspace status polling owns connection-state reporting.
+    }
+  }
+
+  async function submitPrompt() {
+    if (!settings || settings.promptEnabled !== true || promptSubmit.disabled) return;
+    var prompt = promptInput.value.trim();
+    if (!prompt) return;
+    promptSubmit.disabled = true;
+    var previous = promptSubmit.textContent;
+    promptSubmit.textContent = "送出中…";
+    try {
+      var response = await fetch(apiUrl("/api/prompt"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ prompt: prompt }),
+        cache: "no-store"
+      });
+      if (!response.ok) {
+        var errorPayload = await response.json().catch(function () { return {}; });
+        throw new Error(errorPayload.error || "prompt submission failed");
+      }
+      var payload = await response.json();
+      if (payload.event) {
+        activitySequence = Math.max(activitySequence, Number(payload.event.sequence || 0));
+        renderActivity(payload.event);
+      }
+      promptInput.value = "";
+    } catch (error) {
+      liveBadge.textContent = "LIVE LOCAL · " + (error && error.message ? error.message : "prompt failed");
+    } finally {
+      promptSubmit.textContent = previous;
+      promptSubmit.disabled = false;
+    }
+  }
+
   async function fetchStatus() {
-    var response = await fetch("api/workspace-status", { cache: "no-store" });
+    var response = await fetch(apiUrl("/api/workspace-status"), { cache: "no-store" });
     if (!response.ok) throw new Error("local api unavailable");
     var payload = await response.json();
     if (!payload || payload.mode !== "local" || !Array.isArray(payload.modules)) throw new Error("not a local workspace response");
@@ -70,6 +178,7 @@
     if (!active) {
       active = true;
       document.documentElement.dataset.workspaceMode = "local";
+      await fetchSettings();
     }
     renderBadge(payload);
     return payload;
@@ -82,9 +191,35 @@
       if (!active && polling) {
         window.clearInterval(polling);
         polling = null;
+        if (activityPolling) {
+          window.clearInterval(activityPolling);
+          activityPolling = null;
+        }
       }
     }
   }
+
+  promptToggle.addEventListener("click", async function () {
+    if (!active || !settings) return;
+    promptToggle.disabled = true;
+    try {
+      await updatePromptSetting(settings.promptEnabled !== true);
+    } catch (error) {
+      liveBadge.textContent = "LIVE LOCAL · " + (error && error.message ? error.message : "settings failed");
+    } finally {
+      promptToggle.disabled = false;
+    }
+  });
+
+  promptSubmit.addEventListener("click", function () {
+    submitPrompt();
+  });
+
+  promptInput.addEventListener("keydown", function (event) {
+    if (event.key !== "Enter" || event.shiftKey) return;
+    event.preventDefault();
+    submitPrompt();
+  });
 
   statusButton.addEventListener("click", function () {
     if (!latest) return;
@@ -102,7 +237,7 @@
     var previous = refreshButton.textContent;
     refreshButton.textContent = "更新中…";
     try {
-      var response = await fetch("api/refresh", {
+      var response = await fetch(apiUrl("/api/refresh"), {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: "{}",
@@ -126,6 +261,9 @@
     refreshButton.disabled = false;
   });
 
+  localApiBase = discoverLocalApiBase();
+  if (!localApiBase) return;
   poll();
   polling = window.setInterval(poll, 5000);
+  activityPolling = window.setInterval(pollActivity, 1000);
 }());
