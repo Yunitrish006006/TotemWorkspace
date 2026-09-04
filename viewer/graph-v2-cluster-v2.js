@@ -16,13 +16,15 @@
   var features = DATA.features || [];
   var contracts = DATA.contracts || [];
   var capabilities = DATA.sharedCapabilities || [];
+  var components = DATA.components || [];
   var code = DATA.code || { nodes: [] };
 
   document.getElementById("snapshot").textContent = ((DATA.snapshot && DATA.snapshot.date) || "unknown") + " snapshot";
-  document.getElementById("stats").textContent = modules.length + " modules｜" + features.length + " features｜" + contracts.length + " contracts｜" + capabilities.length + " shared｜" + ((code.nodes || []).length) + " code nodes";
+  document.getElementById("stats").textContent = modules.length + " modules｜" + features.length + " features｜" + components.length + " components｜" + contracts.length + " contracts｜" + capabilities.length + " shared";
 
   var moduleMap = new Map(modules.map(function (x) { return [x.id, x]; }));
   var featureMap = new Map(features.map(function (x) { return [x.id, x]; }));
+  var componentMap = new Map(components.map(function (x) { return [x.id, x]; }));
   var contractMap = new Map(contracts.map(function (x) { return [x.id, x]; }));
   var edgeFilterKeys = [
     "hard-core",
@@ -122,13 +124,13 @@
 
   function clusterRadius(moduleId) {
     var featureCount = features.filter(function (f) { return f.ownerId === moduleId; }).length;
-    var categoryCount = (code.nodes || []).filter(function (n) {
-      return n.moduleId === moduleId && n.type === "code-category";
+    var unmappedComponentCount = components.filter(function (component) {
+      return component.moduleId === moduleId && !(component.featureIds || []).length;
     }).length;
     var syntheticCapabilityCount = capabilities.filter(function (capability) {
       return capability.consumerModuleId === moduleId && !capabilityConsumerFeature(capability);
     }).length;
-    var count = Math.max(1, featureCount + categoryCount + syntheticCapabilityCount);
+    var count = Math.max(1, featureCount + unmappedComponentCount + syntheticCapabilityCount);
     return Math.min(245, 118 + Math.sqrt(count) * 27);
   }
 
@@ -137,7 +139,8 @@
   }
 
   function band(type) {
-    if (type === "category") return [0.72, 0.96];
+    if (type === "component") return [0.48, 0.72];
+    if (type === "implementation") return [0.38, 0.62];
     if (type === "capability") return [0.56, 0.78];
     return [0.34, 0.64];
   }
@@ -428,7 +431,7 @@
     var nodes = [];
     var edges = [];
     var clusters = [];
-    var expandedCount = expanded.size;
+    var expandedCount = modules.filter(function (module) { return expanded.has(module.id); }).length;
     var moduleRadius = moduleOrbitRadius(expandedCount);
     var externalRadius = moduleRadius + 280;
 
@@ -484,12 +487,13 @@
     });
 
     expanded.forEach(function (moduleId) {
+      if (!moduleMap.has(moduleId)) return;
       var parent = nodes.find(function (node) { return node.id === moduleId; });
       if (!parent) return;
 
       var moduleFeatures = features.filter(function (feature) { return feature.ownerId === moduleId; });
-      var categories = (code.nodes || []).filter(function (node) {
-        return node.moduleId === moduleId && node.type === "code-category";
+      var unmappedComponents = components.filter(function (component) {
+        return component.moduleId === moduleId && !(component.featureIds || []).length;
       });
       var moduleCaps = capabilities.filter(function (capability) {
         return capability.consumerModuleId === moduleId;
@@ -502,7 +506,7 @@
       clusters.push({
         ownerId: moduleId,
         radius: radius,
-        childCount: moduleFeatures.length + categories.length + syntheticCaps.length
+        childCount: moduleFeatures.length + unmappedComponents.length + syntheticCaps.length
       });
 
       moduleFeatures.forEach(function (feature) {
@@ -534,17 +538,88 @@
         });
       });
 
-      categories.forEach(function (category) {
-        var position = relationAwareScatter(parent, category.id, "category", radius, moduleId, nodes, []);
+      unmappedComponents.forEach(function (component) {
+        var position = relationAwareScatter(parent, component.id, "component", radius, moduleId, nodes, []);
         nodes.push({
-          id: category.id,
-          label: moduleShort(moduleId) + " · CODE · " + category.label,
-          type: "category",
+          id: component.id,
+          label: moduleShort(moduleId) + " · COMPONENT · " + component.label,
+          type: "component",
           ownerId: moduleId,
           x: position.x,
           y: position.y,
           z: position.z,
-          source: category
+          source: component
+        });
+        edges.push({
+          id: "contains-component:" + component.id,
+          from: moduleId,
+          to: component.id,
+          type: "detail",
+          label: "unmapped component",
+          retargeted: true
+        });
+      });
+    });
+
+    expanded.forEach(function (featureId) {
+      var feature = featureMap.get(featureId);
+      if (!feature) return;
+      var parent = nodes.find(function (node) { return node.id === featureId; });
+      if (!parent) return;
+      var mapped = components.filter(function (component) {
+        return (component.featureIds || []).includes(featureId);
+      });
+      var radius = Math.min(150, 74 + Math.sqrt(Math.max(1, mapped.length)) * 22);
+      mapped.forEach(function (component) {
+        var position = scatter(parent, component.id, "component", radius);
+        nodes.push({
+          id: component.id,
+          label: "COMPONENT · " + component.label,
+          type: "component",
+          ownerId: feature.ownerId,
+          x: position.x,
+          y: position.y,
+          z: position.z,
+          source: component
+        });
+        edges.push({
+          id: "contains-component:" + featureId + ":" + component.id,
+          from: featureId,
+          to: component.id,
+          type: "detail",
+          label: "responsibility",
+          retargeted: true
+        });
+      });
+    });
+
+    expanded.forEach(function (componentId) {
+      var component = componentMap.get(componentId);
+      if (!component) return;
+      var parent = nodes.find(function (node) { return node.id === componentId; });
+      if (!parent) return;
+      var paths = (component.implementationPaths || []).slice(0, 10);
+      var radius = Math.min(132, 62 + Math.sqrt(Math.max(1, paths.length)) * 18);
+      paths.forEach(function (implementationPath, index) {
+        var id = "implementation:" + component.id + ":" + index;
+        var position = scatter(parent, id, "implementation", radius);
+        nodes.push({
+          id: id,
+          label: implementationPath.split("/").pop(),
+          type: "implementation",
+          ownerId: component.moduleId,
+          x: position.x,
+          y: position.y,
+          z: position.z,
+          source: { component: component, path: implementationPath }
+        });
+        edges.push({
+          id: "contains-implementation:" + component.id + ":" + index,
+          from: component.id,
+          to: id,
+          type: "detail",
+          label: "implementation",
+          retargeted: true
         });
       });
     });
@@ -717,9 +792,9 @@
   }
 
   function drawChild(ctx, node, projected, selected, connected) {
-    var radius = node.type === "capability" ? 6 : node.type === "category" ? 4.5 : 5.25;
-    var stroke = selected ? "#ffffff" : node.type === "capability" ? "#f472b6" : node.type === "category" ? "#34d399" : ((node.source && node.source.softContractIds) || []).length ? "#fbbf24" : "#8095ad";
-    var fill = node.type === "capability" ? "#f472b6" : node.type === "category" ? "#34d399" : "#93c5fd";
+    var radius = node.type === "capability" ? 6 : node.type === "component" ? 5.8 : node.type === "implementation" ? 4.3 : 5.25;
+    var stroke = selected ? "#ffffff" : node.type === "capability" ? "#f472b6" : node.type === "component" ? "#34d399" : node.type === "implementation" ? "#a7f3d0" : ((node.source && node.source.softContractIds) || []).length ? "#fbbf24" : "#8095ad";
+    var fill = node.type === "capability" ? "#f472b6" : node.type === "component" ? "#34d399" : node.type === "implementation" ? "#a7f3d0" : "#93c5fd";
     var text = short(node.label, 40);
 
     ctx.globalAlpha = spotlightId ? (connected ? 1 : 0.22) : 1;
@@ -807,7 +882,8 @@
     var agentActivity = window.__TOTEM_AGENT_ACTIVITY__ || null;
     var agentActivityNodeId = null;
     if (agentActivity) {
-      if (agentActivity.featureId && byId.has(agentActivity.featureId)) agentActivityNodeId = agentActivity.featureId;
+      if (agentActivity.componentId && byId.has(agentActivity.componentId)) agentActivityNodeId = agentActivity.componentId;
+      else if (agentActivity.featureId && byId.has(agentActivity.featureId)) agentActivityNodeId = agentActivity.featureId;
       else if (agentActivity.moduleId && byId.has(agentActivity.moduleId)) agentActivityNodeId = agentActivity.moduleId;
     }
     currentScene.clusters.forEach(function (cluster) {
@@ -849,11 +925,11 @@
       return projected.get(a.id).z - projected.get(b.id).z;
     }).forEach(function (node) {
       var p = projected.get(node.id);
-      var child = node.type === "feature" || node.type === "category" || node.type === "capability";
+      var child = node.type === "feature" || node.type === "component" || node.type === "implementation" || node.type === "capability";
       var selected = spotlightId === node.id || keyboardFocusId === node.id;
       var connected = connectedToSpotlight(currentScene, node.id);
       var activityRadius = child
-        ? (node.type === "capability" ? 6 : node.type === "category" ? 4.5 : 5.25)
+        ? (node.type === "capability" ? 6 : node.type === "component" ? 5.8 : node.type === "implementation" ? 4.3 : 5.25)
         : Math.max(8, 12 * p.scale);
       if (node.id === agentActivityNodeId) {
         drawAgentActivityHalo(ctx, p, activityRadius, agentActivity && agentActivity.type);
@@ -916,7 +992,7 @@
 
   function keyboardNodes() {
     return scene().nodes.filter(function (node) {
-      return node.type === "module" || node.type === "external" || node.type === "feature" || node.type === "category" || node.type === "capability";
+      return node.type === "module" || node.type === "external" || node.type === "feature" || node.type === "component" || node.type === "implementation" || node.type === "capability";
     });
   }
 
