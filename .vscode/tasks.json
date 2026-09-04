@@ -1,0 +1,60 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Totem: Start Bridge",
+      "type": "shell",
+      "command": "bash tools/remote/bridge.sh start",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    },
+    {
+      "label": "Totem: Bridge Status",
+      "type": "shell",
+      "command": "bash tools/remote/bridge.sh status",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    },
+    {
+      "label": "Totem: Bridge Logs",
+      "type": "shell",
+      "command": "bash tools/remote/bridge.sh logs",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    },
+    {
+      "label": "Totem: Restart Bridge",
+      "type": "shell",
+      "command": "bash tools/remote/bridge.sh restart",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    },
+    {
+      "label": "Totem: Stop Bridge",
+      "type": "shell",
+      "command": "bash tools/remote/bridge.sh stop",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    }
+  ]
+}
