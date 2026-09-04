@@ -295,7 +295,10 @@ GraphScene buildGraphScene(
 
   if (enabledFilters.contains('shared-capability')) {
     for (final capability in data.sharedCapabilities) {
-      if (!expanded.contains(capability.consumerModuleId)) continue;
+      if (!expanded.contains(capability.consumerModuleId) &&
+          !expanded.contains(capability.providerModuleId)) {
+        continue;
+      }
       final from = _capabilityConsumerEndpoint(data, capability, expanded);
       var to = capability.providerModuleId;
       final providerFeatureId = capability.providerFeatureId;
@@ -390,8 +393,9 @@ GraphFeature? _capabilityConsumerFeature(GraphData data, GraphSharedCapability c
 }
 
 String _capabilityConsumerEndpoint(GraphData data, GraphSharedCapability capability, Set<String> expanded) {
+  if (!expanded.contains(capability.consumerModuleId)) return capability.consumerModuleId;
   final inferred = _capabilityConsumerFeature(data, capability);
-  if (expanded.contains(capability.consumerModuleId) && inferred != null) return inferred.id;
+  if (inferred != null) return inferred.id;
   return 'capability-node:${capability.id}';
 }
 

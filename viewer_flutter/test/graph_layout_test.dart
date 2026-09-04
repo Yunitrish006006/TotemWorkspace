@@ -156,6 +156,15 @@ void main() {
     );
   });
 
+  test('shared capability connects collapsed consumer module to expanded provider feature', () {
+    final data = GraphData.fromJson(fixture);
+    final scene = buildGraphScene(data, expanded: {'totem-core'});
+    final edge = scene.edges.singleWhere((edge) => edge.type == 'shared-capability');
+
+    expect(edge.from, 'totem-a');
+    expect(edge.to, 'core.manual');
+  });
+
   test('shared manual uses curated feature endpoints when both modules are expanded', () {
     final data = GraphData.fromJson(fixture);
     final scene = buildGraphScene(data, expanded: {'totem-a', 'totem-core'});

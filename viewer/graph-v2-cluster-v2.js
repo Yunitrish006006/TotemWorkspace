@@ -418,8 +418,9 @@
   }
 
   function capabilityConsumerEndpoint(capability) {
+    if (!expanded.has(capability.consumerModuleId)) return capability.consumerModuleId;
     var inferred = capabilityConsumerFeature(capability);
-    if (expanded.has(capability.consumerModuleId) && inferred) return inferred.id;
+    if (inferred) return inferred.id;
     return "capability-node:" + capability.id;
   }
 
@@ -551,7 +552,7 @@
     contracts.forEach(function (contract) { addContractEdges(edges, contract); });
 
     capabilities.forEach(function (capability) {
-      if (!expanded.has(capability.consumerModuleId)) return;
+      if (!expanded.has(capability.consumerModuleId) && !expanded.has(capability.providerModuleId)) return;
       var from = capabilityConsumerEndpoint(capability);
       var to = capability.providerModuleId;
       if (
