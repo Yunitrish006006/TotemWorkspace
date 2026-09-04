@@ -180,7 +180,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
       if (!mounted) return;
       setState(() {
         _mergeActivity(batch);
-        if (graph != null) _data = graph!;
+        if (graph != null) _data = graph;
         if (change != null) _change = change;
       });
     } catch (error) {
