@@ -8,6 +8,8 @@ PORT="${TOTEM_BRIDGE_PORT:-18765}"
 BACKEND="${TOTEM_BRIDGE_BACKEND:-auto}"
 LOG="${TOTEM_BRIDGE_LOG:-$ROOT/.totem-index/remote-bridge.log}"
 PID_FILE="${TOTEM_BRIDGE_PID_FILE:-$ROOT/.totem-index/remote-bridge.pid}"
+FLUTTER_STAMP="${TOTEM_FLUTTER_STAMP:-$ROOT/.totem-index/flutter-build.sha256}"
+FLUTTER_BUILD_MODE="${TOTEM_FLUTTER_BUILD_MODE:-auto}"
 ACTION="${1:-status}"
 
 usage() {
@@ -29,6 +31,7 @@ Environment:
   TOTEM_BRIDGE_BACKEND=auto|tmux|nohup
   TOTEM_BRIDGE_SESSION=totem-workspace-bridge
   TOTEM_BRIDGE_LOG=.totem-index/remote-bridge.log
+  TOTEM_FLUTTER_BUILD_MODE=auto|always|never
 EOF
 }
 
@@ -91,6 +94,62 @@ selected_backend() {
   esac
 }
 
+flutter_fingerprint() {
+  node "$ROOT/scripts/flutter-local-build-fingerprint.mjs"
+}
+
+flutter_build_ready() {
+  [[ -f "$ROOT/viewer_flutter/build/web/index.html" ]] || return 1
+  [[ -f "$FLUTTER_STAMP" ]] || return 1
+  local expected actual
+  expected="$(flutter_fingerprint)"
+  actual="$(cat "$FLUTTER_STAMP" 2>/dev/null || true)"
+  [[ "$expected" == "$actual" ]]
+}
+
+ensure_flutter_build() {
+  require_command node
+  mkdir -p "$(dirname "$FLUTTER_STAMP")"
+
+  case "$FLUTTER_BUILD_MODE" in
+    auto)
+      if flutter_build_ready; then
+        echo "Flutter viewer: READY (cached build)"
+        return 0
+      fi
+      ;;
+    always)
+      ;;
+    never)
+      if [[ -f "$ROOT/viewer_flutter/build/web/index.html" ]]; then
+        echo "Flutter viewer: using existing build (freshness check disabled)"
+        return 0
+      fi
+      echo "Flutter viewer build is missing and TOTEM_FLUTTER_BUILD_MODE=never." >&2
+      exit 6
+      ;;
+    *)
+      echo "Invalid TOTEM_FLUTTER_BUILD_MODE: $FLUTTER_BUILD_MODE" >&2
+      exit 2
+      ;;
+  esac
+
+  if ! command -v flutter >/dev/null 2>&1; then
+    echo "Flutter viewer build is missing or stale, and 'flutter' is not available on the remote host." >&2
+    echo "Install Flutter for this user, or provide a current viewer_flutter/build/web and set TOTEM_FLUTTER_BUILD_MODE=never." >&2
+    exit 6
+  fi
+
+  echo "Flutter viewer: building local root..."
+  (
+    cd "$ROOT/viewer_flutter"
+    flutter pub get
+    flutter build web --wasm --base-href /
+  )
+  flutter_fingerprint > "$FLUTTER_STAMP"
+  echo "Flutter viewer: BUILT"
+}
+
 show_status() {
   local owner="none"
   if tmux_running; then
@@ -127,6 +186,7 @@ start_nohup() {
 start_bridge() {
   require_command node
   require_command curl
+  ensure_flutter_build
 
   mkdir -p "$(dirname "$LOG")"
   mkdir -p "$(dirname "$PID_FILE")"
@@ -238,6 +298,17 @@ doctor() {
   echo "port: $PORT"
   echo "log: $LOG"
   echo "pid file: $PID_FILE"
+  echo "flutter build mode: $FLUTTER_BUILD_MODE"
+  if flutter_build_ready; then
+    echo "flutter viewer: READY"
+  elif [[ -f "$ROOT/viewer_flutter/build/web/index.html" ]]; then
+    echo "flutter viewer: STALE"
+  elif command -v flutter >/dev/null 2>&1; then
+    echo "flutter viewer: MISSING (will build on start)"
+  else
+    echo "flutter viewer: MISSING and flutter command unavailable"
+    failed=1
+  fi
 
   if port_in_use; then
     if health_ok; then
