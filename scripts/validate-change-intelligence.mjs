@@ -80,7 +80,7 @@ assert.ok(semanticDiff.modified.some((entry) => entry.id === "component:totem-al
 assert.ok(semanticDiff.added.some((entry) => entry.id.endsWith("/B.java")));
 const relationChange = semanticDiff.modified.find((entry) => entry.id === "hard:totem-alchemy:totem-core");
 assert.ok(relationChange, "relation mutation must be part of semantic diff");
-assert.deepEqual(relationChange.moduleIds.sort(), ["totem-alchemy", "totem-core"]);
+assert.deepEqual([...relationChange.moduleIds].sort(), ["totem-alchemy", "totem-core"]);
 
 const gitChanges = [{
   moduleId: "totem-alchemy",
