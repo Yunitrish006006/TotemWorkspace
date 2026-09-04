@@ -298,6 +298,42 @@ try {
   assert.match(failing.status().lastTask?.error ?? "", /fixture failure/);
   assert.ok(activity.some((event) => event.type === "task_failed" && event.taskId === failedTask.id));
 
+  child = fakeChild();
+  const interrupted = createAgentAdapter({
+    workspaceRoot,
+    reposRoot,
+    knowledge,
+    env: {
+      TOTEM_AGENT_ADAPTER: "codex",
+      TOTEM_CODEX_CWD: reposRoot
+    },
+    spawnSyncImpl() {
+      return { status: 0, stdout: "codex-cli fixture\n", stderr: "" };
+    },
+    spawnImpl() {
+      return child;
+    },
+    onActivity(event) {
+      activity.push(event);
+    },
+    async onTaskSettled(taskValue) {
+      settled.push(taskValue);
+    }
+  });
+  const interruptedTask = interrupted.dispatch({ prompt: "Long running fixture" });
+  assert.equal(interrupted.status().busy, true);
+  interrupted.close("Bridge restart interrupted active task");
+  await tick();
+  assert.equal(child.killed, true);
+  assert.equal(interrupted.status().busy, false);
+  assert.equal(interrupted.status().lastTask?.state, "failed");
+  assert.match(interrupted.status().lastTask?.error ?? "", /Bridge restart interrupted active task/);
+  assert.ok(activity.some((event) =>
+    event.type === "task_failed" &&
+    event.taskId === interruptedTask.id &&
+    /Bridge restart interrupted active task/.test(event.summary)
+  ));
+
   const unsafe = createAgentAdapter({
     workspaceRoot,
     reposRoot,
@@ -335,6 +371,8 @@ for (const fragment of [
   '"pr_created"',
   '"pr_merged"',
   'type: finalState === "completed" ? "task_completed" : "task_failed"',
+  'function close(reason = "Bridge shutdown interrupted active task")',
+  'void settle(task, "failed", reason)',
 ]) {
   assert.ok(adapterSource.includes(fragment), `Codex adapter core missing: ${fragment}`);
 }
@@ -349,6 +387,8 @@ for (const fragment of [
   'execution: "codex"',
   'onTaskSettled: async (task) =>',
   'refreshWorkspaceChanges([], { taskId: task?.id ?? null })',
+  'agentAdapter?.close?.("Bridge shutdown interrupted active Codex task")',
+  'process.once(signal, () => shutdown(signal))',
 ]) {
   assert.ok(serverSource.includes(fragment), `Bridge Phase 5 integration missing: ${fragment}`);
 }
@@ -363,7 +403,9 @@ for (const fragment of [
   assert.ok(flutterLive.includes(fragment), `Flutter Phase 5 client missing: ${fragment}`);
 }
 for (const fragment of [
-  "_AgentAdapterStrip(status: _adapter!)",
+  "_AgentAdapterStrip(",
+  "replaySession: _replayTimeline?.sessions.isNotEmpty == true",
+  "'INTERRUPTED'",
   "client.agentAdapterStatus()",
   "if (submission.adapter != null) _adapter = submission.adapter",
 ]) {
@@ -373,6 +415,8 @@ for (const fragment of [
   'document.getElementById("agentAdapter")',
   'fetch(apiUrl("/api/agent-adapter")',
   'payload.execution === "agent-adapter-unavailable"',
+  'latestAdapterStatus',
+  'replaySession.state === "running" ? "INTERRUPTED"',
 ]) {
   assert.ok(legacyLive.includes(fragment), `legacy Phase 5 live adapter missing: ${fragment}`);
 }
