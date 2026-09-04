@@ -563,6 +563,12 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
             _PromptPanel(
               submitting: _submittingPrompt,
               onSubmit: _submitPrompt,
+              events: _activity,
+              taskId: _adapter?.currentTask?.id ??
+                  _adapter?.lastTask?.id ??
+                  (_replayTimeline?.sessions.isNotEmpty == true
+                      ? _replayTimeline!.sessions.last.taskId
+                      : null),
             ),
           Expanded(
             child: GraphView(
@@ -869,10 +875,17 @@ class _ActivityStrip extends StatelessWidget {
 }
 
 class _PromptPanel extends StatefulWidget {
-  const _PromptPanel({required this.submitting, required this.onSubmit});
+  const _PromptPanel({
+    required this.submitting,
+    required this.onSubmit,
+    required this.events,
+    required this.taskId,
+  });
 
   final bool submitting;
   final ValueChanged<String> onSubmit;
+  final List<AgentActivityEvent> events;
+  final String? taskId;
 
   @override
   State<_PromptPanel> createState() => _PromptPanelState();
@@ -880,10 +893,29 @@ class _PromptPanel extends StatefulWidget {
 
 class _PromptPanelState extends State<_PromptPanel> {
   final TextEditingController _controller = TextEditingController();
+  final ScrollController _consoleScroll = ScrollController();
+
+  @override
+  void didUpdateWidget(covariant _PromptPanel oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final oldSequence = oldWidget.events.isEmpty ? 0 : oldWidget.events.last.sequence;
+    final newSequence = widget.events.isEmpty ? 0 : widget.events.last.sequence;
+    if (oldSequence != newSequence) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!_consoleScroll.hasClients) return;
+        _consoleScroll.animateTo(
+          _consoleScroll.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 160),
+          curve: Curves.easeOut,
+        );
+      });
+    }
+  }
 
   @override
   void dispose() {
     _controller.dispose();
+    _consoleScroll.dispose();
     super.dispose();
   }
 
@@ -894,41 +926,159 @@ class _PromptPanelState extends State<_PromptPanel> {
     _controller.clear();
   }
 
+  String _eventLabel(AgentActivityEvent event) {
+    switch (event.type) {
+      case 'command_started':
+        return r'$';
+      case 'command_completed':
+        return event.status == 'failed' ? '[CMD FAIL]' : '[CMD OK]';
+      case 'tool_started':
+        return '[MCP →]';
+      case 'tool_completed':
+        return '[MCP ✓]';
+      case 'file_edit':
+        return '[EDIT]';
+      case 'web_search_started':
+        return '[WEB →]';
+      case 'web_search_completed':
+        return '[WEB ✓]';
+      case 'todo_updated':
+        return '[PLAN]';
+      case 'agent_message':
+        return '[CODEX]';
+      case 'usage_updated':
+        return '[TOKENS]';
+      case 'task_started':
+        return '[START]';
+      case 'task_completed':
+        return '[DONE]';
+      case 'task_failed':
+        return '[FAILED]';
+      default:
+        return '[${event.type}]';
+    }
+  }
+
+  String _eventHeadline(AgentActivityEvent event) {
+    if (event.command != null && event.command!.isNotEmpty) return event.command!;
+    if (event.tool != null && event.tool!.isNotEmpty) return event.tool!;
+    if (event.file != null && event.file!.isNotEmpty && event.summary == null) return event.file!;
+    return event.summary ?? event.targetLabel;
+  }
+
   @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-        decoration: const BoxDecoration(
-          color: Color(0xFF07111D),
-          border: Border(bottom: BorderSide(color: Color(0xFF2B4058))),
-        ),
-        child: Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: _controller,
-                enabled: !widget.submitting,
-                onSubmitted: (_) => _submit(),
-                decoration: const InputDecoration(
-                  isDense: true,
-                  hintText: '輸入 Prompt（Codex adapter READY 時會直接建立 task；OFF/UNAVAILABLE 不會假裝執行）',
-                  border: OutlineInputBorder(),
+  Widget build(BuildContext context) {
+    final taskEvents = widget.taskId == null
+        ? const <AgentActivityEvent>[]
+        : widget.events.where((event) => event.taskId == widget.taskId).toList(growable: false);
+    final visibleEvents = taskEvents.length > 80
+        ? taskEvents.sublist(taskEvents.length - 80)
+        : taskEvents;
+
+    return Container(
+      decoration: const BoxDecoration(
+        color: Color(0xFF07111D),
+        border: Border(bottom: BorderSide(color: Color(0xFF2B4058))),
+      ),
+      child: Column(
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Expanded(
+                  child: TextField(
+                    controller: _controller,
+                    enabled: !widget.submitting,
+                    minLines: 1,
+                    maxLines: 6,
+                    keyboardType: TextInputType.multiline,
+                    decoration: const InputDecoration(
+                      isDense: true,
+                      hintText: '輸入 Prompt（支援多行；送出後下方會顯示 Codex CLI 等級的執行紀錄）',
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
                 ),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                  onPressed: widget.submitting ? null : _submit,
+                  icon: widget.submitting
+                      ? const SizedBox.square(
+                          dimension: 14,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.send, size: 16),
+                  label: Text(widget.submitting ? '送出中' : '送出'),
+                ),
+              ],
+            ),
+          ),
+          if (widget.taskId != null)
+            Container(
+              height: 220,
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                color: Color(0xFF050A10),
+                border: Border(top: BorderSide(color: Color(0xFF1E3144))),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 7, 12, 5),
+                    child: Text(
+                      'CODEX CONSOLE · ${widget.taskId} · ${taskEvents.length} events',
+                      style: const TextStyle(
+                        color: Color(0xFF9FB4CA),
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: ListView.builder(
+                      controller: _consoleScroll,
+                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+                      itemCount: visibleEvents.length,
+                      itemBuilder: (context, index) {
+                        final event = visibleEvents[index];
+                        final headline = _eventHeadline(event);
+                        final detail = event.detail;
+                        final usage = event.usage;
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 7),
+                          child: SelectableText(
+                            [
+                              '${_eventLabel(event)} ${headline.isEmpty ? event.type : headline}',
+                              if (detail != null && detail.isNotEmpty) detail,
+                              if (usage != null)
+                                'input ${usage.inputTokens} · cached ${usage.cachedInputTokens} · output ${usage.outputTokens} · total ${usage.totalTokens}',
+                            ].join('\n'),
+                            style: TextStyle(
+                              fontFamily: 'monospace',
+                              fontSize: 11,
+                              height: 1.35,
+                              color: event.type == 'task_failed' || event.status == 'failed'
+                                  ? const Color(0xFFFCA5A5)
+                                  : event.type == 'agent_message'
+                                      ? const Color(0xFFD1FAE5)
+                                      : const Color(0xFFCBD5E1),
+                            ),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(width: 8),
-            FilledButton.icon(
-              onPressed: widget.submitting ? null : _submit,
-              icon: widget.submitting
-                  ? const SizedBox.square(
-                      dimension: 14,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  : const Icon(Icons.send, size: 16),
-              label: Text(widget.submitting ? '送出中' : '送出'),
-            ),
-          ],
-        ),
-      );
+        ],
+      ),
+    );
+  }
 }
 
 class _InventoryModuleTile extends StatelessWidget {
