@@ -95,9 +95,9 @@ const CORE_API_CAPABILITY_FAMILIES = Object.freeze([
   Object.freeze({
     key: "client.world",
     label: "Core World Outline API",
-    importPattern: /^(?:v\\d+\\.)?client\\.world\\./,
-    providerFeaturePattern: /世界輪廓|world\\s*outline|outline/i,
-    consumerFeaturePattern: /輪廓|框線|連線|world\\s*outline|outline|visualization|visual|line/i
+    importPattern: /^(?:v\d+\.)?client\.world\./,
+    providerFeaturePattern: /世界輪廓|world\s*outline|outline/i,
+    consumerFeaturePattern: /輪廓|框線|連線|world\s*outline|outline|visualization|visual|line/i
   })
 ]);
 
