@@ -26,6 +26,49 @@ const DOMINANT_AREA_MODIFIER_WORDS = new Set([
   "operation", "operations", "helper", "sink", "native", "remote", "owned", "structured"
 ]);
 
+const SEMANTIC_CONCEPT_ALIASES = Object.freeze({
+  manual: ["manual", "guide", "book", "handbook", "手冊", "說明書"],
+  observer: ["observer", "spectator", "provider", "觀察", "旁觀"],
+  inventory: ["inventory", "container", "backpack", "storage", "sort", "sorting", "背包", "容器", "物品欄", "整理", "分類"],
+  gathering: ["gather", "gathering", "harvest", "collect", "採集", "收集"],
+  routing: ["route", "routing", "sort", "sorting", "destination", "分類", "路由"],
+  furnace: ["furnace", "smoker", "blast", "熔爐", "煙燻", "高爐"],
+  llm: ["llm", "openai", "prompt", "rule", "chat", "模型"],
+  outline: ["outline", "visualization", "render", "box", "line", "輪廓", "框線", "線段"],
+  friendship: ["friend", "friendship", "好友", "朋友"],
+  teleport: ["teleport", "nexus", "portal", "map", "傳送", "地圖", "節點"],
+  death: ["death", "dead", "remnant", "死亡", "回收"],
+  lock: ["lock", "locksmith", "permission", "access", "key", "鎖", "權限", "鑰匙"],
+  villager: ["villager", "village", "村民", "村莊"],
+  woodcutter: ["woodcutter", "wood", "lumber", "伐木", "木材"],
+  enchanting: ["enchant", "enchanting", "bookshelf", "附魔", "書櫃"],
+  brewing: ["alchemy", "brew", "brewing", "potion", "cauldron", "釀造", "煉藥", "藥水", "煉金"],
+  excavation: ["excavation", "selection", "mining", "hammer", "挖掘", "選區", "槌"],
+  networking: ["network", "networking", "packet", "payload", "sync", "網路", "同步"],
+  persistence: ["persist", "persistence", "storage", "state", "codec", "保存", "持久"],
+  ui: ["screen", "menu", "hud", "tooltip", "ui", "gui", "畫面", "介面"],
+  event: ["event", "eventbus", "audit", "事件", "稽核"],
+  registry: ["registry", "register", "bootstrap", "註冊", "登錄"],
+  recipe: ["recipe", "craft", "crafting", "配方", "合成"]
+});
+
+function semanticConcepts(value) {
+  const text = String(value ?? "").toLowerCase();
+  const concepts = [];
+  for (const [concept, aliases] of Object.entries(SEMANTIC_CONCEPT_ALIASES)) {
+    if (aliases.some((alias) => text.includes(alias.toLowerCase()))) concepts.push(concept);
+  }
+  return concepts;
+}
+
+function humanizeKey(value) {
+  return String(value ?? "")
+    .replaceAll("-", " ")
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+
 const SURFACE_LABELS = Object.freeze({
   entrypoints: "Entrypoints",
   api: "API / contracts",
@@ -566,7 +609,73 @@ function targetModuleForImport(importName, modulePackageRoots, sourceModuleId) {
   return best?.moduleId ?? null;
 }
 
-function moduleInventory(module, records, modulePackageRoots, resources = []) {
+function componentFeatureMatch(module, areaKey, areaRecords, features) {
+  const candidates = (features ?? []).filter((feature) => feature.ownerId === module.id);
+  if (!candidates.length) return Object.freeze({ featureIds: Object.freeze([]), score: 0, confidence: "unmapped" });
+
+  const areaConcepts = new Set([
+    ...semanticConcepts(areaKey),
+    ...areaRecords.flatMap((record) => semanticConcepts([
+      record.label,
+      record.packageName,
+      ...record.symbols
+    ].join(" ")))
+  ]);
+  const areaWords = new Set([
+    ...identifierWords(areaKey),
+    ...areaRecords.flatMap((record) => [
+      ...semanticLabelWords(record.label, module),
+      ...semanticSymbolWords(record, module)
+    ])
+  ]);
+
+  const scored = candidates.map((feature) => {
+    const featureText = `${feature.title ?? ""} ${feature.summary ?? ""}`;
+    const featureConcepts = new Set(semanticConcepts(featureText));
+    const featureWords = new Set(identifierWords(featureText));
+    const conceptOverlap = [...areaConcepts].filter((value) => featureConcepts.has(value)).length;
+    const wordOverlap = [...areaWords].filter((value) => featureWords.has(value)).length;
+    const exactArea = featureWords.has(areaKey) || featureConcepts.has(areaKey) ? 1 : 0;
+    const score = conceptOverlap * 5 + Math.min(4, wordOverlap) + exactArea * 4;
+    return { feature, score, conceptOverlap, wordOverlap };
+  }).sort((a, b) => b.score - a.score || b.conceptOverlap - a.conceptOverlap || b.wordOverlap - a.wordOverlap || a.feature.id.localeCompare(b.feature.id));
+
+  const best = scored[0];
+  const runnerUp = scored[1];
+  if (!best || best.score < 5) return Object.freeze({ featureIds: Object.freeze([]), score: best?.score ?? 0, confidence: "unmapped" });
+  if (runnerUp && best.score - runnerUp.score < 2) {
+    return Object.freeze({ featureIds: Object.freeze([]), score: best.score, confidence: "ambiguous" });
+  }
+  return Object.freeze({
+    featureIds: Object.freeze([best.feature.id]),
+    score: best.score,
+    confidence: best.score >= 10 ? "high" : "medium"
+  });
+}
+
+function componentInventory(module, area, areaRecords, features) {
+  const mapping = componentFeatureMatch(module, area.key, areaRecords, features);
+  const surfaceKinds = unique(areaRecords.flatMap((record) => surfaceKeys(record))).sort();
+  const implementationPaths = unique(areaRecords.map((record) => record.path)).sort();
+  return Object.freeze({
+    id: `component:${module.id}:${area.key}`,
+    type: "component",
+    moduleId: module.id,
+    key: area.key,
+    label: humanizeKey(area.key),
+    responsibility: `${humanizeKey(area.key)} responsibility inferred from production package, class, symbol, and surface evidence.`,
+    featureIds: mapping.featureIds,
+    mappingScore: mapping.score,
+    mappingConfidence: mapping.confidence,
+    fileCount: implementationPaths.length,
+    implementationPaths: Object.freeze(implementationPaths.slice(0, 24)),
+    representativePaths: Object.freeze(implementationPaths.slice(0, 6)),
+    symbols: Object.freeze(unique(areaRecords.flatMap((record) => record.symbols)).slice(0, 12)),
+    surfaceKinds: Object.freeze(surfaceKinds)
+  });
+}
+
+function moduleInventory(module, records, modulePackageRoots, resources = [], features = []) {
   const ownRoot = modulePackageRoots.get(module.id) ?? packageRoot(records, module);
   const areaAssignments = featureAreaAssignments(records, module, ownRoot);
   const surfaces = Object.fromEntries(Object.keys(SURFACE_LABELS).map((key) => [key, []]));
@@ -609,6 +718,16 @@ function moduleInventory(module, records, modulePackageRoots, resources = []) {
     }))
     .sort((a, b) => b.fileCount - a.fileCount || a.key.localeCompare(b.key));
 
+  const recordsByArea = new Map();
+  for (const record of records) {
+    const areaKey = areaAssignments.get(record.path) ?? featureArea(record, module, ownRoot);
+    if (!recordsByArea.has(areaKey)) recordsByArea.set(areaKey, []);
+    recordsByArea.get(areaKey).push(record);
+  }
+  const components = featureAreas.map((area) =>
+    componentInventory(module, area, recordsByArea.get(area.key) ?? [], features)
+  );
+
   const normalizedSurfaces = Object.fromEntries(Object.entries(surfaces).map(([key, items]) => [
     key,
     Object.freeze(unique(items.map((item) => item.path)).map((itemPath) => items.find((item) => item.path === itemPath)).sort((a, b) => a.path.localeCompare(b.path)))
@@ -622,6 +741,7 @@ function moduleInventory(module, records, modulePackageRoots, resources = []) {
     productionFileCount: records.length,
     resourceEvidence: resourceEvidence(resources),
     featureAreas: Object.freeze(featureAreas),
+    components: Object.freeze(components),
     surfaces: Object.freeze(normalizedSurfaces),
     integrations: Object.freeze([...integrations.values()].map((entry) => Object.freeze({
       packageRoot: entry.packageRoot,
@@ -635,6 +755,8 @@ function moduleInventory(module, records, modulePackageRoots, resources = []) {
     })).sort((a, b) => a.targetModuleId.localeCompare(b.targetModuleId))),
     counts: Object.freeze({
       featureAreas: featureAreas.length,
+      components: components.length,
+      mappedComponents: components.filter((component) => component.featureIds.length > 0).length,
       api: normalizedSurfaces.api.length,
       networking: normalizedSurfaces.networking.length,
       events: normalizedSurfaces.events.length,
@@ -668,7 +790,7 @@ export function buildCodeInventory({ knowledge, index } = {}) {
   ]));
 
   return Object.freeze({
-    schemaVersion: 4,
+    schemaVersion: 5,
     generatedAt: index?.generatedAt ?? knowledge?.snapshot?.date ?? null,
     sourceScope: "production-code-only",
     resourceScope: "production-resource-evidence",
@@ -677,7 +799,8 @@ export function buildCodeInventory({ knowledge, index } = {}) {
       module,
       byModule.get(module.id) ?? [],
       modulePackageRoots,
-      resourcesByModule.get(module.id) ?? []
+      resourcesByModule.get(module.id) ?? [],
+      knowledge?.features ?? []
     )))
   });
 }
