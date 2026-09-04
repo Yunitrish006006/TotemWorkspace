@@ -17,3 +17,8 @@ button,.button-link{border:1px solid #38506a;border-radius:9px;background:#10253
 .verification-state[data-status="running"]{color:#67e8f9;border-color:#27566a;background:#071821}
 .verification-state[data-status="failed"]{color:#f87171;border-color:#713b3b;background:#241010}
 .change-intelligence{max-width:min(42vw,620px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#fbbf24;border-color:#735c22;background:#241b09}
+
+.agent-adapter{max-width:min(42vw,620px);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:#94a3b8;border-color:#475569;background:#0c1118}
+.agent-adapter[data-status="ready"]{color:#86efac;border-color:#28503f;background:#081b13}
+.agent-adapter[data-status="busy"]{color:#67e8f9;border-color:#27566a;background:#071821}
+.agent-adapter[data-status="failed"],.agent-adapter[data-status="unavailable"]{color:#f87171;border-color:#713b3b;background:#241010}
