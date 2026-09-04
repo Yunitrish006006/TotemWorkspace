@@ -238,6 +238,7 @@ const flutterView = fs.readFileSync(new URL("../viewer_flutter/lib/widgets/graph
 const legacyLive = fs.readFileSync(new URL("../viewer/local-live.js", import.meta.url), "utf8");
 const legacyRenderer = fs.readFileSync(new URL("../viewer/graph-v2-cluster-v2.js", import.meta.url), "utf8");
 const legacyHtml = fs.readFileSync(new URL("../graph-v2.html", import.meta.url), "utf8");
+const activityCli = fs.readFileSync(new URL("./totem-activity.mjs", import.meta.url), "utf8");
 
 assert.ok(graphSource.includes("schemaVersion: 5"), "graph schema must advance for Verification Graph");
 assert.ok(graphSource.includes("buildVerificationGraph"), "graph payload must derive verification data");
@@ -310,6 +311,8 @@ for (const fragment of [
 }
 assert.ok(legacyHtml.includes('data-edge-filter="validated-by"'), "legacy validated-by filter is required");
 assert.ok(legacyHtml.includes('id="verificationState"'), "legacy VERIFY status badge is required");
+assert.ok(activityCli.includes('request("/api/verification-state")'), "activity CLI status must expose verification state");
+assert.ok(activityCli.includes("--test <stable-test-id-or-repo-relative-path>"), "activity CLI must document safe Test target format");
 
 console.log(
   "Phase 4 Verification Graph validation passed: stable Test entities, feature/API validated-by relations, requirements/evidence separation, Git mapping, persistent live state, failure propagation, and Flutter/legacy parity are present."
