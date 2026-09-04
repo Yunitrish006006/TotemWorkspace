@@ -2,6 +2,17 @@
   "version": "2.0.0",
   "tasks": [
     {
+      "label": "Totem: Bootstrap Flutter",
+      "type": "shell",
+      "command": "bash tools/remote/bootstrap-flutter.sh install",
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated",
+        "clear": true
+      }
+    },
+    {
       "label": "Totem: Start Bridge",
       "type": "shell",
       "command": "bash tools/remote/bridge.sh start",

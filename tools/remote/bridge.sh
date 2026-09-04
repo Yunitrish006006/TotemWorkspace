@@ -10,6 +10,9 @@ LOG="${TOTEM_BRIDGE_LOG:-$ROOT/.totem-index/remote-bridge.log}"
 PID_FILE="${TOTEM_BRIDGE_PID_FILE:-$ROOT/.totem-index/remote-bridge.pid}"
 FLUTTER_STAMP="${TOTEM_FLUTTER_STAMP:-$ROOT/.totem-index/flutter-build.sha256}"
 FLUTTER_BUILD_MODE="${TOTEM_FLUTTER_BUILD_MODE:-auto}"
+FLUTTER_VERSION="${TOTEM_FLUTTER_VERSION:-3.47.0}"
+FLUTTER_HOME="${TOTEM_FLUTTER_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/totem-workspace/flutter/$FLUTTER_VERSION}"
+FLUTTER_BOOTSTRAP="${TOTEM_FLUTTER_BOOTSTRAP:-auto}"
 ACTION="${1:-status}"
 
 usage() {
@@ -32,6 +35,9 @@ Environment:
   TOTEM_BRIDGE_SESSION=totem-workspace-bridge
   TOTEM_BRIDGE_LOG=.totem-index/remote-bridge.log
   TOTEM_FLUTTER_BUILD_MODE=auto|always|never
+  TOTEM_FLUTTER_BOOTSTRAP=auto|never
+  TOTEM_FLUTTER_VERSION=3.47.0
+  TOTEM_FLUTTER_HOME=~/.local/share/totem-workspace/flutter/3.47.0
 EOF
 }
 
@@ -98,6 +104,44 @@ flutter_fingerprint() {
   node "$ROOT/scripts/flutter-local-build-fingerprint.mjs"
 }
 
+flutter_command() {
+  if command -v flutter >/dev/null 2>&1; then
+    command -v flutter
+    return 0
+  fi
+  if [[ -x "$FLUTTER_HOME/bin/flutter" ]]; then
+    printf '%s/bin/flutter\n' "$FLUTTER_HOME"
+    return 0
+  fi
+  return 1
+}
+
+ensure_flutter_toolchain() {
+  local command_path
+  if command_path="$(flutter_command)"; then
+    printf '%s\n' "$command_path"
+    return 0
+  fi
+
+  case "$FLUTTER_BOOTSTRAP" in
+    auto)
+      echo "Flutter SDK not found; bootstrapping pinned Flutter $FLUTTER_VERSION without sudo..." >&2
+      TOTEM_FLUTTER_VERSION="$FLUTTER_VERSION" \
+      TOTEM_FLUTTER_HOME="$FLUTTER_HOME" \
+        bash "$ROOT/tools/remote/bootstrap-flutter.sh" install >&2
+      flutter_command
+      ;;
+    never)
+      echo "Flutter SDK is missing and TOTEM_FLUTTER_BOOTSTRAP=never." >&2
+      return 1
+      ;;
+    *)
+      echo "Invalid TOTEM_FLUTTER_BOOTSTRAP: $FLUTTER_BOOTSTRAP" >&2
+      return 1
+      ;;
+  esac
+}
+
 flutter_build_ready() {
   [[ -f "$ROOT/viewer_flutter/build/web/index.html" ]] || return 1
   [[ -f "$FLUTTER_STAMP" ]] || return 1
@@ -134,17 +178,18 @@ ensure_flutter_build() {
       ;;
   esac
 
-  if ! command -v flutter >/dev/null 2>&1; then
-    echo "Flutter viewer build is missing or stale, and 'flutter' is not available on the remote host." >&2
-    echo "Install Flutter for this user, or provide a current viewer_flutter/build/web and set TOTEM_FLUTTER_BUILD_MODE=never." >&2
+  local flutter_cmd
+  if ! flutter_cmd="$(ensure_flutter_toolchain)"; then
+    echo "Flutter viewer build is missing or stale and no usable Flutter SDK is available." >&2
+    echo "Run: bash tools/remote/bootstrap-flutter.sh install" >&2
     exit 6
   fi
 
-  echo "Flutter viewer: building local root..."
+  echo "Flutter viewer: building local root with $flutter_cmd..."
   (
     cd "$ROOT/viewer_flutter"
-    flutter pub get
-    flutter build web --wasm --base-href /
+    "$flutter_cmd" pub get
+    "$flutter_cmd" build web --wasm --base-href /
   )
   flutter_fingerprint > "$FLUTTER_STAMP"
   echo "Flutter viewer: BUILT"
@@ -299,14 +344,18 @@ doctor() {
   echo "log: $LOG"
   echo "pid file: $PID_FILE"
   echo "flutter build mode: $FLUTTER_BUILD_MODE"
+  echo "flutter bootstrap: $FLUTTER_BOOTSTRAP"
+  echo "flutter user SDK: $FLUTTER_HOME"
   if flutter_build_ready; then
     echo "flutter viewer: READY"
   elif [[ -f "$ROOT/viewer_flutter/build/web/index.html" ]]; then
     echo "flutter viewer: STALE"
-  elif command -v flutter >/dev/null 2>&1; then
+  elif flutter_command >/dev/null 2>&1; then
     echo "flutter viewer: MISSING (will build on start)"
+  elif [[ "$FLUTTER_BOOTSTRAP" == "auto" ]]; then
+    echo "flutter viewer: MISSING (user-space Flutter will bootstrap on start)"
   else
-    echo "flutter viewer: MISSING and flutter command unavailable"
+    echo "flutter viewer: MISSING and bootstrap disabled"
     failed=1
   fi
 

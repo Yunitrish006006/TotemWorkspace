@@ -40,7 +40,21 @@ bash tools/remote/bridge.sh doctor
 bash tools/remote/bridge.sh start
 ```
 
-On `start`, the controller fingerprints `viewer_flutter/`. If the local web build is missing or stale it runs:
+On `start`, the controller fingerprints `viewer_flutter/`. If the local web build is missing or stale, it first resolves Flutter. A system/user PATH Flutter is preferred; otherwise it automatically installs the pinned SDK in user space:
+
+```text
+~/.local/share/totem-workspace/flutter/3.47.0
+```
+
+This bootstrap uses only the current user's files and does **not** require sudo.
+
+You can also bootstrap explicitly:
+
+```bash
+bash tools/remote/bootstrap-flutter.sh install
+```
+
+Then it runs:
 
 ```bash
 cd viewer_flutter
@@ -147,4 +161,6 @@ TOTEM_FLUTTER_BUILD_MODE=auto
 - `always`: rebuild on every Bridge start.
 - `never`: never invoke Flutter; requires an existing `viewer_flutter/build/web/index.html`.
 
-If the remote account does not have Flutter installed yet, `doctor` reports that condition before startup.
+If the remote account does not have Flutter installed yet, the default `TOTEM_FLUTTER_BOOTSTRAP=auto` installs Flutter 3.47.0 under the user's data directory on first start. Set `TOTEM_FLUTTER_BOOTSTRAP=never` only when you intentionally want startup to fail instead of downloading the SDK.
+
+The first bootstrap downloads the Flutter SDK and web artifacts, so it is much heavier than later restarts. Subsequent starts reuse the SDK and only rebuild the viewer when its fingerprint changes.
