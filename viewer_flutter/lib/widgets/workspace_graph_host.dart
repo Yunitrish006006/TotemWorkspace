@@ -23,6 +23,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
   Timer? _poller;
   Timer? _activityPoller;
   ViewerSettings _settings = ViewerSettings.defaults;
+  ChangeIntelligence? _change;
   final List<AgentActivityEvent> _activity = <AgentActivityEvent>[];
   int _activitySequence = 0;
   bool _probing = true;
@@ -64,6 +65,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
         client.workspaceStatus(),
         client.viewerSettings(),
         client.activity(),
+        client.changeIntelligence(),
       ]);
       if (!mounted) {
         client.close();
@@ -72,10 +74,12 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
       final status = results[0] as WorkspaceLiveStatus;
       final settings = results[1] as ViewerSettings;
       final activity = results[2] as AgentActivityBatch;
+      final change = results[3] as ChangeIntelligence;
       setState(() {
         _client = client;
         _live = status;
         _settings = settings;
+        _change = change;
         _mergeActivity(activity);
         _probing = false;
         _liveError = null;
@@ -181,7 +185,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
       _liveError = null;
     });
     try {
-      await client.refresh();
+      final change = await client.refresh();
       final results = await Future.wait<Object>([
         client.graphData(),
         client.workspaceStatus(),
@@ -190,6 +194,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
       setState(() {
         _data = results[0] as GraphData;
         _live = results[1] as WorkspaceLiveStatus;
+        _change = change;
       });
     } catch (error) {
       if (mounted) setState(() => _liveError = error.toString());
@@ -358,6 +363,8 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
             onInventory: _showCodeInventory,
             onPromptChanged: isLocal ? _setPromptEnabled : null,
           ),
+          if (isLocal && _change?.hasChanges == true)
+            _ChangeStrip(change: _change!),
           if (isLocal && _settings.agentActivityEnabled && _activity.isNotEmpty)
             _ActivityStrip(event: _activity.last),
           if (isLocal && _settings.promptEnabled)
@@ -373,9 +380,44 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
               activityModuleId: latestActivity?.moduleId,
               activityType: latestActivity?.type,
               autoExpandAgentFocus: _settings.autoExpandAgentFocus,
+              changedEntityIds: _change?.changedEntityIds ?? const <String>{},
+              impactedModuleIds: _change?.impactedModuleIds ?? const <String>{},
+              changeAnimationsEnabled: _settings.changeAnimationsEnabled,
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _ChangeStrip extends StatelessWidget {
+  const _ChangeStrip({required this.change});
+
+  final ChangeIntelligence change;
+
+  @override
+  Widget build(BuildContext context) {
+    final diff = change.semanticDiff;
+    final impacted = change.impact.impactedModules;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      decoration: const BoxDecoration(
+        color: Color(0xFF17120A),
+        border: Border(bottom: BorderSide(color: Color(0xFF5B4518))),
+      ),
+      child: Text(
+        'CHANGE · ${change.gitChanges.length} files · +${diff.added.length} ~${diff.modified.length} −${diff.removed.length}'
+        '${impacted.isEmpty ? '' : ' · impact ${impacted.join(', ')}'}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: const TextStyle(
+          color: Color(0xFFFBBF24),
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.25,
+        ),
       ),
     );
   }
