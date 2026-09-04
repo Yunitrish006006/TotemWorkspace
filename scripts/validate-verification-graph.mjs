@@ -268,7 +268,7 @@ for (const fragment of [
   assert.ok(flutterLive.includes(fragment), `Flutter live verification client missing: ${fragment}`);
 }
 for (const fragment of [
-  "_VerificationStrip(state: _verification!)",
+  "_VerificationStrip(state: displayedVerification)",
   "runningVerificationTargetIds",
   "failedVerificationTargetIds",
 ]) {
