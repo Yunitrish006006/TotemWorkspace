@@ -105,6 +105,8 @@ class VisualNode {
     this.module,
     this.feature,
     this.capability,
+    this.component,
+    this.implementationPath,
   });
 
   final String id;
@@ -116,8 +118,11 @@ class VisualNode {
   final GraphModule? module;
   final GraphFeature? feature;
   final GraphSharedCapability? capability;
+  final GraphComponent? component;
+  final String? implementationPath;
 
-  bool get isChild => kind == 'feature' || kind == 'capability';
+  bool get isChild =>
+      kind == 'feature' || kind == 'capability' || kind == 'component' || kind == 'implementation';
 }
 
 class VisualEdge {
@@ -184,7 +189,8 @@ GraphScene buildGraphScene(
   final nodes = <VisualNode>[];
   final edges = <VisualEdge>[];
   final clusters = <VisualCluster>[];
-  final moduleRadius = _moduleOrbitRadius(expanded.length);
+  final expandedModuleCount = data.modules.where((module) => expanded.contains(module.id)).length;
+  final moduleRadius = _moduleOrbitRadius(expandedModuleCount);
   final externalRadius = moduleRadius + 280;
   final core = data.moduleById('totem-core');
   final peripheral = data.modules.where((module) => module.id != 'totem-core').toList(growable: false)
@@ -236,11 +242,14 @@ GraphScene buildGraphScene(
       if (capability.consumerModuleId != moduleId) return false;
       return _capabilityConsumerEndpoint(data, capability, expanded).startsWith('capability-node:');
     }).toList(growable: false);
-    final radius = _clusterRadius(moduleFeatures.length + syntheticCapabilities.length);
+    final unmappedComponents = data.componentsForModule(moduleId)
+        .where((component) => component.featureIds.isEmpty)
+        .toList(growable: false);
+    final radius = _clusterRadius(moduleFeatures.length + syntheticCapabilities.length + unmappedComponents.length);
     clusters.add(VisualCluster(
       ownerId: moduleId,
       radius: radius,
-      childCount: moduleFeatures.length + syntheticCapabilities.length,
+      childCount: moduleFeatures.length + syntheticCapabilities.length + unmappedComponents.length,
     ));
 
     for (final feature in moduleFeatures) {
@@ -284,6 +293,96 @@ GraphScene buildGraphScene(
         position: position,
         ownerId: moduleId,
         capability: capability,
+      ));
+    }
+
+    for (final component in unmappedComponents) {
+      final position = _relationAwareScatter(
+        parent.position,
+        component.id,
+        'component',
+        radius,
+        moduleId,
+        anchors,
+        const [],
+      );
+      nodes.add(VisualNode(
+        id: component.id,
+        label: '${_moduleShort(data, moduleId)} · COMPONENT · ${component.label}',
+        kind: 'component',
+        rank: parent.rank,
+        position: position,
+        ownerId: moduleId,
+        component: component,
+      ));
+      edges.add(VisualEdge(
+        id: 'contains-component:${component.id}',
+        from: moduleId,
+        to: component.id,
+        type: 'detail',
+        label: 'unmapped component',
+        retargeted: true,
+      ));
+    }
+  }
+
+  for (final featureId in expanded.toList()..sort()) {
+    final feature = data.featureById(featureId);
+    if (feature == null) continue;
+    final parent = nodes.where((node) => node.id == featureId).firstOrNull;
+    if (parent == null) continue;
+    final components = data.componentsForFeature(featureId);
+    final radius = math.min(150, 74 + math.sqrt(math.max(1, components.length)) * 22).toDouble();
+    for (final component in components) {
+      final position = _scatter(parent.position, component.id, 'component', radius);
+      nodes.add(VisualNode(
+        id: component.id,
+        label: 'COMPONENT · ${component.label}',
+        kind: 'component',
+        rank: parent.rank,
+        position: position,
+        ownerId: feature.ownerId,
+        component: component,
+      ));
+      edges.add(VisualEdge(
+        id: 'contains-component:${feature.id}:${component.id}',
+        from: feature.id,
+        to: component.id,
+        type: 'detail',
+        label: 'responsibility',
+        retargeted: true,
+      ));
+    }
+  }
+
+  for (final componentId in expanded.toList()..sort()) {
+    final component = data.componentById(componentId);
+    if (component == null) continue;
+    final parent = nodes.where((node) => node.id == componentId).firstOrNull;
+    if (parent == null) continue;
+    final paths = component.implementationPaths.take(10).toList(growable: false);
+    final radius = math.min(132, 62 + math.sqrt(math.max(1, paths.length)) * 18).toDouble();
+    for (var index = 0; index < paths.length; index += 1) {
+      final implementationPath = paths[index];
+      final id = 'implementation:${component.id}:$index';
+      final position = _scatter(parent.position, id, 'implementation', radius);
+      nodes.add(VisualNode(
+        id: id,
+        label: implementationPath.split('/').last,
+        kind: 'implementation',
+        rank: parent.rank,
+        position: position,
+        ownerId: component.moduleId,
+        component: component,
+        implementationPath: implementationPath,
+      ));
+      edges.add(VisualEdge(
+        id: 'contains-implementation:${component.id}:$index',
+        from: component.id,
+        to: id,
+        type: 'detail',
+        label: 'implementation',
+        retargeted: true,
       ));
     }
   }
