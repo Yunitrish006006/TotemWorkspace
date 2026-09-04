@@ -328,6 +328,42 @@ void main() {
           200,
         );
       }
+      if (request.url.path == '/api/orchestration-plan') {
+        return http.Response(
+          jsonEncode(<String, Object?>{
+            'schemaVersion': 1,
+            'mode': 'bounded-parallel',
+            'score': 7,
+            'estimatedBenefit': 'high',
+            'rationale': <String, Object>{
+              'modules': <String>['totem-core', 'totem-alchemy'],
+            },
+            'assignments': <Object>[
+              <String, Object>{
+                'id': 'explorer:scope',
+                'role': 'explorer',
+                'modules': <String>['totem-core', 'totem-alchemy'],
+                'phase': 'discovery',
+                'writeAllowed': false,
+                'purpose': 'confirm scope',
+              },
+              <String, Object>{
+                'id': 'worker:totem-core',
+                'role': 'worker',
+                'modules': <String>['totem-core'],
+                'phase': 'implementation',
+                'writeAllowed': true,
+                'purpose': 'bounded implementation',
+              },
+            ],
+            'limits': <String, Object>{
+              'maxSubagents': 4,
+              'maxParallelWorkers': 1,
+            },
+          }),
+          200,
+        );
+      }
       if (request.url.path == '/api/agent-adapter') {
         return http.Response(
           jsonEncode(<String, Object?>{
@@ -340,7 +376,22 @@ void main() {
             'sandbox': 'workspace-write',
             'model': 'fixture-model',
             'reason': '',
-            'currentTask': null,
+            'currentTask': <String, Object?>{
+              'schemaVersion': 1,
+              'id': 'task:flutter-fixture:current',
+              'adapter': 'codex',
+              'state': 'running',
+              'startedAt': 'now',
+              'orchestration': <String, Object>{
+                'mode': 'bounded-parallel',
+                'score': 7,
+                'modules': <String>['totem-core', 'totem-alchemy'],
+                'subagents': 2,
+                'roles': <String>['explorer', 'worker'],
+                'maxParallelWorkers': 1,
+                'estimatedBenefit': 'high',
+              },
+            },
             'lastTask': null,
           }),
           200,
@@ -423,12 +474,52 @@ void main() {
               'source': 'viewer',
               'summary': 'inspect outline api',
             },
-            'task': <String, Object>{
+            'task': <String, Object?>{
               'schemaVersion': 1,
               'id': 'task:flutter-fixture:1',
               'adapter': 'codex',
               'state': 'running',
               'startedAt': 'now',
+              'orchestration': <String, Object>{
+                'mode': 'bounded-parallel',
+                'score': 7,
+                'modules': <String>['totem-core', 'totem-alchemy'],
+                'subagents': 2,
+                'roles': <String>['explorer', 'worker'],
+                'maxParallelWorkers': 1,
+                'estimatedBenefit': 'high',
+              },
+            },
+            'orchestration': <String, Object?>{
+              'schemaVersion': 1,
+              'mode': 'bounded-parallel',
+              'score': 7,
+              'estimatedBenefit': 'high',
+              'rationale': <String, Object>{
+                'modules': <String>['totem-core', 'totem-alchemy'],
+              },
+              'assignments': <Object>[
+                <String, Object>{
+                  'id': 'explorer:scope',
+                  'role': 'explorer',
+                  'modules': <String>['totem-core', 'totem-alchemy'],
+                  'phase': 'discovery',
+                  'writeAllowed': false,
+                  'purpose': 'confirm scope',
+                },
+                <String, Object>{
+                  'id': 'worker:totem-core',
+                  'role': 'worker',
+                  'modules': <String>['totem-core'],
+                  'phase': 'implementation',
+                  'writeAllowed': true,
+                  'purpose': 'bounded implementation',
+                },
+              ],
+              'limits': <String, Object>{
+                'maxSubagents': 4,
+                'maxParallelWorkers': 1,
+              },
             },
             'adapter': <String, Object>{
               'schemaVersion': 1,
@@ -438,12 +529,21 @@ void main() {
               'busy': true,
               'version': 'codex-cli fixture',
               'sandbox': 'workspace-write',
-              'currentTask': <String, Object>{
+              'currentTask': <String, Object?>{
                 'schemaVersion': 1,
                 'id': 'task:flutter-fixture:1',
                 'adapter': 'codex',
                 'state': 'running',
                 'startedAt': 'now',
+                'orchestration': <String, Object>{
+                  'mode': 'bounded-parallel',
+                  'score': 7,
+                  'modules': <String>['totem-core', 'totem-alchemy'],
+                  'subagents': 2,
+                  'roles': <String>['explorer', 'worker'],
+                  'maxParallelWorkers': 1,
+                  'estimatedBenefit': 'high',
+                },
               },
             },
           }),
@@ -520,6 +620,19 @@ void main() {
     expect(adapter.available, isTrue);
     expect(adapter.label, 'CODEX READY');
 
+    expect(adapter.currentTask?.orchestration?.mode, 'bounded-parallel');
+    expect(adapter.currentTask?.orchestration?.subagents, 2);
+
+    final orchestration = await client.orchestrationPlan(
+      'inspect outline api',
+      moduleId: 'totem-core',
+    );
+    expect(orchestration.mode, 'bounded-parallel');
+    expect(orchestration.score, 7);
+    expect(orchestration.assignments.length, 2);
+    expect(orchestration.assignments.last.writeAllowed, isTrue);
+    expect(orchestration.summary.roles, contains('worker'));
+
     final replayTimeline = await client.replayTimeline();
     expect(replayTimeline.eventCount, 9);
     expect(replayTimeline.latestSequence, 9);
@@ -541,6 +654,9 @@ void main() {
     expect(promptSubmission.task?.id, 'task:flutter-fixture:1');
     expect(promptSubmission.adapter?.busy, isTrue);
     expect(promptSubmission.adapter?.currentTask?.state, 'running');
+    expect(promptSubmission.orchestration?.mode, 'bounded-parallel');
+    expect(promptSubmission.orchestration?.assignments.length, 2);
+    expect(promptSubmission.task?.orchestration?.score, 7);
 
     final verification = await client.verificationState();
     expect(verification.failedCount, 1);
@@ -567,6 +683,14 @@ void main() {
 
     final activityRequest = requests.singleWhere((request) => request.url.path == '/api/activity');
     expect(activityRequest.url.queryParameters['after'], '2');
+
+    final orchestrationRequest = requests.singleWhere(
+      (request) => request.url.path == '/api/orchestration-plan',
+    );
+    expect(
+      (jsonDecode(orchestrationRequest.body) as Map<String, dynamic>)['query'],
+      'inspect outline api',
+    );
 
     final promptRequest = requests.singleWhere((request) => request.url.path == '/api/prompt');
     expect((jsonDecode(promptRequest.body) as Map<String, dynamic>)['prompt'], 'inspect outline api');
