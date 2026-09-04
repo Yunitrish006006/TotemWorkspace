@@ -29,11 +29,12 @@ function fingerprint(value) {
   return crypto.createHash("sha256").update(JSON.stringify(stableValue(value))).digest("hex");
 }
 
-function entityRecord({ id, type, moduleId = null, payload }) {
+function entityRecord({ id, type, moduleId = null, moduleIds = [], payload }) {
   return Object.freeze({
     id,
     type,
     moduleId,
+    moduleIds: Object.freeze([...new Set([moduleId, ...moduleIds].filter(Boolean))].sort()),
     fingerprint: fingerprint(payload)
   });
 }
@@ -118,20 +119,26 @@ export function semanticSnapshot(graph) {
   }
 
   for (const contract of graph?.contracts ?? []) {
+    const relation = relationPayload(contract);
     entities.push(entityRecord({
       id: contract.id,
       type: "relation",
       moduleId: null,
-      payload: relationPayload(contract)
+      moduleIds: [relation.from, relation.to, ...relation.relatedNodes]
+        .filter((id) => String(id ?? "").startsWith("totem-")),
+      payload: relation
     }));
   }
 
   for (const capability of graph?.sharedCapabilities ?? []) {
+    const relation = relationPayload(capability);
     entities.push(entityRecord({
       id: capability.id,
       type: "relation",
       moduleId: capability.providerModuleId ?? null,
-      payload: relationPayload(capability)
+      moduleIds: [capability.providerModuleId, capability.consumerModuleId]
+        .filter((id) => String(id ?? "").startsWith("totem-")),
+      payload: relation
     }));
   }
 
@@ -147,7 +154,8 @@ function publicEntity(entity) {
   return Object.freeze({
     id: entity.id,
     type: entity.type,
-    moduleId: entity.moduleId ?? null
+    moduleId: entity.moduleId ?? null,
+    moduleIds: Object.freeze([...(entity.moduleIds ?? [])])
   });
 }
 
@@ -299,11 +307,12 @@ export function collectGitChanges({
 }
 
 function changedModulesFromDiff(diff) {
-  return new Set(
-    [...(diff?.added ?? []), ...(diff?.modified ?? []), ...(diff?.removed ?? [])]
-      .map((entry) => entry.moduleId)
-      .filter(Boolean)
-  );
+  const modules = new Set();
+  for (const entry of [...(diff?.added ?? []), ...(diff?.modified ?? []), ...(diff?.removed ?? [])]) {
+    if (entry.moduleId) modules.add(entry.moduleId);
+    for (const moduleId of entry.moduleIds ?? []) modules.add(moduleId);
+  }
+  return modules;
 }
 
 function safeImpact({ knowledge, gitChanges, semanticDiff }) {
