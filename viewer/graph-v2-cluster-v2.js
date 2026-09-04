@@ -601,7 +601,7 @@
       var paths = (component.implementationPaths || []).slice(0, 10);
       var radius = Math.min(132, 62 + Math.sqrt(Math.max(1, paths.length)) * 18);
       paths.forEach(function (implementationPath, index) {
-        var id = "implementation:" + component.id + ":" + index;
+        var id = "implementation:" + component.id + ":" + implementationPath;
         var position = scatter(parent, id, "implementation", radius);
         nodes.push({
           id: id,
@@ -614,7 +614,7 @@
           source: { component: component, path: implementationPath }
         });
         edges.push({
-          id: "contains-implementation:" + component.id + ":" + index,
+          id: "contains-implementation:" + component.id + ":" + implementationPath,
           from: component.id,
           to: id,
           type: "detail",
