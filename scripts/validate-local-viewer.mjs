@@ -32,6 +32,7 @@ assert.ok(html.includes('id="liveLocal"'), "viewer must expose LIVE LOCAL badge"
 assert.ok(html.includes('id="localStatus"'), "viewer must expose local status button");
 assert.ok(html.includes('id="refreshLocal"'), "viewer must expose local refresh button");
 assert.ok(html.includes('<script src="viewer/local-live.js"></script>'), "viewer must load the local-live adapter");
+assert.ok(html.includes("connect-src 'self' http://127.0.0.1:8765"), "legacy CSP must permit the loopback bridge");
 assert.ok(liveSource.includes('apiUrl("/api/workspace-status")'), "legacy local adapter must poll workspace status through the local bridge base");
 assert.ok(liveSource.includes('apiUrl("/api/refresh")'), "legacy local adapter must trigger index refresh through the local bridge base");
 assert.ok(liveSource.includes('apiUrl("/api/viewer-settings")'), "legacy viewer must use shared local viewer settings");
@@ -81,11 +82,13 @@ try {
     method: "OPTIONS",
     headers: {
       Origin: "http://127.0.0.1:54321",
-      "Access-Control-Request-Method": "POST"
+      "Access-Control-Request-Method": "POST",
+      "Access-Control-Request-Private-Network": "true"
     }
   });
   assert.equal(preflight.status, 204);
   assert.equal(preflight.headers.get("access-control-allow-origin"), "http://127.0.0.1:54321");
+  assert.equal(preflight.headers.get("access-control-allow-private-network"), "true");
 
   const blocked = await fetch(`${base}/api/health`, {
     headers: { Origin: "https://example.com" }
@@ -159,7 +162,7 @@ try {
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ type: "file_read", file: "/Users/example/private.java" })
   });
-  assert.equal(absolutePathEvent.status, 500, "absolute local paths must be rejected rather than stored");
+  assert.equal(absolutePathEvent.status, 400, "absolute local paths must be rejected rather than stored");
 
   const status = await fetch(`${base}/api/workspace-status`);
   assert.equal(status.status, 200);
