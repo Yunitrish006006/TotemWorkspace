@@ -49,9 +49,15 @@
     </div>
     <button id="contracts" type="button">關係</button>
   </header>
-  <div class="prompt-bar" id="promptBar" hidden>
-    <input id="promptInput" type="text" maxlength="8192" autocomplete="off" placeholder="輸入 Prompt（CODEX READY 時直接建立 task；OFF/UNAVAILABLE 不會假裝執行）">
-    <button id="promptSubmit" type="button">送出</button>
+  <div class="prompt-shell" id="promptBar" hidden>
+    <div class="prompt-bar">
+      <textarea id="promptInput" maxlength="8192" rows="3" autocomplete="off" placeholder="輸入多行 Prompt（Ctrl/Cmd+Enter 送出；下方顯示 Codex CLI 等級執行紀錄）"></textarea>
+      <button id="promptSubmit" type="button">送出</button>
+    </div>
+    <section id="codexConsole" class="codex-console" hidden>
+      <div id="codexConsoleHeader" class="codex-console-header">CODEX CONSOLE</div>
+      <div id="codexConsoleBody" class="codex-console-body"></div>
+    </section>
   </div>
   <div class="replay-bar" id="replayBar" hidden>
     <b id="replayLabel">REPLAY · LIVE</b>
