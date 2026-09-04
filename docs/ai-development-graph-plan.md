@@ -511,3 +511,116 @@ last task failed
 
 Phase 6 will make task/activity sessions durable and replayable; Phase 5 keeps the
 live Codex task state in Bridge memory.
+
+## Phase 6 — Development Replay implementation
+
+Phase 6 turns the live activity overlay into a durable, local-only development
+history.
+
+### Durable replay state
+
+The Bridge persists replay metadata under:
+
+```text
+.totem-index/development-replay.json
+```
+
+The file contains only bounded browser-safe metadata:
+
+- normalized activity events,
+- monotonically increasing sequence numbers,
+- task sessions,
+- commit / PR / deployment milestones,
+- semantic change checkpoints,
+- public graph entity/relationship identity needed for historical visibility.
+
+It does not archive source bodies, credentials, tokens, or absolute local
+repository paths.
+
+Bridge startup restores the latest sequence and recent activity tail from this
+file, so a restart does not reset the timeline.
+
+### Sessions and milestones
+
+A `task_started` event creates a replay session keyed by the stable task ID.
+Subsequent task-scoped activity is attached to that session until
+`task_completed` or `task_failed`.
+
+Milestone event types are:
+
+```text
+commit_created
+pr_created
+pr_merged
+deployment_started
+deployment_completed
+deployment_failed
+```
+
+The Codex adapter maps successful structured `command_execution` items for
+`git commit`, `gh pr create`, and `gh pr merge` to the corresponding
+milestones. Deployment milestones remain explicit activity events rather than
+being guessed from ambiguous command text.
+
+### Replay API
+
+The loopback Bridge exposes:
+
+```text
+GET /api/replay
+GET /api/replay/frame?sequence=<N>
+```
+
+The timeline endpoint returns sequence bounds, session summaries, event count and
+milestones. A frame reconstructs:
+
+- latest Agent Activity at or before the requested sequence,
+- latest semantic change checkpoint at or before that sequence,
+- verification state folded from durable `test_started / test_passed / test_failed`
+  events up to that sequence,
+- historical graph entity/relationship membership,
+- milestones visible up to that sequence.
+
+The replay read path never mutates live verification or change state.
+
+### Graph reconstruction
+
+Phase 3 refresh now records a checkpoint immediately before refresh and again
+after the new semantic graph/change result is available. The maintained viewers
+use the checkpoint entity set to suppress nodes/edges that did not exist at the
+selected historical sequence.
+
+The current implementation reconstructs historical visibility and overlays on the
+shared graph renderer; it does not store source bodies or create a second
+architecture source of truth.
+
+### Viewer behavior
+
+Both maintained viewers provide the same timeline semantics:
+
+```text
+REPLAY · LIVE
+  └─ drag sequence slider
+       ├─ Activity focus rewinds
+       ├─ CHANGE / impact rewinds
+       ├─ VERIFY pass/run/fail rewinds
+       └─ graph entity visibility rewinds
+```
+
+Live polling continues while the user is viewing history, but does not overwrite
+the selected historical frame. Pressing `LIVE` returns immediately to the latest
+live state.
+
+`replayEnabled = false` hides the replay surface without disabling Prompt,
+Agent Activity, change intelligence or verification.
+
+### CLI
+
+```sh
+node scripts/totem-activity.mjs status
+node scripts/totem-activity.mjs replay
+node scripts/totem-activity.mjs replay <sequence>
+```
+
+`status` includes replay sequence/event/session/milestone counts; `replay`
+prints the timeline or one reconstructed frame.
