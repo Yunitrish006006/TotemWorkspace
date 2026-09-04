@@ -142,6 +142,45 @@ void main() {
           200,
         );
       }
+      if (request.url.path == '/api/change-intelligence') {
+        return http.Response(jsonEncode(<String, Object>{
+            'schemaVersion': 1,
+            'generatedAt': 'now',
+            'before': <String, Object>{'entityCount': 10},
+            'after': <String, Object>{'entityCount': 12},
+            'gitChanges': <Object>[
+              <String, Object>{
+                'moduleId': 'totem-core',
+                'repoName': 'TotemCore',
+                'status': 'M',
+                'path': 'src/main/java/example/Core.java',
+                'componentIds': <String>['component:totem-core:api'],
+                'featureIds': <String>['totem-core.feature-5'],
+                'implementationIds': <String>['implementation:component:totem-core:api:src/main/java/example/Core.java'],
+              },
+            ],
+            'semanticDiff': <String, Object>{
+              'added': <Object>[],
+              'modified': <Object>[
+                <String, Object>{
+                  'id': 'component:totem-core:api',
+                  'type': 'component',
+                  'moduleId': 'totem-core',
+                  'moduleIds': <String>['totem-core'],
+                },
+              ],
+              'removed': <Object>[],
+              'changedEntityIds': <String>['component:totem-core:api'],
+            },
+            'impact': <String, Object>{
+              'touchedModules': <String>['totem-core'],
+              'impactedModules': <String>['totem-core', 'totem-alchemy'],
+              'contractIds': <String>['hard:totem-alchemy:totem-core'],
+              'risks': <String>['shared-contract'],
+              'requiresIndependentReview': true,
+            },
+          }), 200);
+      }
       if (request.url.path == '/api/activity') {
         return http.Response(
           jsonEncode(<String, Object>{
@@ -179,7 +218,49 @@ void main() {
         );
       }
       if (request.url.path == '/api/refresh') {
-        return http.Response(jsonEncode(<String, Object>{'status': 'ok'}), 200);
+        return http.Response(
+          jsonEncode(<String, Object>{
+            'status': 'ok',
+            'changeIntelligence': <String, Object>{
+            'schemaVersion': 1,
+            'generatedAt': 'now',
+            'before': <String, Object>{'entityCount': 10},
+            'after': <String, Object>{'entityCount': 12},
+            'gitChanges': <Object>[
+              <String, Object>{
+                'moduleId': 'totem-core',
+                'repoName': 'TotemCore',
+                'status': 'M',
+                'path': 'src/main/java/example/Core.java',
+                'componentIds': <String>['component:totem-core:api'],
+                'featureIds': <String>['totem-core.feature-5'],
+                'implementationIds': <String>['implementation:component:totem-core:api:src/main/java/example/Core.java'],
+              },
+            ],
+            'semanticDiff': <String, Object>{
+              'added': <Object>[],
+              'modified': <Object>[
+                <String, Object>{
+                  'id': 'component:totem-core:api',
+                  'type': 'component',
+                  'moduleId': 'totem-core',
+                  'moduleIds': <String>['totem-core'],
+                },
+              ],
+              'removed': <Object>[],
+              'changedEntityIds': <String>['component:totem-core:api'],
+            },
+            'impact': <String, Object>{
+              'touchedModules': <String>['totem-core'],
+              'impactedModules': <String>['totem-core', 'totem-alchemy'],
+              'contractIds': <String>['hard:totem-alchemy:totem-core'],
+              'risks': <String>['shared-contract'],
+              'requiresIndependentReview': true,
+            },
+          },
+          }),
+          200,
+        );
       }
       return http.Response('not found', 404);
     });
@@ -204,7 +285,15 @@ void main() {
     final promptEvent = await client.submitPrompt('inspect outline api');
     expect(promptEvent.type, 'prompt_submitted');
 
-    await client.refresh(modules: const <String>['totem-core']);
+    final initialChange = await client.changeIntelligence();
+    expect(initialChange.gitChanges.single.moduleId, 'totem-core');
+    expect(initialChange.semanticDiff.changedEntityIds, contains('component:totem-core:api'));
+    expect(initialChange.impact.impactedModules, contains('totem-alchemy'));
+
+    final refreshChange = await client.refresh(modules: const <String>['totem-core']);
+    expect(refreshChange.hasChanges, isTrue);
+    expect(refreshChange.beforeEntityCount, 10);
+    expect(refreshChange.afterEntityCount, 12);
 
     final settingsUpdate = requests.singleWhere(
       (request) => request.url.path == '/api/viewer-settings' && request.method == 'POST',
