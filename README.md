@@ -120,6 +120,8 @@ Phase 3 加入 change intelligence：Local Bridge 在重新索引前後建立 se
 
 Phase 4 加入 Verification Graph：實際被 code index 掃到的 Test / GameTest / E2E 檔案才會成為 Test entity，穩定 ID 為 `test:<module-id>:<repo-relative-path>`；`test-matrix.json` 只代表 required verification，不會被當成已通過證據。Feature、contract/API 與 shared capability 可產生 `validated-by` 關係；Local Bridge 透過 `/api/verification-state` 保存與傳送 `test_started / test_passed / test_failed` 最新狀態，Flutter 與 legacy 3D 同步顯示 Test LOD、驗證線與 pass/run/fail highlighting。
 
+Phase 5 加入 opt-in Codex Agent Adapter：只有主機端設定 `TOTEM_AGENT_ADAPTER=codex` 時，Prompt 才會透過 `codex exec --json` 建立真實 Codex task；瀏覽器不能指定 executable、cwd、sandbox、model 或 CLI flags。Bridge 會輸出 `task_started / task_completed / task_failed`，把 Codex JSONL 的 file change / MCP activity 映射回既有 activity graph，task 結束後自動重新索引並更新 Phase 3 change intelligence。Adapter 未啟用或 Codex 不可用時，Prompt 只記錄為 submitted，不會假裝 agent 已開始。
+
 ### VS Code Remote-SSH / tmux Bridge
 
 遠端開發時，Bridge 預設使用 `127.0.0.1:18765`，並可由 repository 內的 background controller 執行；有 tmux 時優先使用 tmux，否則 fallback 到 nohup：
@@ -130,6 +132,20 @@ bash tools/remote/bridge.sh start
 bash tools/remote/bridge.sh status
 bash tools/remote/bridge.sh logs
 ```
+
+要讓 Viewer Prompt 直接交給 Codex，先確認遠端使用者可執行 `codex --version`，再以主機環境啟用：
+
+```sh
+export TOTEM_AGENT_ADAPTER=codex
+export TOTEM_CODEX_CWD="$HOME/workspace"
+export TOTEM_CODEX_SANDBOX=workspace-write
+bash tools/remote/bridge.sh doctor
+bash tools/remote/bridge.sh restart
+node scripts/totem-activity.mjs prompt on
+node scripts/totem-activity.mjs status
+```
+
+`TOTEM_CODEX_MODEL` 可選；未設定時沿用 Codex 本身的 model 設定。Bridge 不會自動加入 `--full-auto` 或 dangerous approval/sandbox bypass。
 
 `start` 會對 `viewer_flutter/` 做內容指紋；build 缺失或過期時自動執行 `flutter build web --wasm --base-href /`。因此直接開 `http://127.0.0.1:18765/` 就是 Flutter，舊 JS 位於 `/legacy/`。
 
