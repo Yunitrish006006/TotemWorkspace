@@ -95,7 +95,7 @@ const knowledge = {
 };
 
 const small = buildOrchestrationPlan({
-  query: "Alpha local text",
+  query: "local copy typo",
   moduleId: "totem-alpha",
   knowledge
 });
