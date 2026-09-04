@@ -90,12 +90,27 @@ Command Palette
 
 The task executes on the remote host because the VS Code workspace is opened through Remote-SSH.
 
-## tmux requirement
+## Background backend
 
-Check first:
+The controller uses:
 
-```bash
-tmux -V
+```text
+auto
+  ├─ tmux, when installed
+  └─ nohup + .totem-index/remote-bridge.pid, otherwise
 ```
 
-If `tmux` is not installed and the account cannot use sudo, an administrator needs to install it or provide an equivalent user-level process supervisor.
+So sudo is not required just to keep the Bridge running. Check the selected backend with:
+
+```bash
+bash tools/remote/bridge.sh doctor
+```
+
+You can force a backend when debugging:
+
+```bash
+TOTEM_BRIDGE_BACKEND=tmux bash tools/remote/bridge.sh start
+TOTEM_BRIDGE_BACKEND=nohup bash tools/remote/bridge.sh start
+```
+
+`attach` is available only for the tmux backend. For the nohup backend use `logs` or `follow`.
