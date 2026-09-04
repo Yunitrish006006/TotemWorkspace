@@ -103,6 +103,12 @@ const intelligence = buildChangeIntelligence({
   gitChanges
 });
 assert.ok(intelligence.semanticDiff.changedEntityIds.length >= 3);
+assert.ok(intelligence.before.entities.length === intelligence.before.entityCount);
+assert.ok(intelligence.after.entities.length === intelligence.after.entityCount);
+assert.ok(intelligence.affectedEntityIds.includes("totem-alchemy"));
+assert.ok(intelligence.affectedEntityIds.includes("totem-alchemy.feature-1"));
+assert.ok(intelligence.affectedEntityIds.includes("component:totem-alchemy:brewing"));
+assert.ok(intelligence.affectedEntityIds.includes("implementation:component:totem-alchemy:brewing:src/main/java/example/B.java"));
 assert.ok(intelligence.impact.touchedModules.includes("totem-alchemy"));
 assert.ok(intelligence.impact.impactedModules.includes("totem-core"));
 
@@ -154,6 +160,7 @@ assert.ok(serverSource.includes('type: "git_diff_updated"'), "semantic refresh m
 
 for (const fragment of [
   "class ChangeIntelligence",
+  "affectedEntityIds",
   "Future<ChangeIntelligence> changeIntelligence()",
   "Future<ChangeIntelligence> refresh(",
 ]) {
@@ -183,6 +190,7 @@ for (const fragment of [
   'document.getElementById("changeIntelligence")',
   'fetch(apiUrl("/api/change-intelligence")',
   "window.__TOTEM_CHANGE_INTELLIGENCE__",
+  "payload.affectedEntityIds",
   "settings.changeAnimationsEnabled",
 ]) {
   assert.ok(legacyLive.includes(fragment), `legacy Phase 3 live adapter is missing: ${fragment}`);
