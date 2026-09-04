@@ -84,6 +84,8 @@ assert.ok(source.includes('/manual|手冊/i'), "manual capability endpoint must 
 assert.ok(source.includes('capability.family === "manual"'), "manual fallback must apply only to manual capabilities");
 assert.ok(source.includes("capability.consumerFeatureId && featureMap.get(capability.consumerFeatureId)"), "shared capabilities must honor explicit consumer feature endpoints");
 assert.ok(source.includes("return inferred.id"), "expanded consumers must retarget shared capability edges to curated features");
+assert.ok(source.includes("return capability.consumerModuleId"), "collapsed consumers must remain valid module-level shared-capability endpoints");
+assert.ok(source.includes("!expanded.has(capability.consumerModuleId) && !expanded.has(capability.providerModuleId)"), "shared capability edges must remain visible when either endpoint is expanded");
 assert.ok(source.includes("syntheticCaps"), "capabilities without a curated consumer feature must still retain a synthetic capability point");
 assert.ok(source.includes("capability.providerFeatureId"), "provider-side Core capability feature retargeting must remain intact");
 
