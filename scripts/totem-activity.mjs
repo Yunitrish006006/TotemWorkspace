@@ -18,7 +18,7 @@ Emit options:
   --symbol <symbol>
   --summary <text>
   --status <status>
-  --test <test-name>
+  --test <stable-test-id-or-repo-relative-path>
   --task <task-id>
 
 Environment:
@@ -72,16 +72,22 @@ async function main(argv) {
   }
 
   if (command === "status") {
-    const [health, settings, activity] = await Promise.all([
+    const [health, settings, activity, verification] = await Promise.all([
       request("/api/health"),
       request("/api/viewer-settings"),
-      request("/api/activity?after=0")
+      request("/api/activity?after=0"),
+      request("/api/verification-state")
     ]);
     process.stdout.write(`${JSON.stringify({
       health,
       settings,
       latestSequence: activity.latestSequence,
-      latestEvent: activity.events?.at(-1) ?? null
+      latestEvent: activity.events?.at(-1) ?? null,
+      verification: {
+        summary: verification.summary,
+        activePlan: verification.activePlan,
+        latestEntry: verification.entries?.at(-1) ?? null
+      }
     }, null, 2)}\n`);
     return;
   }
