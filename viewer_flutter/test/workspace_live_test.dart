@@ -198,7 +198,7 @@ void main() {
       }
       if (request.url.path == '/api/agent-adapter') {
         return http.Response(
-          jsonEncode(<String, Object>{
+          jsonEncode(<String, Object?>{
             'schemaVersion': 1,
             'kind': 'codex',
             'configured': true,
