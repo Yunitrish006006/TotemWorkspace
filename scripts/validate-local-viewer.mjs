@@ -226,6 +226,17 @@ try {
   });
   assert.equal(absolutePathEvent.status, 400, "absolute local paths must be rejected rather than stored");
 
+  const absoluteTestEvent = await fetch(`${base}/api/activity`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      type: "test_failed",
+      moduleId: "totem-core",
+      test: ["/home", "thomas", "workspace", "TotemCore", "src", "test", "PrivateTest.java"].join("/")
+    })
+  });
+  assert.equal(absoluteTestEvent.status, 400, "verification test targets must not expose absolute local paths");
+
   const status = await fetch(`${base}/api/workspace-status`);
   assert.equal(status.status, 200);
   const payload = await status.json();
