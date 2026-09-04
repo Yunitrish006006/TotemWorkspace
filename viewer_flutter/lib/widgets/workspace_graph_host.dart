@@ -340,6 +340,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
   Widget build(BuildContext context) {
     final live = _live;
     final isLocal = _client != null && live != null;
+    final latestActivity = _activity.isEmpty ? null : _activity.last;
     return Scaffold(
       backgroundColor: const Color(0xFF050B14),
       body: Column(
@@ -364,7 +365,14 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
               submitting: _submittingPrompt,
               onSubmit: _submitPrompt,
             ),
-          Expanded(child: GraphView(data: _data)),
+          Expanded(
+            child: GraphView(
+              data: _data,
+              activityFeatureId: latestActivity?.featureId,
+              activityModuleId: latestActivity?.moduleId,
+              activityType: latestActivity?.type,
+            ),
+          ),
         ],
       ),
     );
