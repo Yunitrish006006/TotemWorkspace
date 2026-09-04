@@ -61,6 +61,12 @@ jobs:
           TOTEM_REPOS_ROOT: ${{ github.workspace }}/..
         run: node scripts/render-flutter-graph.mjs
 
+      - name: Validate live Core API shared capability relations
+        env:
+          TOTEM_WORKSPACE_ROOT: ${{ github.workspace }}
+          TOTEM_REPOS_ROOT: ${{ github.workspace }}/..
+        run: node scripts/validate-live-core-api-capabilities.mjs
+
       - name: Upload code inventory report
         uses: actions/upload-artifact@v4
         with:
