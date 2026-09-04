@@ -147,6 +147,7 @@ export function semanticSnapshot(graph) {
   return Object.freeze({
     schemaVersion: 1,
     generatedAt: graph?.generatedAt ?? null,
+    entityCount: entities.length,
     entities: Object.freeze(entities)
   });
 }
@@ -346,21 +347,23 @@ export function buildChangeIntelligence({
   const after = semanticSnapshot(afterGraph);
   const semanticDiff = diffSemanticSnapshots(before, after);
   const mappedGitChanges = mapGitChangesToSemantic(gitChanges, { beforeGraph, afterGraph });
+  const affectedEntityIds = new Set(semanticDiff.changedEntityIds);
+  for (const change of mappedGitChanges) {
+    affectedEntityIds.add(change.moduleId);
+    for (const id of change.featureIds) affectedEntityIds.add(id);
+    for (const id of change.componentIds) affectedEntityIds.add(id);
+    for (const id of change.implementationIds) affectedEntityIds.add(id);
+  }
   const impact = safeImpact({ knowledge, gitChanges: mappedGitChanges, semanticDiff });
 
   return Object.freeze({
     schemaVersion: 1,
     generatedAt: new Date().toISOString(),
-    before: Object.freeze({
-      generatedAt: before.generatedAt,
-      entityCount: before.entities.length
-    }),
-    after: Object.freeze({
-      generatedAt: after.generatedAt,
-      entityCount: after.entities.length
-    }),
+    before,
+    after,
     gitChanges: mappedGitChanges,
     semanticDiff,
+    affectedEntityIds: Object.freeze([...affectedEntityIds].sort()),
     impact
   });
 }
