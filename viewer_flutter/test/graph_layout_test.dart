@@ -189,8 +189,16 @@ void main() {
 
     expect(scene.edges.any((edge) => edge.id == 'event:a:b'), isFalse);
     expect(
-      scene.edges.any((edge) => edge.from == 'totem-a' || edge.to == 'totem-a'),
+      scene.edges.any((edge) =>
+          edge.type != 'detail' && (edge.from == 'totem-a' || edge.to == 'totem-a')),
       isFalse,
+    );
+    expect(
+      scene.edges.any((edge) =>
+          edge.type == 'detail' &&
+          edge.from == 'totem-a' &&
+          edge.to == 'component:totem-a:runtime'),
+      isTrue,
     );
   });
 
