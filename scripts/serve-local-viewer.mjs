@@ -12,6 +12,7 @@ const HERE = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(HERE, "..");
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 18765;
+const FLUTTER_WEB_ROOT = path.join(ROOT, "viewer_flutter", "build", "web");
 const BODY_LIMIT = 64 * 1024;
 const PROMPT_LIMIT = 8 * 1024;
 const ACTIVITY_LIMIT = 500;
@@ -234,27 +235,63 @@ async function readJsonBody(req) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8"));
 }
 
-function safeFilePath(urlPath) {
-  const decoded = decodeURIComponent(urlPath === "/" ? "/graph-v2.html" : urlPath);
-  const normalized = path.normalize(decoded).replace(/^([/\\])+/, "");
-  const resolved = path.resolve(ROOT, normalized);
-  if (resolved !== ROOT && !resolved.startsWith(`${ROOT}${path.sep}`)) return null;
+function safeJoin(base, relativePath) {
+  const normalized = path.normalize(relativePath).replace(/^([/\\])+/, "");
+  const resolved = path.resolve(base, normalized);
+  if (resolved !== base && !resolved.startsWith(`${base}${path.sep}`)) return null;
   return resolved;
 }
 
-function serveStatic(req, res, pathname) {
-  const filePath = safeFilePath(pathname);
+function staticFilePath(urlPath, flutterRoot = FLUTTER_WEB_ROOT) {
+  const decoded = decodeURIComponent(urlPath);
+  if (decoded === "/graph-v2.html") return path.join(ROOT, "graph-v2.html");
+  if (decoded === "/legacy" || decoded === "/legacy/") return path.join(ROOT, "graph-v2.html");
+  if (decoded.startsWith("/legacy/")) {
+    const legacyRelative = decoded.slice("/legacy/".length);
+    return safeJoin(ROOT, legacyRelative);
+  }
+
+  const flutterRelative = decoded === "/" ? "index.html" : decoded.replace(/^\/+/, "");
+  return safeJoin(flutterRoot, flutterRelative);
+}
+
+function serveStatic(req, res, pathname, { flutterRoot = FLUTTER_WEB_ROOT } = {}) {
+  const filePath = staticFilePath(pathname, flutterRoot);
   if (!filePath) {
     json(res, 403, { error: "forbidden" });
     return;
   }
+
+  if (!fs.existsSync(flutterRoot) && !pathname.startsWith("/legacy") && pathname !== "/graph-v2.html") {
+    json(res, 503, {
+      error: "Flutter viewer build is missing",
+      hint: "Run bash tools/remote/bridge.sh start so the remote controller can build viewer_flutter/build/web."
+    });
+    return;
+  }
+
   let stat;
   try {
     stat = fs.statSync(filePath);
   } catch {
+    if (!pathname.startsWith("/legacy") && pathname !== "/graph-v2.html") {
+      const fallback = path.join(flutterRoot, "index.html");
+      if (fs.existsSync(fallback)) {
+        const body = fs.readFileSync(fallback);
+        res.writeHead(200, {
+          "content-type": "text/html; charset=utf-8",
+          "content-length": body.length,
+          "cache-control": "no-store",
+          "x-content-type-options": "nosniff"
+        });
+        res.end(body);
+        return;
+      }
+    }
     json(res, 404, { error: "not found" });
     return;
   }
+
   const finalPath = stat.isDirectory() ? path.join(filePath, "index.html") : filePath;
   try {
     const body = fs.readFileSync(finalPath);
@@ -375,7 +412,7 @@ async function handleApi(req, res, url) {
   return false;
 }
 
-export function createLocalViewerServer() {
+export function createLocalViewerServer({ flutterRoot = FLUTTER_WEB_ROOT } = {}) {
   return http.createServer(async (req, res) => {
     try {
       const base = `http://${req.headers.host || `${DEFAULT_HOST}:${DEFAULT_PORT}`}`;
@@ -398,7 +435,7 @@ export function createLocalViewerServer() {
         json(res, 405, { error: "method not allowed" });
         return;
       }
-      serveStatic(req, res, url.pathname);
+      serveStatic(req, res, url.pathname, { flutterRoot });
     } catch (error) {
       json(res, 500, { error: error instanceof Error ? error.message : String(error) });
     }

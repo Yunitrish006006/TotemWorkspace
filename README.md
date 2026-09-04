@@ -98,7 +98,7 @@ flutter pub get
 flutter run -d chrome
 ```
 
-Local Bridge 固定綁定 `127.0.0.1:18765`。Flutter production root 與 `/legacy/` 使用同一套本機設定／activity contract；公開 Pages 只允許連回 loopback bridge，不會把本機 source、未提交 diff 或絕對路徑打包進 Pages。
+Local Bridge 固定綁定 `127.0.0.1:18765`。現在本機／Remote-SSH Bridge 與 GitHub Pages 使用相同路由：`/` 是 Flutter production UI、`/legacy/` 是舊 JavaScript rollback/debug surface、`/api/*` 是 loopback API。公開 Pages 只允許連回 loopback bridge，不會把本機 source、未提交 diff 或絕對路徑打包進 Pages。
 
 Prompt 預設關閉，而且只控制 Prompt 輸入框；Agent Activity 與 Graph 功能保持獨立。連上 Local Bridge 後可直接從 Viewer 切換 Prompt，也可用 CLI：
 
@@ -116,7 +116,7 @@ Phase 1 的 Prompt intake 只會寫入本機 activity stream；在 Agent Adapter
 
 ### VS Code Remote-SSH / tmux Bridge
 
-遠端開發時，Bridge 預設使用 `127.0.0.1:18765`，並可由 repository 內的 tmux controller 背景執行：
+遠端開發時，Bridge 預設使用 `127.0.0.1:18765`，並可由 repository 內的 background controller 執行；有 tmux 時優先使用 tmux，否則 fallback 到 nohup：
 
 ```sh
 bash tools/remote/bridge.sh doctor
@@ -124,6 +124,8 @@ bash tools/remote/bridge.sh start
 bash tools/remote/bridge.sh status
 bash tools/remote/bridge.sh logs
 ```
+
+`start` 會對 `viewer_flutter/` 做內容指紋；build 缺失或過期時自動執行 `flutter build web --wasm --base-href /`。因此直接開 `http://127.0.0.1:18765/` 就是 Flutter，舊 JS 位於 `/legacy/`。
 
 VS Code Remote-SSH 連線可在 Mac 的 `~/.ssh/config` 使用：
 

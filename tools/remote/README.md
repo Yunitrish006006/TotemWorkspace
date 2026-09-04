@@ -6,10 +6,12 @@ The supported setup is:
 
 ```text
 Mac browser
-  -> 127.0.0.1:18765
+  -> 127.0.0.1:18765/
+  -> Flutter production UI
+  -> /api/* local workspace API
+  -> /legacy/ JavaScript rollback/debug viewer
   -> VS Code Remote-SSH LocalForward
   -> remote 127.0.0.1:18765
-  -> TotemWorkspace Bridge in tmux
 ```
 
 The Bridge remains loopback-only. Do not bind it to `0.0.0.0`.
@@ -36,6 +38,24 @@ From a VS Code terminal connected to the remote server:
 ```bash
 bash tools/remote/bridge.sh doctor
 bash tools/remote/bridge.sh start
+```
+
+On `start`, the controller fingerprints `viewer_flutter/`. If the local web build is missing or stale it runs:
+
+```bash
+cd viewer_flutter
+flutter pub get
+flutter build web --wasm --base-href /
+```
+
+A matching build is reused on restart. The build stamp lives under ignored `.totem-index/`.
+
+After startup:
+
+```text
+http://127.0.0.1:18765/         Flutter
+http://127.0.0.1:18765/legacy/  Legacy JavaScript viewer
+http://127.0.0.1:18765/api/...  Local Bridge API
 ```
 
 The default tmux session is:
@@ -114,3 +134,17 @@ TOTEM_BRIDGE_BACKEND=nohup bash tools/remote/bridge.sh start
 ```
 
 `attach` is available only for the tmux backend. For the nohup backend use `logs` or `follow`.
+
+## Flutter build modes
+
+Default:
+
+```text
+TOTEM_FLUTTER_BUILD_MODE=auto
+```
+
+- `auto`: rebuild only when the Flutter source fingerprint changes.
+- `always`: rebuild on every Bridge start.
+- `never`: never invoke Flutter; requires an existing `viewer_flutter/build/web/index.html`.
+
+If the remote account does not have Flutter installed yet, `doctor` reports that condition before startup.
