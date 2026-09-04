@@ -2,6 +2,7 @@ import path from "node:path";
 import { loadCodeIndex } from "./code-index.mjs";
 import { buildCodeInventory } from "./code-inventory.mjs";
 import { loadKnowledge } from "./workspace-knowledge.mjs";
+import { buildVerificationGraph } from "./verification-graph.mjs";
 
 const FILE_LIMIT_PER_MODULE = 42;
 const SYMBOL_LIMIT_PER_FILE = 6;
@@ -326,6 +327,13 @@ export function buildGraphViewModel({ knowledge = loadKnowledge(), index = loadC
   const code = buildCodeDetailGraph({ knowledge, index });
   const codeInventory = buildCodeInventory({ knowledge, index });
   const components = semanticComponents(codeInventory);
+  const capabilities = sharedCapabilities(knowledge, index, codeInventory);
+  const verification = buildVerificationGraph({
+    knowledge,
+    index,
+    components,
+    sharedCapabilities: capabilities
+  });
   const externalIds = new Set();
   for (const contract of knowledge.contracts) {
     for (const node of [contract.from, contract.to, ...(contract.relatedNodes ?? [])]) {
@@ -339,7 +347,7 @@ export function buildGraphViewModel({ knowledge = loadKnowledge(), index = loadC
   });
 
   return Object.freeze({
-    schemaVersion: 4,
+    schemaVersion: 5,
     generatedAt: graphTimestamp(knowledge, index),
     snapshot: knowledge.snapshot,
     modules: Object.freeze(knowledge.modules.map((module) => Object.freeze({
@@ -373,8 +381,9 @@ export function buildGraphViewModel({ knowledge = loadKnowledge(), index = loadC
       protocol: contract.protocol ?? null,
       featureIds: contract.featureIds ?? []
     }))),
-    sharedCapabilities: sharedCapabilities(knowledge, index, codeInventory),
+    sharedCapabilities: capabilities,
     components,
+    verification,
     code,
     codeInventory
   });
