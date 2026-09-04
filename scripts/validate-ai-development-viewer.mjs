@@ -66,7 +66,7 @@ for (const behavior of [
   'apiUrl("/api/prompt")',
   'apiUrl("/api/agent-adapter")',
   'apiUrl("/api/replay")',
-  'apiUrl("/api/replay/frame?sequence=")',
+  'apiUrl("/api/replay/frame?sequence=" +',
   'window.__TOTEM_REPLAY_GRAPH_STATE__ = frame.graphState || null',
   'settings.agentActivityEnabled === false',
   'settings.promptEnabled === true',
