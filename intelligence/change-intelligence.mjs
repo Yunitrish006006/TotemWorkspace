@@ -103,19 +103,20 @@ export function semanticSnapshot(graph) {
     }));
   }
 
-  for (const node of graph?.code?.nodes ?? []) {
-    if (node.type !== "code-file") continue;
-    entities.push(entityRecord({
-      id: node.id,
-      type: "implementation",
-      moduleId: node.moduleId ?? null,
-      payload: {
-        moduleId: node.moduleId,
-        category: node.category,
-        path: normalizePath(node.path),
-        symbolCount: node.symbolCount ?? 0
-      }
-    }));
+  for (const component of graph?.components ?? []) {
+    for (const implementationPath of (component.implementationPaths ?? []).slice(0, 10)) {
+      const normalized = normalizePath(implementationPath);
+      entities.push(entityRecord({
+        id: `implementation:${component.id}:${normalized}`,
+        type: "implementation",
+        moduleId: component.moduleId ?? null,
+        payload: {
+          componentId: component.id,
+          moduleId: component.moduleId,
+          path: normalized
+        }
+      }));
+    }
   }
 
   for (const contract of graph?.contracts ?? []) {
@@ -192,16 +193,13 @@ export function diffSemanticSnapshots(before, after) {
 }
 
 function graphSemanticCoordinates(graph) {
-  const components = graph?.components ?? [];
-  const implementations = (graph?.code?.nodes ?? []).filter((node) => node.type === "code-file");
-  return { components, implementations };
+  return { components: graph?.components ?? [] };
 }
 
 export function mapGitChangesToSemantic(gitChanges, { beforeGraph, afterGraph } = {}) {
   const before = graphSemanticCoordinates(beforeGraph);
   const after = graphSemanticCoordinates(afterGraph);
   const components = [...before.components, ...after.components];
-  const implementations = [...before.implementations, ...after.implementations];
 
   return Object.freeze((gitChanges ?? []).map((change) => {
     const changedPath = normalizePath(change.path);
@@ -215,11 +213,7 @@ export function mapGitChangesToSemantic(gitChanges, { beforeGraph, afterGraph } 
       if (!paths.includes(changedPath)) continue;
       componentIds.add(component.id);
       for (const featureId of component.featureIds ?? []) featureIds.add(featureId);
-    }
-
-    for (const implementation of implementations) {
-      if (implementation.moduleId !== change.moduleId) continue;
-      if (normalizePath(implementation.path) === changedPath) implementationIds.add(implementation.id);
+      implementationIds.add(`implementation:${component.id}:${changedPath}`);
     }
 
     return Object.freeze({
