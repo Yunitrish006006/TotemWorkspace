@@ -17,6 +17,7 @@
   var active = false;
   var polling = null;
   var activityPolling = null;
+  var activityAnimation = null;
   var activitySequence = 0;
   var localApiBase = null;
 
@@ -112,15 +113,24 @@
     renderSettings(await response.json());
   }
 
+  function requestAgentDraw() {
+    var renderer = window.__TOTEM_CLUSTER_3D_V2__;
+    if (renderer && typeof renderer.draw === "function") renderer.draw();
+  }
+
   function renderActivity(event) {
     if (!event || !settings || settings.agentActivityEnabled === false) {
       activityBadge.hidden = true;
+      window.__TOTEM_AGENT_ACTIVITY__ = null;
       return;
     }
+    window.__TOTEM_AGENT_ACTIVITY__ = event;
     var target = event.featureId || event.componentId || event.moduleId || event.file || event.symbol || event.test || "";
     activityBadge.hidden = false;
     activityBadge.textContent = "AGENT · " + event.type + (target ? " · " + target : "") + (event.summary ? " · " + event.summary : "");
     activityBadge.title = event.timestamp || "";
+    requestAgentDraw();
+    if (!activityAnimation) activityAnimation = window.setInterval(requestAgentDraw, 80);
   }
 
   async function pollActivity() {
