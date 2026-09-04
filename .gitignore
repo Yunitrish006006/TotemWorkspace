@@ -11,3 +11,6 @@ out/
 
 # Generated Flutter graph asset for local/CI builds
 viewer_flutter/assets/graph-data.json
+
+# Flutter local package/compiler state
+viewer_flutter/.dart_tool/
