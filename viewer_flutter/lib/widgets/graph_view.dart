@@ -22,6 +22,7 @@ class GraphView extends StatefulWidget {
     this.runningVerificationTargetIds = const <String>{},
     this.passedVerificationTargetIds = const <String>{},
     this.failedVerificationTargetIds = const <String>{},
+    this.historicalEntityIds = const <String>{},
   });
 
   final GraphData data;
@@ -36,6 +37,7 @@ class GraphView extends StatefulWidget {
   final Set<String> runningVerificationTargetIds;
   final Set<String> passedVerificationTargetIds;
   final Set<String> failedVerificationTargetIds;
+  final Set<String> historicalEntityIds;
 
   @override
   State<GraphView> createState() => _GraphViewState();
@@ -239,6 +241,7 @@ class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMix
                     runningVerificationTargetIds: widget.runningVerificationTargetIds,
                     passedVerificationTargetIds: widget.passedVerificationTargetIds,
                     failedVerificationTargetIds: widget.failedVerificationTargetIds,
+                    historicalEntityIds: widget.historicalEntityIds,
                   ),
                 ),
               ),
@@ -576,6 +579,7 @@ class _GraphPainter extends CustomPainter {
     required this.runningVerificationTargetIds,
     required this.passedVerificationTargetIds,
     required this.failedVerificationTargetIds,
+    required this.historicalEntityIds,
   }) : super(repaint: activityPulse);
 
   final GraphData data;
@@ -591,6 +595,7 @@ class _GraphPainter extends CustomPainter {
   final Set<String> runningVerificationTargetIds;
   final Set<String> passedVerificationTargetIds;
   final Set<String> failedVerificationTargetIds;
+  final Set<String> historicalEntityIds;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -620,6 +625,7 @@ class _GraphPainter extends CustomPainter {
     }
 
     for (final cluster in scene.clusters) {
+      if (historicalEntityIds.isNotEmpty && !historicalEntityIds.contains(cluster.ownerId)) continue;
       final parent = projected[cluster.ownerId];
       if (parent == null) continue;
       final active = scene.ownerOf(spotlightId ?? '') == cluster.ownerId;
@@ -628,6 +634,10 @@ class _GraphPainter extends CustomPainter {
     }
 
     for (final edge in scene.edges) {
+      if (historicalEntityIds.isNotEmpty &&
+          (!historicalEntityIds.contains(edge.from) || !historicalEntityIds.contains(edge.to))) {
+        continue;
+      }
       final from = projected[edge.from];
       final to = projected[edge.to];
       if (from == null || to == null) continue;
@@ -681,6 +691,7 @@ class _GraphPainter extends CustomPainter {
 
     final ordered = [...scene.nodes]..sort((a, b) => projected[a.id]!.depth.compareTo(projected[b.id]!.depth));
     for (final node in ordered) {
+      if (historicalEntityIds.isNotEmpty && !historicalEntityIds.contains(node.id)) continue;
       final point = projected[node.id]!;
       final nodeSelected = node.id == selectedId;
       final nodeConnected = spotlightId == null || connected.contains(node.id) || node.ownerId == scene.ownerOf(spotlightId);
