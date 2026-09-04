@@ -109,7 +109,7 @@ void main() {
         'key': 'runtime',
         'label': 'Runtime',
         'responsibility': 'Unmapped runtime responsibility',
-        'featureIds': [],
+        'featureIds': <String>[],
         'mappingScore': 1,
         'mappingConfidence': 'unmapped',
         'fileCount': 1,
