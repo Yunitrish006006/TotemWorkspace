@@ -94,7 +94,7 @@ const mapped = mapGitChangesToSemantic(gitChanges, { beforeGraph, afterGraph });
 assert.equal(mapped.length, 1);
 assert.deepEqual(mapped[0].componentIds, ["component:totem-alchemy:brewing"]);
 assert.deepEqual(mapped[0].featureIds, ["totem-alchemy.feature-1"]);
-assert.deepEqual(mapped[0].implementationIds, ["code-file:totem-alchemy:src/main/java/example/B.java"]);
+assert.deepEqual(mapped[0].implementationIds, ["implementation:component:totem-alchemy:brewing:src/main/java/example/B.java"]);
 
 const intelligence = buildChangeIntelligence({
   knowledge: loadKnowledge(),
