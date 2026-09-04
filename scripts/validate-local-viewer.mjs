@@ -185,6 +185,8 @@ try {
 
   const flutterRoot = await fetch(`${base}/`);
   assert.equal(flutterRoot.status, 200);
+  assert.equal(flutterRoot.headers.get("cross-origin-opener-policy"), "same-origin");
+  assert.equal(flutterRoot.headers.get("cross-origin-embedder-policy"), "credentialless");
   assert.match(await flutterRoot.text(), /TOTEM Flutter fixture/, "local bridge root must serve Flutter");
 
   const flutterAsset = await fetch(`${base}/main.dart.js`);
