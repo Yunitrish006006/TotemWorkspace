@@ -28,6 +28,10 @@ assert.ok(serverSource.includes('pathname === "/api/prompt"'), "prompt intake en
 assert.ok(serverSource.includes('"https://yunitrish006006.github.io"'), "official TotemWorkspace Pages origin must be explicitly allowlisted");
 assert.ok(serverSource.includes('"agent-adapter-required"'), "prompt intake must not claim direct agent execution");
 assert.ok(serverSource.includes("activity file paths must be repository-relative"), "activity ingestion must reject absolute local file paths");
+for (const type of ["command_started", "command_completed", "tool_started", "tool_completed", "agent_message", "usage_updated"]) {
+  assert.ok(serverSource.includes(`"${type}"`), `rich Codex activity type missing: ${type}`);
+}
+assert.ok(serverSource.includes("schemaVersion: 4"), "rich activity payload must use schema v4");
 assert.ok(serverSource.includes('const FLUTTER_WEB_ROOT = path.join(ROOT, "viewer_flutter", "build", "web")'), "local bridge must serve the Flutter build by default");
 assert.ok(serverSource.includes('decoded === "/legacy" || decoded === "/legacy/"'), "legacy JavaScript viewer must remain mounted under /legacy/");
 assert.ok(serverSource.includes("workspaceStatus({ knowledge, reposRoot })"), "status endpoint must reuse workspaceStatus");
@@ -246,14 +250,44 @@ try {
   assert.equal(editEvent.type, "file_edit");
   assert.equal(editEvent.moduleId, "totem-automata");
 
+  const consoleEventPost = await fetch(`${base}/api/activity`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      type: "command_completed",
+      taskId: "task:console-fixture",
+      moduleId: "totem-automata",
+      command: "./gradlew test",
+      status: "success",
+      summary: "Command completed · ./gradlew test",
+      detail: "BUILD SUCCESSFUL",
+      usage: {
+        inputTokens: 120,
+        cachedInputTokens: 80,
+        cacheWriteInputTokens: 0,
+        outputTokens: 20,
+        reasoningOutputTokens: 4,
+        totalTokens: 140
+      }
+    })
+  });
+  assert.equal(consoleEventPost.status, 202);
+  const consoleEvent = (await consoleEventPost.json()).event;
+  assert.equal(consoleEvent.command, "./gradlew test");
+  assert.equal(consoleEvent.detail, "BUILD SUCCESSFUL");
+  assert.equal(consoleEvent.usage.totalTokens, 140);
+
   const activity = await fetch(`${base}/api/activity?after=0`);
   assert.equal(activity.status, 200);
   const activityPayload = await activity.json();
-  assert.ok(activityPayload.latestSequence >= 2);
-  assert.deepEqual(
-    activityPayload.events.slice(-3).map((event) => event.type),
-    ["prompt_submitted", "orchestration_planned", "file_edit"]
-  );
+  assert.equal(activityPayload.schemaVersion, 4);
+  assert.ok(activityPayload.latestSequence >= 3);
+  assert.ok(activityPayload.events.some((event) =>
+    event.type === "command_completed" &&
+    event.taskId === "task:console-fixture" &&
+    event.detail === "BUILD SUCCESSFUL" &&
+    event.usage?.totalTokens === 140
+  ), "rich Codex console event fields must survive activity persistence");
 
   const testTarget = "test:totem-core:src/test/java/example/BridgeFixtureTest.java";
   const testStarted = await fetch(`${base}/api/activity`, {
