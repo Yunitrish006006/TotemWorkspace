@@ -553,6 +553,30 @@ public final class LanguageCacheDownloader {
   void persist(Path path, byte[] bytes) throws Exception { Files.write(path, bytes); Files.move(path, path); }
 }
 `
+  },
+  {
+    moduleId: "totem-bridgedemo",
+    repoName: "TotemBridgeDemo",
+    path: "src/main/java/dev/example/bridgedemo/domain/BridgeEventPublisher.java",
+    startLine: 1,
+    symbols: ["BridgeEventPublisher", "publish"],
+    text: `package dev.example.bridgedemo.domain;
+public final class BridgeEventPublisher {
+  void publish(Object event) { TotemEventBus.publish(event); }
+}
+`
+  },
+  {
+    moduleId: "totem-bridgedemo",
+    repoName: "TotemBridgeDemo",
+    path: "src/main/java/dev/example/bridgedemo/integration/BridgeEventSubscriber.java",
+    startLine: 1,
+    symbols: ["BridgeEventSubscriber", "subscribe"],
+    text: `package dev.example.bridgedemo.integration;
+public final class BridgeEventSubscriber {
+  Object subscribe() { return TotemEventBus.subscribe(Object.class, event -> {}); }
+}
+`
   }
 );
 
@@ -732,13 +756,15 @@ assert.ok(!moduleD.surfaces.clientUi.some((entry) => entry.label === "ObserverBe
 
 const bridgeDemo = inventory.modules.find((entry) => entry.moduleId === "totem-bridgedemo");
 assert.ok(bridgeDemo);
-assert.equal(bridgeDemo.productionFileCount, 7);
+assert.equal(bridgeDemo.productionFileCount, 9);
 assert.ok(bridgeDemo.surfaces.entrypoints.some((entry) => entry.label === "TotemBridgeDemo"));
 assert.ok(!bridgeDemo.surfaces.networking.some((entry) => entry.label === "DiscordEventPayload"));
 assert.ok(!bridgeDemo.surfaces.networking.some((entry) => entry.label === "DiscordEventTransport"));
 assert.ok(bridgeDemo.surfaces.networking.some((entry) => entry.label === "RealPayload"));
 assert.ok(bridgeDemo.surfaces.persistence.some((entry) => entry.label === "JsonConfigFileStore"));
 assert.ok(bridgeDemo.surfaces.persistence.some((entry) => entry.label === "LanguageCacheDownloader"));
+assert.ok(bridgeDemo.surfaces.events.some((entry) => entry.label === "BridgeEventPublisher"));
+assert.ok(bridgeDemo.surfaces.events.some((entry) => entry.label === "BridgeEventSubscriber"));
 const bridgeRootArea = bridgeDemo.featureAreas.find((entry) => entry.key === "module-root");
 assert.ok(bridgeRootArea);
 assert.ok(bridgeRootArea.representativePaths.some((path) => path.endsWith("TotemBridgeDemo.java")));
