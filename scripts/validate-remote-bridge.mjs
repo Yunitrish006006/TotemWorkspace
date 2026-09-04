@@ -21,6 +21,7 @@ for (const fragment of [
   'FLUTTER_BUILD_MODE="${TOTEM_FLUTTER_BUILD_MODE:-auto}"',
   'FLUTTER_BOOTSTRAP="${TOTEM_FLUTTER_BOOTSTRAP:-auto}"',
   'FLUTTER_VERSION="${TOTEM_FLUTTER_VERSION:-3.47.0}"',
+  'FORCE="${TOTEM_BRIDGE_FORCE:-0}"',
   'ensure_flutter_toolchain',
   'bootstrap-flutter.sh',
   'HOST="127.0.0.1"',
@@ -37,6 +38,11 @@ for (const fragment of [
   'ensure_flutter_build',
   '"$flutter_cmd" build web --wasm --base-href /',
   'flutter-local-build-fingerprint.mjs',
+  'agent_busy()',
+  'guard_agent_idle()',
+  'show_agent_status()',
+  'Refusing Bridge $action: Codex has an active task.',
+  'TOTEM_BRIDGE_FORCE=1 bash tools/remote/bridge.sh $action',
 ]) {
   assert.ok(bridge.includes(fragment), `remote bridge controller is missing: ${fragment}`);
 }
@@ -50,6 +56,9 @@ assert.ok(remoteGuide.includes("bash tools/remote/bridge.sh start"), "remote gui
 assert.ok(remoteGuide.includes("tmux"), "remote guide must document tmux background execution");
 assert.ok(remoteGuide.includes("nohup"), "remote guide must document the no-sudo nohup fallback");
 assert.ok(remoteGuide.includes("sudo is not required"), "remote guide must explain that Bridge background execution does not require sudo");
+assert.ok(remoteGuide.includes("RUNNING") && remoteGuide.includes("COMPLETED") && remoteGuide.includes("INTERRUPTED"),
+  "remote guide must document durable task lifecycle states");
+assert.ok(remoteGuide.includes("TOTEM_BRIDGE_FORCE=1"), "remote guide must document the explicit emergency restart override");
 
 const labels = new Set((tasks.tasks ?? []).map((task) => task.label));
 for (const fragment of [
