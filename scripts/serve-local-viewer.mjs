@@ -9,6 +9,7 @@ import {
   buildChangeIntelligence,
   collectGitChanges,
   loadChangeIntelligence,
+  mapGitChangesToSemantic,
   saveChangeIntelligence
 } from "../intelligence/change-intelligence.mjs";
 import { defaultReposRoot, loadKnowledge, workspaceStatus } from "../intelligence/workspace-knowledge.mjs";
@@ -739,17 +740,18 @@ export function createLocalViewerServer({
       knowledge: activeKnowledge,
       index: loadCodeIndex({ knowledge: activeKnowledge })
     });
-    const normalizedPath = String(event.file).replaceAll("\\", "/").replace(/^\.\//, "");
-    const components = (graph.components ?? []).filter((component) =>
-      component.moduleId === event.moduleId
-      && (component.implementationPaths ?? []).some((entry) =>
-        String(entry).replaceAll("\\", "/").replace(/^\.\//, "") === normalizedPath));
-    const componentIds = [...new Set(components.map((component) => component.id).filter(Boolean))];
-    const featureIds = [...new Set(components.flatMap((component) => component.featureIds ?? []).filter(Boolean))];
+    const mapped = mapGitChangesToSemantic([
+      {
+        moduleId: event.moduleId,
+        repoName: activeKnowledge.moduleById.get(event.moduleId)?.repoName ?? event.moduleId,
+        path: event.file,
+        status: "M"
+      }
+    ], { beforeGraph: graph, afterGraph: graph })[0];
     return {
       ...event,
-      componentId: event.componentId ?? (componentIds.length === 1 ? componentIds[0] : null),
-      featureId: event.featureId ?? (featureIds.length === 1 ? featureIds[0] : null)
+      componentId: event.componentId ?? (mapped?.componentIds?.length === 1 ? mapped.componentIds[0] : null),
+      featureId: event.featureId ?? (mapped?.featureIds?.length === 1 ? mapped.featureIds[0] : null)
     };
   }
 
