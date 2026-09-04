@@ -159,14 +159,31 @@ async function validateMcpServer() {
   try {
     const init = await request(1, "initialize", { protocolVersion: "2025-06-18", clientInfo: { name: "TotemWorkspace validation", version: "1" }, capabilities: {} });
     assert.equal(init.serverInfo?.name, "totem-workspace-intelligence");
-    assert.equal(init.serverInfo?.version, "0.3.0");
+    assert.equal(init.serverInfo?.version, "0.4.0");
     child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} })}\n`);
     const listed = await request(2, "tools/list", {});
     const names = (listed.tools ?? []).map((t) => t.name);
-    for (const required of ["resolve_task", "search", "context_pack", "impact", "test_plan", "workspace_status", "refresh_index"]) assert.ok(names.includes(required));
+    for (const required of ["resolve_task", "orchestration_plan", "search", "context_pack", "impact", "test_plan", "workspace_status", "refresh_index"]) assert.ok(names.includes(required));
     const called = await request(3, "tools/call", { name: "resolve_task", arguments: { query: "死亡背包跟 Nexus 同步" } });
     assert.equal(called.isError, false);
     assert.ok(called.structuredContent?.modules?.some((m) => m.id === "totem-remnant"));
+
+    const orchestration = await request(4, "tools/call", {
+      name: "orchestration_plan",
+      arguments: { query: "死亡背包跟 Nexus 同步" }
+    });
+    assert.equal(orchestration.isError, false);
+    assert.equal(orchestration.structuredContent?.schemaVersion, 1);
+    assert.ok(["primary-only", "assisted", "bounded-parallel", "guarded-parallel"].includes(orchestration.structuredContent?.mode));
+    assert.ok((orchestration.structuredContent?.assignments?.length ?? 0) <= 4);
+
+    const architectPack = buildContextPack("修改 Observer Screen provider protocol", {
+      audience: "architect",
+      maxTokens: 4000,
+      knowledge
+    });
+    assert.equal(architectPack.audience, "architect");
+    assert.ok(architectPack.routing.orchestration);
   } finally {
     lines.close();
     if (!child.killed) child.kill("SIGTERM");
