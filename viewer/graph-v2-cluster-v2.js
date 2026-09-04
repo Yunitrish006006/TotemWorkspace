@@ -825,7 +825,7 @@
   }
 
   function agentActivityColor(type) {
-    if (type === "test_failed" || type === "deployment_failed") return "#f87171";
+    if (type === "task_failed" || type === "test_failed" || type === "deployment_failed") return "#f87171";
     if (type === "test_passed" || type === "task_completed" || type === "deployment_completed") return "#86efac";
     if (type === "file_edit" || type === "symbol_edit" || type === "git_diff_updated") return "#fbbf24";
     return "#67e8f9";
