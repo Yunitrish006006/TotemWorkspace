@@ -164,3 +164,53 @@ TOTEM_FLUTTER_BUILD_MODE=auto
 If the remote account does not have Flutter installed yet, the default `TOTEM_FLUTTER_BOOTSTRAP=auto` installs Flutter 3.47.0 under the user's data directory on first start. Set `TOTEM_FLUTTER_BOOTSTRAP=never` only when you intentionally want startup to fail instead of downloading the SDK.
 
 The first bootstrap downloads the Flutter SDK and web artifacts, so it is much heavier than later restarts. Subsequent starts reuse the SDK and only rebuild the viewer when its fingerprint changes.
+
+
+## Codex Agent Adapter
+
+Phase 5 keeps agent execution opt-in. The Bridge defaults to:
+
+```text
+TOTEM_AGENT_ADAPTER=off
+```
+
+To dispatch Viewer prompts to the Codex CLI on the remote host:
+
+```bash
+codex --version
+
+export TOTEM_AGENT_ADAPTER=codex
+export TOTEM_CODEX_BIN=codex
+export TOTEM_CODEX_CWD="$HOME/workspace"
+export TOTEM_CODEX_SANDBOX=workspace-write
+# Optional:
+# export TOTEM_CODEX_MODEL=<model-id>
+
+bash tools/remote/bridge.sh doctor
+bash tools/remote/bridge.sh restart
+node scripts/totem-activity.mjs prompt on
+node scripts/totem-activity.mjs status
+```
+
+`TOTEM_CODEX_CWD` must resolve inside the Totem workspace. For the current sibling-repository layout, the common parent directory is the useful write boundary. The adapter invokes Codex with structured argv and sends the Prompt over stdin; browser payloads cannot choose the executable, working directory, sandbox, model, or CLI flags.
+
+The adapter uses `codex exec --json` and consumes JSONL lifecycle/items. It does **not** force `--full-auto` or `--dangerously-bypass-approvals-and-sandbox`; Codex approval/auth configuration remains owned by the remote operating-system user.
+
+Useful endpoints:
+
+```text
+GET /api/agent-adapter
+GET /api/activity
+POST /api/prompt
+```
+
+Expected Viewer states:
+
+```text
+ADAPTER OFF       host has not enabled dispatch
+CODEX UNAVAILABLE adapter requested but Codex probe failed
+CODEX READY       Prompt can start a task
+CODEX BUSY        one task is already running
+```
+
+Phase 5 allows one active task at a time. When a task settles, the Bridge automatically refreshes the code index, generated graph data, and Phase 3 change intelligence.
