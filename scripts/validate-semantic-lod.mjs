@@ -91,8 +91,8 @@ for (const fragment of [
 }
 assert.ok(!legacy.includes('type: "category"'), "legacy module expansion must not fall back to generic code-category nodes");
 
-assert.ok(live.includes('renderer.focusActivity(event, settings.autoExpandAgentFocus !== false)'),
-  "legacy Agent Activity must auto-expand the same semantic path");
+assert.ok(live.includes('renderer.focusActivity(window.__TOTEM_AGENT_ACTIVITY__, settings.autoExpandAgentFocus !== false)'),
+  "legacy Agent Activity must auto-expand the preserved semantic edit path");
 assert.ok(live.includes("event.componentId || event.featureId || event.moduleId"),
   "legacy activity target label must prioritize components");
 assert.ok(live.includes("latestLiveSemanticActivity"),
