@@ -660,6 +660,182 @@ class PromptSubmission {
   }
 }
 
+class ReplayMilestone {
+  const ReplayMilestone({
+    required this.sequence,
+    required this.timestamp,
+    required this.type,
+    required this.taskId,
+    required this.sessionId,
+    required this.moduleId,
+    required this.summary,
+  });
+
+  final int sequence;
+  final String timestamp;
+  final String type;
+  final String? taskId;
+  final String? sessionId;
+  final String? moduleId;
+  final String? summary;
+
+  factory ReplayMilestone.fromJson(Map<String, dynamic> json) => ReplayMilestone(
+        sequence: (json['sequence'] as num?)?.toInt() ?? 0,
+        timestamp: json['timestamp'] as String? ?? '',
+        type: json['type'] as String? ?? 'unknown',
+        taskId: json['taskId'] as String?,
+        sessionId: json['sessionId'] as String?,
+        moduleId: json['moduleId'] as String?,
+        summary: json['summary'] as String?,
+      );
+}
+
+class ReplaySession {
+  const ReplaySession({
+    required this.id,
+    required this.taskId,
+    required this.state,
+    required this.startedSequence,
+    required this.endedSequence,
+    required this.startedAt,
+    required this.endedAt,
+    required this.moduleId,
+    required this.featureId,
+    required this.summary,
+    required this.eventCount,
+    required this.milestoneCount,
+    required this.milestones,
+  });
+
+  final String id;
+  final String? taskId;
+  final String state;
+  final int startedSequence;
+  final int? endedSequence;
+  final String startedAt;
+  final String? endedAt;
+  final String? moduleId;
+  final String? featureId;
+  final String? summary;
+  final int eventCount;
+  final int milestoneCount;
+  final List<ReplayMilestone> milestones;
+
+  factory ReplaySession.fromJson(Map<String, dynamic> json) => ReplaySession(
+        id: json['id'] as String? ?? '',
+        taskId: json['taskId'] as String?,
+        state: json['state'] as String? ?? 'unknown',
+        startedSequence: (json['startedSequence'] as num?)?.toInt() ?? 0,
+        endedSequence: (json['endedSequence'] as num?)?.toInt(),
+        startedAt: json['startedAt'] as String? ?? '',
+        endedAt: json['endedAt'] as String?,
+        moduleId: json['moduleId'] as String?,
+        featureId: json['featureId'] as String?,
+        summary: json['summary'] as String?,
+        eventCount: (json['eventCount'] as num?)?.toInt() ?? 0,
+        milestoneCount: (json['milestoneCount'] as num?)?.toInt() ?? 0,
+        milestones: (json['milestones'] as List? ?? const <Object>[])
+            .whereType<Map>()
+            .map((entry) => ReplayMilestone.fromJson(Map<String, dynamic>.from(entry)))
+            .toList(growable: false),
+      );
+}
+
+class DevelopmentReplayTimeline {
+  const DevelopmentReplayTimeline({
+    required this.schemaVersion,
+    required this.generatedAt,
+    required this.updatedAt,
+    required this.earliestSequence,
+    required this.latestSequence,
+    required this.eventCount,
+    required this.sessions,
+    required this.milestones,
+  });
+
+  final int schemaVersion;
+  final String generatedAt;
+  final String? updatedAt;
+  final int earliestSequence;
+  final int latestSequence;
+  final int eventCount;
+  final List<ReplaySession> sessions;
+  final List<ReplayMilestone> milestones;
+
+  bool get hasEvents => eventCount > 0 && latestSequence >= earliestSequence;
+
+  factory DevelopmentReplayTimeline.fromJson(Map<String, dynamic> json) => DevelopmentReplayTimeline(
+        schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 1,
+        generatedAt: json['generatedAt'] as String? ?? '',
+        updatedAt: json['updatedAt'] as String?,
+        earliestSequence: (json['earliestSequence'] as num?)?.toInt() ?? 0,
+        latestSequence: (json['latestSequence'] as num?)?.toInt() ?? 0,
+        eventCount: (json['eventCount'] as num?)?.toInt() ?? 0,
+        sessions: (json['sessions'] as List? ?? const <Object>[])
+            .whereType<Map>()
+            .map((entry) => ReplaySession.fromJson(Map<String, dynamic>.from(entry)))
+            .toList(growable: false),
+        milestones: (json['milestones'] as List? ?? const <Object>[])
+            .whereType<Map>()
+            .map((entry) => ReplayMilestone.fromJson(Map<String, dynamic>.from(entry)))
+            .toList(growable: false),
+      );
+}
+
+class DevelopmentReplayFrame {
+  const DevelopmentReplayFrame({
+    required this.schemaVersion,
+    required this.sequence,
+    required this.latestSequence,
+    required this.live,
+    required this.activity,
+    required this.changeIntelligence,
+    required this.verificationState,
+    required this.historicalEntityIds,
+    required this.milestones,
+  });
+
+  final int schemaVersion;
+  final int sequence;
+  final int latestSequence;
+  final bool live;
+  final AgentActivityEvent? activity;
+  final ChangeIntelligence? changeIntelligence;
+  final VerificationState verificationState;
+  final Set<String> historicalEntityIds;
+  final List<ReplayMilestone> milestones;
+
+  factory DevelopmentReplayFrame.fromJson(Map<String, dynamic> json) {
+    final activityRaw = json['activity'];
+    final changeRaw = json['changeIntelligence'];
+    final graphState = Map<String, dynamic>.from(
+      json['graphState'] as Map? ?? const <String, dynamic>{},
+    );
+    return DevelopmentReplayFrame(
+      schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 1,
+      sequence: (json['sequence'] as num?)?.toInt() ?? 0,
+      latestSequence: (json['latestSequence'] as num?)?.toInt() ?? 0,
+      live: json['live'] as bool? ?? false,
+      activity: activityRaw is Map
+          ? AgentActivityEvent.fromJson(Map<String, dynamic>.from(activityRaw))
+          : null,
+      changeIntelligence: changeRaw is Map
+          ? ChangeIntelligence.fromJson(Map<String, dynamic>.from(changeRaw))
+          : null,
+      verificationState: VerificationState.fromJson(
+        Map<String, dynamic>.from(
+          json['verificationState'] as Map? ?? const <String, dynamic>{},
+        ),
+      ),
+      historicalEntityIds: GraphData.strings(graphState['entityIds']).toSet(),
+      milestones: (json['milestones'] as List? ?? const <Object>[])
+          .whereType<Map>()
+          .map((entry) => ReplayMilestone.fromJson(Map<String, dynamic>.from(entry)))
+          .toList(growable: false),
+    );
+  }
+}
+
 class LocalWorkspaceClient {
   LocalWorkspaceClient(this.baseUrl, {http.Client? client}) : _client = client ?? http.Client();
 
@@ -721,6 +897,19 @@ class LocalWorkspaceClient {
     final response = await _client.get(_uri('/api/agent-adapter')).timeout(const Duration(seconds: 4));
     _requireSuccess(response, 'agent adapter status');
     return AgentAdapterStatus.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<DevelopmentReplayTimeline> replayTimeline() async {
+    final response = await _client.get(_uri('/api/replay')).timeout(const Duration(seconds: 5));
+    _requireSuccess(response, 'development replay timeline');
+    return DevelopmentReplayTimeline.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<DevelopmentReplayFrame> replayFrame(int sequence) async {
+    final uri = _uri('/api/replay/frame').replace(queryParameters: {'sequence': '$sequence'});
+    final response = await _client.get(uri).timeout(const Duration(seconds: 6));
+    _requireSuccess(response, 'development replay frame');
+    return DevelopmentReplayFrame.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   Future<ChangeIntelligence> changeIntelligence() async {
