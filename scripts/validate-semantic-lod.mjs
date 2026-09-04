@@ -67,7 +67,7 @@ for (const fragment of [
 ]) {
   assert.ok(flutterView.includes(fragment), `Flutter interaction is missing: ${fragment}`);
 }
-assert.ok(flutterHost.includes("activityComponentId: latestActivity?.componentId"),
+assert.ok(flutterHost.includes("activityComponentId: displayedActivity?.componentId"),
   "Flutter host must forward Agent Activity component IDs");
 assert.ok(flutterHost.includes("autoExpandAgentFocus: _settings.autoExpandAgentFocus"),
   "Flutter Agent Activity expansion must respect shared viewer settings");
