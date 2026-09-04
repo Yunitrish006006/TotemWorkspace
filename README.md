@@ -110,6 +110,8 @@ node scripts/totem-activity.mjs emit file_edit \
   --file src/client/java/dev/totem/automata/client/CopperGolemVisualizationClient.java \
   --summary "editing outline rendering"
 node scripts/totem-activity.mjs status
+node scripts/totem-activity.mjs replay
+node scripts/totem-activity.mjs replay 42
 ```
 
 Phase 1 的 Prompt intake 只會寫入本機 activity stream；在 Agent Adapter 完成前不會直接從瀏覽器執行 shell 或假裝 Codex 已開始工作。
@@ -121,6 +123,8 @@ Phase 3 加入 change intelligence：Local Bridge 在重新索引前後建立 se
 Phase 4 加入 Verification Graph：實際被 code index 掃到的 Test / GameTest / E2E 檔案才會成為 Test entity，穩定 ID 為 `test:<module-id>:<repo-relative-path>`；`test-matrix.json` 只代表 required verification，不會被當成已通過證據。Feature、contract/API 與 shared capability 可產生 `validated-by` 關係；Local Bridge 透過 `/api/verification-state` 保存與傳送 `test_started / test_passed / test_failed` 最新狀態，Flutter 與 legacy 3D 同步顯示 Test LOD、驗證線與 pass/run/fail highlighting。
 
 Phase 5 加入 opt-in Codex Agent Adapter：只有主機端設定 `TOTEM_AGENT_ADAPTER=codex` 時，Prompt 才會透過 `codex exec --json` 建立真實 Codex task；瀏覽器不能指定 executable、cwd、sandbox、model 或 CLI flags。Bridge 會輸出 `task_started / task_completed / task_failed`，把 Codex JSONL 的 file change / MCP activity 映射回既有 activity graph，task 結束後自動重新索引並更新 Phase 3 change intelligence。Adapter 未啟用或 Codex 不可用時，Prompt 只記錄為 submitted，不會假裝 agent 已開始。
+
+Phase 6 加入 Development Replay：Bridge 會把 bounded activity、task session、commit/PR/deployment milestone 與 refresh checkpoint 持久化到 `.totem-index/development-replay.json`，重啟後 sequence 不歸零。Flutter 與 legacy 都有 timeline scrubber；拖到歷史 sequence 時會重建該時點的 Activity、Phase 3 change/impact、Phase 4 verification 狀態，並依 checkpoint 隱藏當時尚不存在的 graph entity/edge；按 `LIVE` 回到最新狀態。
 
 ### VS Code Remote-SSH / tmux Bridge
 
