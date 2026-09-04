@@ -143,7 +143,7 @@ function coreApiCapabilities(knowledge, codeInventory) {
           consumerLabel: consumerFeature?.title ?? `${consumerModule?.name ?? consumerInventory.moduleId} ${family.key} consumer`,
           label: family.label,
           evidencePaths: Object.freeze([...(crossImport.evidencePaths ?? [])].sort().slice(0, 8)),
-          imports: Object.freeze(imports.sort())
+          imports: Object.freeze([...imports].sort())
         }));
       });
     }
