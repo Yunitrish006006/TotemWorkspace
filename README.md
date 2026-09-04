@@ -114,6 +114,30 @@ node scripts/totem-activity.mjs status
 
 Phase 1 的 Prompt intake 只會寫入本機 activity stream；在 Agent Adapter 完成前不會直接從瀏覽器執行 shell 或假裝 Codex 已開始工作。
 
+### VS Code Remote-SSH / tmux Bridge
+
+遠端開發時，Bridge 預設使用 `127.0.0.1:18765`，並可由 repository 內的 tmux controller 背景執行：
+
+```sh
+bash tools/remote/bridge.sh doctor
+bash tools/remote/bridge.sh start
+bash tools/remote/bridge.sh status
+bash tools/remote/bridge.sh logs
+```
+
+VS Code Remote-SSH 連線可在 Mac 的 `~/.ssh/config` 使用：
+
+```sshconfig
+Host csvr.4hotel.tw
+    HostName csvr.4hotel.tw
+    User thomas
+    LocalForward 127.0.0.1:18765 127.0.0.1:18765
+    ServerAliveInterval 30
+    ServerAliveCountMax 3
+```
+
+repository 也提供共享 `.vscode/tasks.json`。Remote-SSH 開啟 TotemWorkspace 後可直接執行 `Tasks: Run Task → Totem: Start Bridge`。完整操作與 stop/restart/attach/log follow 見 [Remote SSH Bridge](tools/remote/README.md)。
+
 WebAssembly build：
 
 ```sh
