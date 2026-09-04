@@ -12,14 +12,18 @@ class GraphView extends StatefulWidget {
     super.key,
     required this.data,
     this.activityFeatureId,
+    this.activityComponentId,
     this.activityModuleId,
     this.activityType,
+    this.autoExpandAgentFocus = true,
   });
 
   final GraphData data;
   final String? activityFeatureId;
+  final String? activityComponentId;
   final String? activityModuleId;
   final String? activityType;
+  final bool autoExpandAgentFocus;
 
   @override
   State<GraphView> createState() => _GraphViewState();
@@ -41,6 +45,26 @@ class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMix
       vsync: this,
       duration: const Duration(milliseconds: 1200),
     )..repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant GraphView oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!widget.autoExpandAgentFocus) return;
+    if (widget.activityComponentId == oldWidget.activityComponentId &&
+        widget.activityFeatureId == oldWidget.activityFeatureId &&
+        widget.activityModuleId == oldWidget.activityModuleId) {
+      return;
+    }
+    final componentId = widget.activityComponentId;
+    final component = componentId == null ? null : widget.data.componentById(componentId);
+    setState(() {
+      final moduleId = component?.moduleId ?? widget.activityModuleId;
+      if (moduleId != null && widget.data.moduleById(moduleId) != null) _expanded.add(moduleId);
+      final featureId = component?.featureIds.firstOrNull ?? widget.activityFeatureId;
+      if (featureId != null && widget.data.featureById(featureId) != null) _expanded.add(featureId);
+      if (component != null) _expanded.add(component.id);
+    });
   }
 
   @override
@@ -79,7 +103,7 @@ class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMix
           children: [
             _Toolbar(
               data: widget.data,
-              expandedCount: _expanded.length,
+              expandedCount: widget.data.modules.where((module) => _expanded.contains(module.id)).length,
               enabledFilters: _enabledFilters,
               onReset: _resetView,
               onToggleAll: _toggleAll,
@@ -188,9 +212,11 @@ class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMix
                     scene: scene,
                     camera: _camera,
                     selectedId: _selectedId,
-                    activityNodeId: widget.activityFeatureId != null && scene.byId.containsKey(widget.activityFeatureId)
-                        ? widget.activityFeatureId
-                        : widget.activityModuleId,
+                    activityNodeId: widget.activityComponentId != null && scene.byId.containsKey(widget.activityComponentId)
+                        ? widget.activityComponentId
+                        : widget.activityFeatureId != null && scene.byId.containsKey(widget.activityFeatureId)
+                            ? widget.activityFeatureId
+                            : widget.activityModuleId,
                     activityType: widget.activityType,
                     activityPulse: _activityPulse,
                   ),
@@ -210,7 +236,8 @@ class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMix
 
   void _toggleAll() {
     setState(() {
-      if (_expanded.length == widget.data.modules.length) {
+      final expandedModules = widget.data.modules.where((module) => _expanded.contains(module.id)).length;
+      if (expandedModules == widget.data.modules.length) {
         _expanded.clear();
       } else {
         _expanded
@@ -279,9 +306,17 @@ class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMix
     if (node == null) return;
     setState(() {
       _selectedId = id;
-      if (toggleModule && node.kind == 'module') {
+      if (toggleModule && (node.kind == 'module' || node.kind == 'feature' || node.kind == 'component')) {
         if (_expanded.contains(id)) {
           _expanded.remove(id);
+          if (node.kind == 'module') {
+            _expanded.removeWhere((entry) =>
+                widget.data.featureById(entry)?.ownerId == id ||
+                widget.data.componentById(entry)?.moduleId == id);
+          } else if (node.kind == 'feature') {
+            final componentIds = widget.data.componentsForFeature(id).map((component) => component.id).toSet();
+            _expanded.removeAll(componentIds);
+          }
         } else {
           _expanded.add(id);
         }
@@ -426,6 +461,22 @@ class _InfoPanel extends StatelessWidget {
             Text(feature.summary, style: const TextStyle(color: Color(0xFFB8C9DA), height: 1.5)),
             const SizedBox(height: 8),
             _Item('Owner: ${feature.ownerId}'),
+            _Item(expanded ? 'L3 Components expanded' : 'Activate to reveal mapped Components'),
+          ],
+          if (node.component case final component?) ...[
+            const SizedBox(height: 8),
+            Text(component.responsibility, style: const TextStyle(color: Color(0xFFB8C9DA), height: 1.5)),
+            const SizedBox(height: 8),
+            _Item('Mapping: ${component.mappingConfidence} · score ${component.mappingScore}'),
+            _Item('Implementation files: ${component.fileCount}'),
+            if (component.surfaceKinds.isNotEmpty) _Item('Surfaces: ${component.surfaceKinds.join(', ')}'),
+            if (component.featureIds.isEmpty) const _Item('Module-level component · no strong Feature mapping'),
+            _Item(expanded ? 'L4 Implementation expanded' : 'Activate to reveal implementation files'),
+          ],
+          if (node.implementationPath case final implementationPath?) ...[
+            const SizedBox(height: 8),
+            _Item(implementationPath),
+            const _Item('L4 production implementation evidence'),
           ],
           if (node.capability case final capability?) ...[
             const SizedBox(height: 8),
@@ -438,7 +489,7 @@ class _InfoPanel extends StatelessWidget {
           for (final edge in relationships) _Item('${edge.type} · ${edge.from} → ${edge.to}\n${edge.label}'),
           const SizedBox(height: 20),
           const Text(
-            '點模組展開/收合 · 左鍵/一指旋轉 · 右鍵拖曳平移 · 兩指縮放＋平移 · 滾輪縮放 · 方向鍵選節點 · Enter/Space 啟動 · Home 回 Core · Esc 清除',
+            '點 Module → Feature → Component 逐層展開；Component 再展開 L4 implementation · 左鍵/一指旋轉 · 右鍵拖曳平移 · 兩指縮放＋平移 · 滾輪縮放 · 方向鍵選節點 · Enter/Space 啟動',
             style: TextStyle(color: Color(0xFF8FA5BD), fontSize: 11, height: 1.45),
           ),
         ],
@@ -603,11 +654,20 @@ class _GraphPainter extends CustomPainter {
     required bool agentActive,
   }) {
     final child = node.isChild;
-    final radius = child ? (node.kind == 'capability' ? 6.0 : 5.3) : math.max(8.0, 12 * projected.scale);
+    final radius = child
+        ? switch (node.kind) {
+            'capability' => 6.0,
+            'component' => 5.8,
+            'implementation' => 4.3,
+            _ => 5.3,
+          }
+        : math.max(8.0, 12 * projected.scale);
     final fill = switch (node.kind) {
       'external' => const Color(0xFFFBBF24),
       'capability' => const Color(0xFFF472B6),
       'feature' => const Color(0xFF93C5FD),
+      'component' => const Color(0xFF34D399),
+      'implementation' => const Color(0xFFA7F3D0),
       _ when node.rank == 3 => const Color(0xFF22D3EE),
       _ => const Color(0xFF60A5FA),
     };
@@ -699,6 +759,7 @@ class _GraphPainter extends CustomPainter {
         'fabric-suggests' => const Color(0xFFFBBF24),
         'external-service' => const Color(0xFF22D3EE),
         'shared-capability' => const Color(0xFFF472B6),
+        'detail' => const Color(0xFF34D399),
         _ => const Color(0xFFA78BFA),
       };
 
