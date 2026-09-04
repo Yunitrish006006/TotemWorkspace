@@ -6,9 +6,17 @@ import 'package:http/testing.dart';
 import 'package:totem_workspace_viewer/live/workspace_live.dart';
 
 void main() {
-  test('local API discovery stays disabled on published Pages', () {
+  test('published TotemWorkspace Pages discover the loopback workspace API', () {
     expect(
-      discoverLocalApiBase(pageUri: Uri.parse('https://yunitrish006006.github.io/TotemWorkspace/flutter/')),
+      discoverLocalApiBase(pageUri: Uri.parse('https://yunitrish006006.github.io/TotemWorkspace/')),
+      'http://127.0.0.1:8765',
+    );
+    expect(
+      discoverLocalApiBase(pageUri: Uri.parse('https://yunitrish006006.github.io/TotemWorkspace/legacy/')),
+      'http://127.0.0.1:8765',
+    );
+    expect(
+      discoverLocalApiBase(pageUri: Uri.parse('https://example.com/')),
       isNull,
     );
   });
@@ -107,6 +115,69 @@ void main() {
           200,
         );
       }
+      if (request.url.path == '/api/viewer-settings') {
+        if (request.method == 'POST') {
+          final body = jsonDecode(request.body) as Map<String, dynamic>;
+          return http.Response(
+            jsonEncode(<String, Object>{
+              'schemaVersion': 1,
+              'promptEnabled': body['promptEnabled'] as bool? ?? false,
+              'agentActivityEnabled': true,
+              'changeAnimationsEnabled': true,
+              'autoExpandAgentFocus': true,
+              'replayEnabled': true,
+            }),
+            200,
+          );
+        }
+        return http.Response(
+          jsonEncode(<String, Object>{
+            'schemaVersion': 1,
+            'promptEnabled': false,
+            'agentActivityEnabled': true,
+            'changeAnimationsEnabled': true,
+            'autoExpandAgentFocus': true,
+            'replayEnabled': true,
+          }),
+          200,
+        );
+      }
+      if (request.url.path == '/api/activity') {
+        return http.Response(
+          jsonEncode(<String, Object>{
+            'schemaVersion': 1,
+            'latestSequence': 3,
+            'events': <Object>[
+              <String, Object>{
+                'sequence': 3,
+                'timestamp': 'now',
+                'type': 'file_edit',
+                'source': 'agent-adapter',
+                'moduleId': 'totem-core',
+                'featureId': 'totem-core.feature-5',
+                'summary': 'editing outline api',
+              },
+            ],
+          }),
+          200,
+        );
+      }
+      if (request.url.path == '/api/prompt') {
+        return http.Response(
+          jsonEncode(<String, Object>{
+            'status': 'accepted',
+            'execution': 'agent-adapter-required',
+            'event': <String, Object>{
+              'sequence': 4,
+              'timestamp': 'now',
+              'type': 'prompt_submitted',
+              'source': 'viewer',
+              'summary': 'inspect outline api',
+            },
+          }),
+          202,
+        );
+      }
       if (request.url.path == '/api/refresh') {
         return http.Response(jsonEncode(<String, Object>{'status': 'ok'}), 200);
       }
@@ -117,7 +188,34 @@ void main() {
     expect(await client.health(), isTrue);
     expect((await client.workspaceStatus()).mode, 'local');
     expect((await client.graphData()).modules, isEmpty);
+
+    final settings = await client.viewerSettings();
+    expect(settings.promptEnabled, isFalse);
+    expect(settings.agentActivityEnabled, isTrue);
+
+    final updated = await client.updateViewerSettings(settings.copyWith(promptEnabled: true));
+    expect(updated.promptEnabled, isTrue);
+
+    final activity = await client.activity(after: 2);
+    expect(activity.latestSequence, 3);
+    expect(activity.events.single.type, 'file_edit');
+    expect(activity.events.single.targetLabel, 'totem-core.feature-5');
+
+    final promptEvent = await client.submitPrompt('inspect outline api');
+    expect(promptEvent.type, 'prompt_submitted');
+
     await client.refresh(modules: const <String>['totem-core']);
+
+    final settingsUpdate = requests.singleWhere(
+      (request) => request.url.path == '/api/viewer-settings' && request.method == 'POST',
+    );
+    expect((jsonDecode(settingsUpdate.body) as Map<String, dynamic>)['promptEnabled'], isTrue);
+
+    final activityRequest = requests.singleWhere((request) => request.url.path == '/api/activity');
+    expect(activityRequest.url.queryParameters['after'], '2');
+
+    final promptRequest = requests.singleWhere((request) => request.url.path == '/api/prompt');
+    expect((jsonDecode(promptRequest.body) as Map<String, dynamic>)['prompt'], 'inspect outline api');
 
     final refresh = requests.singleWhere((request) => request.url.path == '/api/refresh');
     expect(refresh.method, 'POST');
