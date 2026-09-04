@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createLocalViewerServer } from "./serve-local-viewer.mjs";
@@ -21,6 +22,8 @@ assert.ok(serverSource.includes('pathname === "/api/prompt"'), "prompt intake en
 assert.ok(serverSource.includes('"https://yunitrish006006.github.io"'), "official TotemWorkspace Pages origin must be explicitly allowlisted");
 assert.ok(serverSource.includes('"agent-adapter-required"'), "prompt intake must not claim direct agent execution");
 assert.ok(serverSource.includes("activity file paths must be repository-relative"), "activity ingestion must reject absolute local file paths");
+assert.ok(serverSource.includes('const FLUTTER_WEB_ROOT = path.join(ROOT, "viewer_flutter", "build", "web")'), "local bridge must serve the Flutter build by default");
+assert.ok(serverSource.includes('decoded === "/legacy" || decoded === "/legacy/"'), "legacy JavaScript viewer must remain mounted under /legacy/");
 assert.ok(serverSource.includes("workspaceStatus({ knowledge, reposRoot })"), "status endpoint must reuse workspaceStatus");
 assert.ok(serverSource.includes("refreshCodeIndex({"), "refresh endpoint must reuse incremental code-index refresh");
 assert.ok(serverSource.includes("renderGraphV2({ knowledge, index: refreshed.index })"), "refresh endpoint must regenerate graph data");
@@ -46,7 +49,11 @@ const settingsPath = path.join(ROOT, ".totem-index", "viewer-settings.json");
 const settingsBackup = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath) : null;
 if (fs.existsSync(settingsPath)) fs.rmSync(settingsPath);
 
-const server = createLocalViewerServer();
+const flutterFixture = fs.mkdtempSync(path.join(os.tmpdir(), "totem-flutter-root-"));
+fs.writeFileSync(path.join(flutterFixture, "index.html"), "<!doctype html><title>TOTEM Flutter fixture</title><script src=\"main.dart.js\"></script>", "utf8");
+fs.writeFileSync(path.join(flutterFixture, "main.dart.js"), "window.__TOTEM_FLUTTER_FIXTURE__ = true;", "utf8");
+
+const server = createLocalViewerServer({ flutterRoot: flutterFixture });
 await new Promise((resolve, reject) => {
   server.once("error", reject);
   server.listen(0, "127.0.0.1", resolve);
@@ -175,11 +182,24 @@ try {
   assert.equal(payload.modules.length, 11);
   assert.ok(payload.modules.every((entry) => !Object.hasOwn(entry, "path")), "browser API must not expose absolute local repo paths");
 
-  const page = await fetch(`${base}/graph-v2.html`);
-  assert.equal(page.status, 200);
-  assert.ok((await page.text()).includes("viewer/local-live.js"));
+  const flutterRoot = await fetch(`${base}/`);
+  assert.equal(flutterRoot.status, 200);
+  assert.match(await flutterRoot.text(), /TOTEM Flutter fixture/, "local bridge root must serve Flutter");
+
+  const flutterAsset = await fetch(`${base}/main.dart.js`);
+  assert.equal(flutterAsset.status, 200);
+  assert.match(await flutterAsset.text(), /TOTEM_FLUTTER_FIXTURE/, "Flutter assets must be served from the local build root");
+
+  const legacyPage = await fetch(`${base}/legacy/`);
+  assert.equal(legacyPage.status, 200);
+  assert.ok((await legacyPage.text()).includes("viewer/local-live.js"), "legacy viewer must remain available under /legacy/");
+
+  const compatibilityPage = await fetch(`${base}/graph-v2.html`);
+  assert.equal(compatibilityPage.status, 200);
+  assert.ok((await compatibilityPage.text()).includes("viewer/local-live.js"));
 } finally {
   await new Promise((resolve) => server.close(resolve));
+  fs.rmSync(flutterFixture, { recursive: true, force: true });
   if (settingsBackup == null) {
     if (fs.existsSync(settingsPath)) fs.rmSync(settingsPath);
   } else {
@@ -188,4 +208,4 @@ try {
   }
 }
 
-console.log("Local live viewer validation passed: loopback-only bind, approved Pages CORS, shared settings, prompt gating, activity ingestion/polling, local-path redaction, repo status, and refresh wiring are present.");
+console.log("Local live viewer validation passed: Flutter owns /, legacy JS stays under /legacy/, and loopback-only API/settings/activity/refresh behavior remains intact.");
