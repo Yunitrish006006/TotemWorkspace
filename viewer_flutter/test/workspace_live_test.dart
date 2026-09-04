@@ -9,11 +9,11 @@ void main() {
   test('published TotemWorkspace Pages discover the loopback workspace API', () {
     expect(
       discoverLocalApiBase(pageUri: Uri.parse('https://yunitrish006006.github.io/TotemWorkspace/')),
-      'http://127.0.0.1:8765',
+      'http://127.0.0.1:18765',
     );
     expect(
       discoverLocalApiBase(pageUri: Uri.parse('https://yunitrish006006.github.io/TotemWorkspace/legacy/')),
-      'http://127.0.0.1:8765',
+      'http://127.0.0.1:18765',
     );
     expect(
       discoverLocalApiBase(pageUri: Uri.parse('https://example.com/')),
@@ -24,11 +24,11 @@ void main() {
   test('Flutter dev server discovers the loopback workspace API', () {
     expect(
       discoverLocalApiBase(pageUri: Uri.parse('http://localhost:54321/')),
-      'http://127.0.0.1:8765',
+      'http://127.0.0.1:18765',
     );
     expect(
-      discoverLocalApiBase(pageUri: Uri.parse('http://127.0.0.1:8765/flutter/')),
-      'http://127.0.0.1:8765',
+      discoverLocalApiBase(pageUri: Uri.parse('http://127.0.0.1:18765/flutter/')),
+      'http://127.0.0.1:18765',
     );
   });
 
@@ -184,7 +184,7 @@ void main() {
       return http.Response('not found', 404);
     });
 
-    final client = LocalWorkspaceClient('http://127.0.0.1:8765', client: mock);
+    final client = LocalWorkspaceClient('http://127.0.0.1:18765', client: mock);
     expect(await client.health(), isTrue);
     expect((await client.workspaceStatus()).mode, 'local');
     expect((await client.graphData()).modules, isEmpty);
