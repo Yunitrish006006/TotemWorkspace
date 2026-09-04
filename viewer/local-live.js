@@ -129,7 +129,9 @@
     window.__TOTEM_CHANGE_INTELLIGENCE__ = payload || null;
     var gitChanges = payload && Array.isArray(payload.gitChanges) ? payload.gitChanges : [];
     var diff = payload && payload.semanticDiff ? payload.semanticDiff : {};
-    var changedIds = Array.isArray(diff.changedEntityIds) ? diff.changedEntityIds : [];
+    var changedIds = payload && Array.isArray(payload.affectedEntityIds)
+      ? payload.affectedEntityIds
+      : Array.isArray(diff.changedEntityIds) ? diff.changedEntityIds : [];
     var impact = payload && payload.impact ? payload.impact : {};
     var impacted = Array.isArray(impact.impactedModules) ? impact.impactedModules : [];
     var hasChanges = gitChanges.length > 0 || changedIds.length > 0;
