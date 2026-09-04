@@ -87,8 +87,12 @@ the 11 active Totem repositories. It is not a Minecraft mod.
 - The supported default Bridge endpoint is `127.0.0.1:18765`; keep Flutter,
   legacy Pages, CLI helpers, SSH documentation, and remote tooling synchronized
   when changing it.
-- `tools/remote/bridge.sh` owns tmux lifecycle for the remote Bridge. Keep it
-  loopback-only and never change it to bind `0.0.0.0`.
+- `tools/remote/bridge.sh` owns the remote Bridge background lifecycle using
+  tmux when available and nohup as the no-sudo fallback. Keep it loopback-only
+  and never change it to bind `0.0.0.0`.
+- The local/remote Bridge route contract mirrors Pages: `/` is Flutter,
+  `/legacy/` is the maintained JavaScript rollback/debug surface, and
+  `/api/*` is the loopback API.
 - Remote Bridge logs and runtime state belong under ignored `.totem-index/`;
   never commit host-specific paths, credentials, passwords, SSH keys, or tmux
   runtime state.
