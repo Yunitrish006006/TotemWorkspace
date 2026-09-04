@@ -192,6 +192,7 @@ GraphScene buildGraphScene(
     'observer-provider',
     'external-service',
     'shared-capability',
+    'validated-by',
   },
 }) {
   final nodes = <VisualNode>[];
@@ -358,14 +359,16 @@ GraphScene buildGraphScene(
         ownerId: moduleId,
         test: test,
       ));
-      edges.add(VisualEdge(
-        id: 'validated-by-module:$moduleId:${test.id}',
-        from: moduleId,
-        to: test.id,
-        type: 'validated-by',
-        label: 'module test evidence',
-        retargeted: true,
-      ));
+      if (enabledFilters.contains('validated-by')) {
+        edges.add(VisualEdge(
+          id: 'validated-by-module:$moduleId:${test.id}',
+          from: moduleId,
+          to: test.id,
+          type: 'validated-by',
+          label: 'module test evidence',
+          retargeted: true,
+        ));
+      }
     }
   }
 
@@ -411,14 +414,16 @@ GraphScene buildGraphScene(
           test: test,
         ));
       }
-      edges.add(VisualEdge(
-        id: 'validated-by:${feature.id}:${test.id}',
-        from: feature.id,
-        to: test.id,
-        type: 'validated-by',
-        label: 'validated by',
-        retargeted: true,
-      ));
+      if (enabledFilters.contains('validated-by')) {
+        edges.add(VisualEdge(
+          id: 'validated-by:${feature.id}:${test.id}',
+          from: feature.id,
+          to: test.id,
+          type: 'validated-by',
+          label: 'validated by',
+          retargeted: true,
+        ));
+      }
     }
   }
 
