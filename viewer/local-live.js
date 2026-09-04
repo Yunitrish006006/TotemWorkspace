@@ -3,6 +3,7 @@
 
   var liveBadge = document.getElementById("liveLocal");
   var changeBadge = document.getElementById("changeIntelligence");
+  var verificationBadge = document.getElementById("verificationState");
   var activityBadge = document.getElementById("agentActivity");
   var promptToggle = document.getElementById("promptToggle");
   var promptBar = document.getElementById("promptBar");
@@ -11,15 +12,17 @@
   var statusButton = document.getElementById("localStatus");
   var refreshButton = document.getElementById("refreshLocal");
   var info = document.getElementById("info");
-  if (!liveBadge || !changeBadge || !activityBadge || !promptToggle || !promptBar || !promptInput || !promptSubmit || !statusButton || !refreshButton || !info) return;
+  if (!liveBadge || !changeBadge || !verificationBadge || !activityBadge || !promptToggle || !promptBar || !promptInput || !promptSubmit || !statusButton || !refreshButton || !info) return;
 
   var latest = null;
   var settings = null;
   var active = false;
   var polling = null;
   var activityPolling = null;
+  var verificationPolling = null;
   var activityAnimation = null;
   var changeAnimation = null;
+  var verificationAnimation = null;
   var activitySequence = 0;
   var localApiBase = null;
 
@@ -154,6 +157,48 @@
     return payload;
   }
 
+  function renderVerificationState(payload) {
+    window.__TOTEM_VERIFICATION_STATE__ = payload || null;
+    var summary = payload && payload.summary ? payload.summary : {};
+    var running = Number(summary.running || 0);
+    var passed = Number(summary.passed || 0);
+    var failed = Number(summary.failed || 0);
+    var unresolved = Number(summary.unresolved || 0);
+    var plan = payload && payload.activePlan ? payload.activePlan : {};
+    var required = Array.isArray(plan.requiredCategories) ? plan.requiredCategories.length : 0;
+    var visible = running > 0 || passed > 0 || failed > 0 || required > 0;
+    verificationBadge.hidden = !visible;
+    verificationBadge.dataset.status = failed > 0 ? "failed" : running > 0 ? "running" : "passed";
+    verificationBadge.textContent = "VERIFY · " + (failed > 0 ? "FAIL " + failed : running > 0 ? "RUN " + running : passed > 0 ? "PASS " + passed : "READY") +
+      " · " + passed + " passed · " + failed + " failed" + (required ? " · required " + required : "");
+    verificationBadge.title = unresolved ? unresolved + " unresolved test target(s)" : "Live verification state";
+    requestAgentDraw();
+
+    if ((running > 0 || failed > 0) && !verificationAnimation) {
+      verificationAnimation = window.setInterval(requestAgentDraw, 80);
+    } else if (running === 0 && failed === 0 && verificationAnimation) {
+      window.clearInterval(verificationAnimation);
+      verificationAnimation = null;
+    }
+  }
+
+  async function fetchVerificationState() {
+    var response = await fetch(apiUrl("/api/verification-state"), { cache: "no-store" });
+    if (!response.ok) throw new Error("verification state unavailable");
+    var payload = await response.json();
+    renderVerificationState(payload);
+    return payload;
+  }
+
+  async function pollVerification() {
+    if (!active) return;
+    try {
+      await fetchVerificationState();
+    } catch {
+      // Verification is independent from workspace connection-state reporting.
+    }
+  }
+
   function renderActivity(event) {
     if (!event || !settings || settings.agentActivityEnabled === false) {
       activityBadge.hidden = true;
@@ -247,6 +292,10 @@
           window.clearInterval(activityPolling);
           activityPolling = null;
         }
+        if (verificationPolling) {
+          window.clearInterval(verificationPolling);
+          verificationPolling = null;
+        }
       }
     }
   }
@@ -318,4 +367,6 @@
   poll();
   polling = window.setInterval(poll, 5000);
   activityPolling = window.setInterval(pollActivity, 1000);
+  verificationPolling = window.setInterval(pollVerification, 2000);
+  pollVerification();
 }());

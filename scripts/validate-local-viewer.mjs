@@ -19,6 +19,7 @@ assert.ok(serverSource.includes('pathname === "/api/refresh"'), "refresh endpoin
 assert.ok(serverSource.includes('pathname === "/api/viewer-settings"'), "viewer settings endpoint is required");
 assert.ok(serverSource.includes('pathname === "/api/activity"'), "agent activity endpoint is required");
 assert.ok(serverSource.includes('pathname === "/api/change-intelligence"'), "Phase 3 change-intelligence endpoint is required");
+assert.ok(serverSource.includes('pathname === "/api/verification-state"'), "Phase 4 verification-state endpoint is required");
 assert.ok(serverSource.includes('pathname === "/api/prompt"'), "prompt intake endpoint is required");
 assert.ok(serverSource.includes('"https://yunitrish006006.github.io"'), "official TotemWorkspace Pages origin must be explicitly allowlisted");
 assert.ok(serverSource.includes('"agent-adapter-required"'), "prompt intake must not claim direct agent execution");
@@ -41,6 +42,7 @@ assert.ok(liveSource.includes('apiUrl("/api/workspace-status")'), "legacy local 
 assert.ok(liveSource.includes('apiUrl("/api/refresh")'), "legacy local adapter must trigger index refresh through the local bridge base");
 assert.ok(liveSource.includes('apiUrl("/api/viewer-settings")'), "legacy viewer must use shared local viewer settings");
 assert.ok(liveSource.includes('apiUrl("/api/activity?after="'), "legacy viewer must poll shared agent activity");
+assert.ok(liveSource.includes('apiUrl("/api/verification-state")'), "legacy viewer must poll shared verification state");
 assert.ok(liveSource.includes('apiUrl("/api/prompt")'), "legacy prompt surface must submit through the bridge");
 assert.ok(liveSource.includes('host === "yunitrish006006.github.io"'), "legacy Pages must discover the loopback bridge");
 assert.ok(liveSource.includes("window.setInterval(poll, 5000)"), "local status must refresh periodically");
@@ -49,6 +51,10 @@ assert.ok(liveSource.includes("window.location.reload()"), "successful local ref
 const settingsPath = path.join(ROOT, ".totem-index", "viewer-settings.json");
 const settingsBackup = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath) : null;
 if (fs.existsSync(settingsPath)) fs.rmSync(settingsPath);
+
+const verificationPath = path.join(ROOT, ".totem-index", "verification-state.json");
+const verificationBackup = fs.existsSync(verificationPath) ? fs.readFileSync(verificationPath) : null;
+if (fs.existsSync(verificationPath)) fs.rmSync(verificationPath);
 
 const flutterFixture = fs.mkdtempSync(path.join(os.tmpdir(), "totem-flutter-root-"));
 fs.writeFileSync(path.join(flutterFixture, "index.html"), "<!doctype html><title>TOTEM Flutter fixture</title><script src=\"main.dart.js\"></script>", "utf8");
@@ -72,6 +78,7 @@ try {
   assert.equal(healthPayload.status, "ok");
   assert.equal(healthPayload.mode, "local");
   assert.equal(healthPayload.activitySchemaVersion, 1);
+  assert.equal(healthPayload.verificationSchemaVersion, 1);
   assert.equal(healthPayload.promptExecution, "agent-adapter-required");
 
   const flutterHealth = await fetch(`${base}/api/health`, {
@@ -170,12 +177,65 @@ try {
     ["prompt_submitted", "file_edit"]
   );
 
+  const testTarget = "test:totem-core:src/test/java/example/BridgeFixtureTest.java";
+  const testStarted = await fetch(`${base}/api/activity`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      type: "test_started",
+      moduleId: "totem-core",
+      test: testTarget,
+      summary: "bridge fixture test started"
+    })
+  });
+  assert.equal(testStarted.status, 202);
+
+  const runningVerification = await fetch(`${base}/api/verification-state`);
+  assert.equal(runningVerification.status, 200);
+  const runningPayload = await runningVerification.json();
+  assert.equal(runningPayload.summary.running, 1);
+  assert.equal(runningPayload.summary.failed, 0);
+  assert.equal(runningPayload.entries.at(-1).target, testTarget);
+  assert.equal(runningPayload.entries.at(-1).status, "running");
+
+  const testFailed = await fetch(`${base}/api/activity`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      type: "test_failed",
+      moduleId: "totem-core",
+      test: testTarget,
+      summary: "bridge fixture test failed"
+    })
+  });
+  assert.equal(testFailed.status, 202);
+
+  const failedVerification = await fetch(`${base}/api/verification-state`);
+  assert.equal(failedVerification.status, 200);
+  const failedPayload = await failedVerification.json();
+  assert.equal(failedPayload.summary.running, 0, "latest state must replace older running state");
+  assert.equal(failedPayload.summary.failed, 1);
+  const fixtureEntries = failedPayload.entries.filter((entry) => entry.target === testTarget);
+  assert.equal(fixtureEntries.length, 1, "same test target must have one latest verification state");
+  assert.equal(fixtureEntries[0].status, "failed");
+
   const absolutePathEvent = await fetch(`${base}/api/activity`, {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify({ type: "file_read", file: ["", "Users", "example", "private.java"].join("/") })
   });
   assert.equal(absolutePathEvent.status, 400, "absolute local paths must be rejected rather than stored");
+
+  const absoluteTestEvent = await fetch(`${base}/api/activity`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      type: "test_failed",
+      moduleId: "totem-core",
+      test: ["/home", "thomas", "workspace", "TotemCore", "src", "test", "PrivateTest.java"].join("/")
+    })
+  });
+  assert.equal(absoluteTestEvent.status, 400, "verification test targets must not expose absolute local paths");
 
   const status = await fetch(`${base}/api/workspace-status`);
   assert.equal(status.status, 200);
@@ -218,6 +278,12 @@ try {
     fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
     fs.writeFileSync(settingsPath, settingsBackup);
   }
+  if (verificationBackup == null) {
+    if (fs.existsSync(verificationPath)) fs.rmSync(verificationPath);
+  } else {
+    fs.mkdirSync(path.dirname(verificationPath), { recursive: true });
+    fs.writeFileSync(verificationPath, verificationBackup);
+  }
 }
 
-console.log("Local live viewer validation passed: Flutter owns /, legacy JS stays under /legacy/, and loopback-only API/settings/activity/refresh behavior remains intact.");
+console.log("Local live viewer validation passed: Flutter owns /, legacy JS stays under /legacy/, and loopback-only API/settings/activity/change/verification/refresh behavior remains intact.");

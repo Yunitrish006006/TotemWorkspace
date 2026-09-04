@@ -8,6 +8,7 @@ class GraphData {
     required this.contracts,
     required this.sharedCapabilities,
     required this.components,
+    required this.verification,
     required this.codeInventory,
   });
 
@@ -19,6 +20,7 @@ class GraphData {
   final List<GraphContract> contracts;
   final List<GraphSharedCapability> sharedCapabilities;
   final List<GraphComponent> components;
+  final GraphVerification verification;
   final GraphCodeInventory codeInventory;
 
   factory GraphData.fromJson(Map<String, dynamic> json) {
@@ -33,6 +35,9 @@ class GraphData {
       sharedCapabilities:
           _objects(json['sharedCapabilities']).map(GraphSharedCapability.fromJson).toList(growable: false),
       components: _objects(json['components']).map(GraphComponent.fromJson).toList(growable: false),
+      verification: GraphVerification.fromJson(
+        json['verification'] is Map ? Map<String, dynamic>.from(json['verification'] as Map) : const {},
+      ),
       codeInventory: GraphCodeInventory.fromJson(
         json['codeInventory'] is Map ? Map<String, dynamic>.from(json['codeInventory'] as Map) : const {},
       ),
@@ -67,6 +72,16 @@ class GraphData {
 
   List<GraphComponent> componentsForModule(String moduleId) =>
       components.where((component) => component.moduleId == moduleId).toList(growable: false);
+
+  GraphTest? testById(String id) => verification.testById(id);
+
+  List<GraphTest> testsForFeature(String featureId) => verification.tests
+      .where((test) => test.featureIds.contains(featureId))
+      .toList(growable: false);
+
+  List<GraphTest> testsForModule(String moduleId) => verification.tests
+      .where((test) => test.moduleId == moduleId)
+      .toList(growable: false);
 
   GraphFeature? manualFeatureFor(String moduleId) {
     final matcher = RegExp(r'manual|手冊', caseSensitive: false);
@@ -285,6 +300,160 @@ class GraphComponent {
         representativePaths: GraphData.strings(json['representativePaths']),
         symbols: GraphData.strings(json['symbols']),
         surfaceKinds: GraphData.strings(json['surfaceKinds']),
+      );
+}
+
+class GraphVerification {
+  const GraphVerification({
+    required this.schemaVersion,
+    required this.generatedAt,
+    required this.tests,
+    required this.relations,
+    required this.requirements,
+    required this.coverage,
+  });
+
+  final int schemaVersion;
+  final String generatedAt;
+  final List<GraphTest> tests;
+  final List<GraphVerificationRelation> relations;
+  final List<GraphVerificationRequirement> requirements;
+  final List<GraphVerificationCoverage> coverage;
+
+  factory GraphVerification.fromJson(Map<String, dynamic> json) => GraphVerification(
+        schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 1,
+        generatedAt: json['generatedAt'] as String? ?? '',
+        tests: GraphData._objects(json['tests']).map(GraphTest.fromJson).toList(growable: false),
+        relations:
+            GraphData._objects(json['relations']).map(GraphVerificationRelation.fromJson).toList(growable: false),
+        requirements:
+            GraphData._objects(json['requirements']).map(GraphVerificationRequirement.fromJson).toList(growable: false),
+        coverage:
+            GraphData._objects(json['coverage']).map(GraphVerificationCoverage.fromJson).toList(growable: false),
+      );
+
+  GraphTest? testById(String id) {
+    for (final test in tests) {
+      if (test.id == id) return test;
+    }
+    return null;
+  }
+}
+
+class GraphTest {
+  const GraphTest({
+    required this.id,
+    required this.moduleId,
+    required this.repoName,
+    required this.path,
+    required this.label,
+    required this.kind,
+    required this.categories,
+    required this.symbols,
+    required this.featureIds,
+    required this.componentIds,
+    required this.contractIds,
+    required this.capabilityIds,
+  });
+
+  final String id;
+  final String moduleId;
+  final String repoName;
+  final String path;
+  final String label;
+  final String kind;
+  final List<String> categories;
+  final List<String> symbols;
+  final List<String> featureIds;
+  final List<String> componentIds;
+  final List<String> contractIds;
+  final List<String> capabilityIds;
+
+  factory GraphTest.fromJson(Map<String, dynamic> json) => GraphTest(
+        id: json['id'] as String? ?? '',
+        moduleId: json['moduleId'] as String? ?? '',
+        repoName: json['repoName'] as String? ?? '',
+        path: json['path'] as String? ?? '',
+        label: json['label'] as String? ?? '',
+        kind: json['kind'] as String? ?? 'test',
+        categories: GraphData.strings(json['categories']),
+        symbols: GraphData.strings(json['symbols']),
+        featureIds: GraphData.strings(json['featureIds']),
+        componentIds: GraphData.strings(json['componentIds']),
+        contractIds: GraphData.strings(json['contractIds']),
+        capabilityIds: GraphData.strings(json['capabilityIds']),
+      );
+}
+
+class GraphVerificationRelation {
+  const GraphVerificationRelation({
+    required this.id,
+    required this.type,
+    required this.from,
+    required this.to,
+    required this.targetType,
+    required this.confidence,
+  });
+
+  final String id;
+  final String type;
+  final String from;
+  final String to;
+  final String targetType;
+  final String confidence;
+
+  factory GraphVerificationRelation.fromJson(Map<String, dynamic> json) => GraphVerificationRelation(
+        id: json['id'] as String? ?? '',
+        type: json['type'] as String? ?? 'validated-by',
+        from: json['from'] as String? ?? '',
+        to: json['to'] as String? ?? '',
+        targetType: json['targetType'] as String? ?? '',
+        confidence: json['confidence'] as String? ?? '',
+      );
+}
+
+class GraphVerificationRequirement {
+  const GraphVerificationRequirement({
+    required this.id,
+    required this.moduleId,
+    required this.category,
+    required this.sources,
+    required this.notes,
+  });
+
+  final String id;
+  final String moduleId;
+  final String category;
+  final List<String> sources;
+  final String? notes;
+
+  factory GraphVerificationRequirement.fromJson(Map<String, dynamic> json) => GraphVerificationRequirement(
+        id: json['id'] as String? ?? '',
+        moduleId: json['moduleId'] as String? ?? '',
+        category: json['category'] as String? ?? '',
+        sources: GraphData.strings(json['sources']),
+        notes: json['notes'] as String?,
+      );
+}
+
+class GraphVerificationCoverage {
+  const GraphVerificationCoverage({
+    required this.moduleId,
+    required this.testCount,
+    required this.linkedFeatureCount,
+    required this.linkedFeatureIds,
+  });
+
+  final String moduleId;
+  final int testCount;
+  final int linkedFeatureCount;
+  final List<String> linkedFeatureIds;
+
+  factory GraphVerificationCoverage.fromJson(Map<String, dynamic> json) => GraphVerificationCoverage(
+        moduleId: json['moduleId'] as String? ?? '',
+        testCount: (json['testCount'] as num?)?.toInt() ?? 0,
+        linkedFeatureCount: (json['linkedFeatureCount'] as num?)?.toInt() ?? 0,
+        linkedFeatureIds: GraphData.strings(json['linkedFeatureIds']),
       );
 }
 

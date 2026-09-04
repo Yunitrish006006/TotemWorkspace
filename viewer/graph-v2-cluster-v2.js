@@ -17,14 +17,18 @@
   var contracts = DATA.contracts || [];
   var capabilities = DATA.sharedCapabilities || [];
   var components = DATA.components || [];
+  var verification = DATA.verification || { tests: [], relations: [], requirements: [], coverage: [] };
+  var tests = verification.tests || [];
+  var verificationRelations = verification.relations || [];
   var code = DATA.code || { nodes: [] };
 
   document.getElementById("snapshot").textContent = ((DATA.snapshot && DATA.snapshot.date) || "unknown") + " snapshot";
-  document.getElementById("stats").textContent = modules.length + " modules｜" + features.length + " features｜" + components.length + " components｜" + contracts.length + " contracts｜" + capabilities.length + " shared";
+  document.getElementById("stats").textContent = modules.length + " modules｜" + features.length + " features｜" + components.length + " components｜" + tests.length + " tests｜" + contracts.length + " contracts｜" + capabilities.length + " shared";
 
   var moduleMap = new Map(modules.map(function (x) { return [x.id, x]; }));
   var featureMap = new Map(features.map(function (x) { return [x.id, x]; }));
   var componentMap = new Map(components.map(function (x) { return [x.id, x]; }));
+  var testMap = new Map(tests.map(function (x) { return [x.id, x]; }));
   var contractMap = new Map(contracts.map(function (x) { return [x.id, x]; }));
   var edgeFilterKeys = [
     "hard-core",
@@ -33,7 +37,8 @@
     "eventbus",
     "observer-provider",
     "external-service",
-    "shared-capability"
+    "shared-capability",
+    "validated-by"
   ];
   var enabledEdgeFilters = new Set(edgeFilterKeys);
 
@@ -130,7 +135,10 @@
     var syntheticCapabilityCount = capabilities.filter(function (capability) {
       return capability.consumerModuleId === moduleId && !capabilityConsumerFeature(capability);
     }).length;
-    var count = Math.max(1, featureCount + unmappedComponentCount + syntheticCapabilityCount);
+    var unmappedTestCount = tests.filter(function (test) {
+      return test.moduleId === moduleId && !(test.featureIds || []).length;
+    }).length;
+    var count = Math.max(1, featureCount + unmappedComponentCount + syntheticCapabilityCount + unmappedTestCount);
     return Math.min(245, 118 + Math.sqrt(count) * 27);
   }
 
@@ -141,6 +149,7 @@
   function band(type) {
     if (type === "component") return [0.48, 0.72];
     if (type === "implementation") return [0.38, 0.62];
+    if (type === "test") return [0.44, 0.70];
     if (type === "capability") return [0.56, 0.78];
     return [0.34, 0.64];
   }
@@ -495,6 +504,9 @@
       var unmappedComponents = components.filter(function (component) {
         return component.moduleId === moduleId && !(component.featureIds || []).length;
       });
+      var unmappedTests = tests.filter(function (test) {
+        return test.moduleId === moduleId && !(test.featureIds || []).length;
+      }).slice(0, 8);
       var moduleCaps = capabilities.filter(function (capability) {
         return capability.consumerModuleId === moduleId;
       });
@@ -506,7 +518,7 @@
       clusters.push({
         ownerId: moduleId,
         radius: radius,
-        childCount: moduleFeatures.length + unmappedComponents.length + syntheticCaps.length
+        childCount: moduleFeatures.length + unmappedComponents.length + syntheticCaps.length + unmappedTests.length
       });
 
       moduleFeatures.forEach(function (feature) {
@@ -559,6 +571,28 @@
           retargeted: true
         });
       });
+
+      unmappedTests.forEach(function (test) {
+        var position = relationAwareScatter(parent, test.id, "test", radius, moduleId, nodes, []);
+        nodes.push({
+          id: test.id,
+          label: "TEST · " + test.label,
+          type: "test",
+          ownerId: moduleId,
+          x: position.x,
+          y: position.y,
+          z: position.z,
+          source: test
+        });
+        edges.push({
+          id: "validated-by-module:" + moduleId + ":" + test.id,
+          from: moduleId,
+          to: test.id,
+          type: "validated-by",
+          label: "module test evidence",
+          retargeted: true
+        });
+      });
     });
 
     expanded.forEach(function (featureId) {
@@ -569,7 +603,10 @@
       var mapped = components.filter(function (component) {
         return (component.featureIds || []).includes(featureId);
       });
-      var radius = Math.min(150, 74 + Math.sqrt(Math.max(1, mapped.length)) * 22);
+      var linkedTests = tests.filter(function (test) {
+        return (test.featureIds || []).includes(featureId);
+      }).slice(0, 8);
+      var radius = Math.min(150, 74 + Math.sqrt(Math.max(1, mapped.length + linkedTests.length)) * 22);
       mapped.forEach(function (component) {
         var position = scatter(parent, component.id, "component", radius);
         nodes.push({
@@ -588,6 +625,30 @@
           to: component.id,
           type: "detail",
           label: "responsibility",
+          retargeted: true
+        });
+      });
+
+      linkedTests.forEach(function (test) {
+        if (!nodes.some(function (node) { return node.id === test.id; })) {
+          var position = scatter(parent, test.id, "test", radius * 0.92);
+          nodes.push({
+            id: test.id,
+            label: "TEST · " + test.label,
+            type: "test",
+            ownerId: feature.ownerId,
+            x: position.x,
+            y: position.y,
+            z: position.z,
+            source: test
+          });
+        }
+        edges.push({
+          id: "validated-by:" + featureId + ":" + test.id,
+          from: featureId,
+          to: test.id,
+          type: "validated-by",
+          label: "validated by",
           retargeted: true
         });
       });
@@ -668,6 +729,7 @@
     if (edge.type === "fabric-suggests") return "#fbbf24";
     if (edge.type === "external-service") return "#22d3ee";
     if (edge.type === "shared-capability") return "#f472b6";
+    if (edge.type === "validated-by") return "#4ade80";
     if (edge.type === "detail") return "#34d399";
     if (edge.type === "feature-detail") return "#64748b";
     return "#a78bfa";
@@ -785,6 +847,29 @@
     ctx.restore();
   }
 
+  function verificationColor(status) {
+    if (status === "failed") return "#f87171";
+    if (status === "running") return "#67e8f9";
+    if (status === "passed") return "#86efac";
+    return "#94a3b8";
+  }
+
+  function drawVerificationHalo(ctx, projected, radius, status) {
+    var phase = status === "passed" ? 0.35 : (Date.now() % 1200) / 1200;
+    var pulse = status === "passed" ? phase : (Math.sin(phase * Math.PI * 2) + 1) / 2;
+    var color = verificationColor(status);
+    ctx.save();
+    ctx.beginPath();
+    ctx.arc(projected.x, projected.y, radius + 10 + pulse * 5, 0, Math.PI * 2);
+    ctx.strokeStyle = color;
+    ctx.globalAlpha = status === "passed" ? 0.72 : 0.72 + pulse * 0.24;
+    ctx.lineWidth = status === "failed" ? 3 + pulse * 1.5 : 2.2 + pulse;
+    ctx.shadowColor = color;
+    ctx.shadowBlur = status === "failed" ? 12 + pulse * 8 : 8 + pulse * 5;
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function drawChangeHalo(ctx, projected, radius, kind) {
     var animated = window.__TOTEM_CHANGE_ANIMATIONS__ !== false;
     var phase = animated ? (Date.now() % 1200) / 1200 : 0.25;
@@ -817,9 +902,9 @@
   }
 
   function drawChild(ctx, node, projected, selected, connected) {
-    var radius = node.type === "capability" ? 6 : node.type === "component" ? 5.8 : node.type === "implementation" ? 4.3 : 5.25;
-    var stroke = selected ? "#ffffff" : node.type === "capability" ? "#f472b6" : node.type === "component" ? "#34d399" : node.type === "implementation" ? "#a7f3d0" : ((node.source && node.source.softContractIds) || []).length ? "#fbbf24" : "#8095ad";
-    var fill = node.type === "capability" ? "#f472b6" : node.type === "component" ? "#34d399" : node.type === "implementation" ? "#a7f3d0" : "#93c5fd";
+    var radius = node.type === "capability" ? 6 : node.type === "component" ? 5.8 : node.type === "implementation" ? 4.3 : node.type === "test" ? 5.4 : 5.25;
+    var stroke = selected ? "#ffffff" : node.type === "capability" ? "#f472b6" : node.type === "component" ? "#34d399" : node.type === "implementation" ? "#a7f3d0" : node.type === "test" ? "#4ade80" : ((node.source && node.source.softContractIds) || []).length ? "#fbbf24" : "#8095ad";
+    var fill = node.type === "capability" ? "#f472b6" : node.type === "component" ? "#34d399" : node.type === "implementation" ? "#a7f3d0" : node.type === "test" ? "#4ade80" : "#93c5fd";
     var text = short(node.label, 40);
 
     ctx.globalAlpha = spotlightId ? (connected ? 1 : 0.22) : 1;
@@ -908,8 +993,16 @@
     var changeIntelligence = window.__TOTEM_CHANGE_INTELLIGENCE__ || null;
     var changeDiff = changeIntelligence && changeIntelligence.semanticDiff ? changeIntelligence.semanticDiff : {};
     var changeImpact = changeIntelligence && changeIntelligence.impact ? changeIntelligence.impact : {};
-    var changedEntityIds = new Set(Array.isArray(changeDiff.changedEntityIds) ? changeDiff.changedEntityIds : []);
+    var changedEntityIds = new Set(
+      changeIntelligence && Array.isArray(changeIntelligence.affectedEntityIds)
+        ? changeIntelligence.affectedEntityIds
+        : Array.isArray(changeDiff.changedEntityIds) ? changeDiff.changedEntityIds : []
+    );
     var impactedModules = new Set(Array.isArray(changeImpact.impactedModules) ? changeImpact.impactedModules : []);
+    var verificationState = window.__TOTEM_VERIFICATION_STATE__ || {};
+    var runningVerificationTargets = new Set(Array.isArray(verificationState.runningTargetIds) ? verificationState.runningTargetIds : []);
+    var passedVerificationTargets = new Set(Array.isArray(verificationState.passedTargetIds) ? verificationState.passedTargetIds : []);
+    var failedVerificationTargets = new Set(Array.isArray(verificationState.failedTargetIds) ? verificationState.failedTargetIds : []);
     var agentActivityNodeId = null;
     if (agentActivity) {
       if (agentActivity.componentId && byId.has(agentActivity.componentId)) agentActivityNodeId = agentActivity.componentId;
@@ -933,10 +1026,26 @@
       var internal = edge.type === "detail" || edge.type === "feature-detail";
 
       var changedRelation = relationChanged(edge, changedEntityIds);
+      var verificationStatus = failedVerificationTargets.has(edge.from) || failedVerificationTargets.has(edge.to)
+        ? "failed"
+        : runningVerificationTargets.has(edge.from) || runningVerificationTargets.has(edge.to)
+          ? "running"
+          : passedVerificationTargets.has(edge.from) || passedVerificationTargets.has(edge.to)
+            ? "passed"
+            : null;
       var changePhase = window.__TOTEM_CHANGE_ANIMATIONS__ === false ? 0.5 : (Math.sin((Date.now() % 1200) / 1200 * Math.PI * 2) + 1) / 2;
-      var edgeAlpha = changedRelation ? 0.74 + changePhase * 0.24 : spotlightId ? (active ? 1 : 0.055) : (relation ? 0.82 : internal ? 0.16 : 0.34);
-      var edgeWidth = changedRelation ? 2.8 + changePhase * 1.8 : spotlightId && active ? 4.6 : relation ? 2.6 : internal ? 1.15 : 1.45;
-      var color = changedRelation ? "#fbbf24" : edgeColor(edge);
+      var verificationEdge = edge.type === "validated-by" && verificationStatus;
+      var edgeAlpha = changedRelation
+        ? 0.74 + changePhase * 0.24
+        : verificationEdge
+          ? 0.92
+          : spotlightId ? (active ? 1 : 0.055) : (relation ? 0.82 : internal ? 0.16 : 0.34);
+      var edgeWidth = changedRelation
+        ? 2.8 + changePhase * 1.8
+        : verificationEdge
+          ? 2.8
+          : spotlightId && active ? 4.6 : relation ? 2.6 : internal ? 1.15 : 1.45;
+      var color = changedRelation ? "#fbbf24" : verificationEdge ? verificationColor(verificationStatus) : edgeColor(edge);
       ctx.beginPath();
       ctx.moveTo(a.x, a.y);
       ctx.lineTo(b.x, b.y);
@@ -957,17 +1066,27 @@
       return projected.get(a.id).z - projected.get(b.id).z;
     }).forEach(function (node) {
       var p = projected.get(node.id);
-      var child = node.type === "feature" || node.type === "component" || node.type === "implementation" || node.type === "capability";
+      var child = node.type === "feature" || node.type === "component" || node.type === "implementation" || node.type === "capability" || node.type === "test";
       var selected = spotlightId === node.id || keyboardFocusId === node.id;
       var connected = connectedToSpotlight(currentScene, node.id);
       var activityRadius = child
-        ? (node.type === "capability" ? 6 : node.type === "component" ? 5.8 : node.type === "implementation" ? 4.3 : 5.25)
+        ? (node.type === "capability" ? 6 : node.type === "component" ? 5.8 : node.type === "implementation" ? 4.3 : node.type === "test" ? 5.4 : 5.25)
         : Math.max(8, 12 * p.scale);
+      var verificationStatus = failedVerificationTargets.has(node.id)
+        ? "failed"
+        : runningVerificationTargets.has(node.id)
+          ? "running"
+          : passedVerificationTargets.has(node.id)
+            ? "passed"
+            : null;
       if (node.type === "module" && impactedModules.has(node.id)) {
         drawChangeHalo(ctx, p, activityRadius, "impact");
       }
       if (changedEntityIds.has(node.id)) {
         drawChangeHalo(ctx, p, activityRadius, "change");
+      }
+      if (verificationStatus) {
+        drawVerificationHalo(ctx, p, activityRadius, verificationStatus);
       }
       if (node.id === agentActivityNodeId) {
         drawAgentActivityHalo(ctx, p, activityRadius, agentActivity && agentActivity.type);
@@ -1030,7 +1149,7 @@
 
   function keyboardNodes() {
     return scene().nodes.filter(function (node) {
-      return node.type === "module" || node.type === "external" || node.type === "feature" || node.type === "component" || node.type === "implementation" || node.type === "capability";
+      return node.type === "module" || node.type === "external" || node.type === "feature" || node.type === "component" || node.type === "implementation" || node.type === "capability" || node.type === "test";
     });
   }
 
@@ -1110,6 +1229,7 @@
       }
       var moduleFeatures = features.filter(function (feature) { return feature.ownerId === node.id; });
       var moduleComponents = components.filter(function (component) { return component.moduleId === node.id; });
+      var moduleTests = tests.filter(function (test) { return test.moduleId === node.id; });
       var moduleCapabilities = capabilities.filter(function (capability) { return capability.consumerModuleId === node.id || capability.providerModuleId === node.id; });
       var expandedModules = modules.filter(function (module) { return expanded.has(module.id); }).length;
       setInfo((node.source && node.source.name) || node.label, (node.source && node.source.role) || "", [
@@ -1123,6 +1243,7 @@
             "L2 curated features: " + moduleFeatures.length,
             "L3 inferred components: " + moduleComponents.length,
             "Mapped components: " + moduleComponents.filter(function (component) { return (component.featureIds || []).length; }).length,
+            "Test entities: " + moduleTests.length,
             "Shared capabilities: " + moduleCapabilities.length
           ]
         },
@@ -1159,6 +1280,9 @@
       var featureComponents = components.filter(function (component) {
         return (component.featureIds || []).includes(feature.id);
       });
+      var featureTests = tests.filter(function (test) {
+        return (test.featureIds || []).includes(feature.id);
+      });
       setInfo(node.label, feature.summary || "", [
         {
           title: "L3 Components",
@@ -1167,6 +1291,12 @@
                 return component.label + "｜" + component.mappingConfidence + "｜" + component.fileCount + " files";
               })
             : ["No strongly mapped component evidence"]
+        },
+        {
+          title: "Validated by",
+          items: featureTests.length
+            ? featureTests.map(function (test) { return test.kind + "｜" + test.path; })
+            : ["No confidently linked Test entity"]
         },
         {
           title: "Shared capability links",
@@ -1207,6 +1337,26 @@
         {
           title: "Surface evidence",
           items: (component.surfaceKinds || []).concat((component.symbols || []).slice(0, 8))
+        }
+      ]);
+    } else if (node.type === "test") {
+      var test = node.source || {};
+      setInfo(node.label, (test.kind || "test") + " verification evidence", [
+        {
+          title: "Test path",
+          items: [test.path || node.label]
+        },
+        {
+          title: "Validated Feature",
+          items: test.featureIds || []
+        },
+        {
+          title: "Validated contract / API",
+          items: (test.contractIds || []).concat(test.capabilityIds || [])
+        },
+        {
+          title: "Verification categories",
+          items: test.categories || []
         }
       ]);
     } else if (node.type === "implementation") {

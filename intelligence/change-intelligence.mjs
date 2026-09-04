@@ -119,6 +119,40 @@ export function semanticSnapshot(graph) {
     }
   }
 
+  for (const test of graph?.verification?.tests ?? []) {
+    entities.push(entityRecord({
+      id: test.id,
+      type: "test",
+      moduleId: test.moduleId ?? null,
+      payload: {
+        path: normalizePath(test.path),
+        kind: test.kind,
+        categories: [...(test.categories ?? [])],
+        featureIds: [...(test.featureIds ?? [])],
+        componentIds: [...(test.componentIds ?? [])],
+        contractIds: [...(test.contractIds ?? [])],
+        capabilityIds: [...(test.capabilityIds ?? [])]
+      }
+    }));
+  }
+
+  const testById = new Map((graph?.verification?.tests ?? []).map((test) => [test.id, test]));
+  for (const relation of graph?.verification?.relations ?? []) {
+    const test = testById.get(relation.to);
+    entities.push(entityRecord({
+      id: relation.id,
+      type: "relation",
+      moduleId: test?.moduleId ?? null,
+      payload: {
+        type: relation.type,
+        from: relation.from,
+        to: relation.to,
+        targetType: relation.targetType,
+        confidence: relation.confidence
+      }
+    }));
+  }
+
   for (const contract of graph?.contracts ?? []) {
     const relation = relationPayload(contract);
     entities.push(entityRecord({
@@ -194,19 +228,24 @@ export function diffSemanticSnapshots(before, after) {
 }
 
 function graphSemanticCoordinates(graph) {
-  return { components: graph?.components ?? [] };
+  return {
+    components: graph?.components ?? [],
+    tests: graph?.verification?.tests ?? []
+  };
 }
 
 export function mapGitChangesToSemantic(gitChanges, { beforeGraph, afterGraph } = {}) {
   const before = graphSemanticCoordinates(beforeGraph);
   const after = graphSemanticCoordinates(afterGraph);
   const components = [...before.components, ...after.components];
+  const tests = [...before.tests, ...after.tests];
 
   return Object.freeze((gitChanges ?? []).map((change) => {
     const changedPath = normalizePath(change.path);
     const componentIds = new Set();
     const featureIds = new Set();
     const implementationIds = new Set();
+    const testIds = new Set();
 
     for (const component of components) {
       if (component.moduleId !== change.moduleId) continue;
@@ -217,6 +256,14 @@ export function mapGitChangesToSemantic(gitChanges, { beforeGraph, afterGraph } 
       implementationIds.add(`implementation:${component.id}:${changedPath}`);
     }
 
+    for (const test of tests) {
+      if (test.moduleId !== change.moduleId) continue;
+      if (normalizePath(test.path) !== changedPath) continue;
+      testIds.add(test.id);
+      for (const featureId of test.featureIds ?? []) featureIds.add(featureId);
+      for (const componentId of test.componentIds ?? []) componentIds.add(componentId);
+    }
+
     return Object.freeze({
       moduleId: change.moduleId,
       repoName: change.repoName,
@@ -225,7 +272,8 @@ export function mapGitChangesToSemantic(gitChanges, { beforeGraph, afterGraph } 
       previousPath: change.previousPath ? normalizePath(change.previousPath) : null,
       componentIds: Object.freeze([...componentIds].sort()),
       featureIds: Object.freeze([...featureIds].sort()),
-      implementationIds: Object.freeze([...implementationIds].sort())
+      implementationIds: Object.freeze([...implementationIds].sort()),
+      testIds: Object.freeze([...testIds].sort())
     });
   }));
 }
@@ -353,6 +401,7 @@ export function buildChangeIntelligence({
     for (const id of change.featureIds) affectedEntityIds.add(id);
     for (const id of change.componentIds) affectedEntityIds.add(id);
     for (const id of change.implementationIds) affectedEntityIds.add(id);
+    for (const id of change.testIds) affectedEntityIds.add(id);
   }
   const impact = safeImpact({ knowledge, gitChanges: mappedGitChanges, semanticDiff });
 

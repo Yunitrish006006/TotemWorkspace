@@ -19,6 +19,9 @@ class GraphView extends StatefulWidget {
     this.changedEntityIds = const <String>{},
     this.impactedModuleIds = const <String>{},
     this.changeAnimationsEnabled = true,
+    this.runningVerificationTargetIds = const <String>{},
+    this.passedVerificationTargetIds = const <String>{},
+    this.failedVerificationTargetIds = const <String>{},
   });
 
   final GraphData data;
@@ -30,6 +33,9 @@ class GraphView extends StatefulWidget {
   final Set<String> changedEntityIds;
   final Set<String> impactedModuleIds;
   final bool changeAnimationsEnabled;
+  final Set<String> runningVerificationTargetIds;
+  final Set<String> passedVerificationTargetIds;
+  final Set<String> failedVerificationTargetIds;
 
   @override
   State<GraphView> createState() => _GraphViewState();
@@ -230,6 +236,9 @@ class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMix
                     changedEntityIds: widget.changedEntityIds,
                     impactedModuleIds: widget.impactedModuleIds,
                     changeAnimationsEnabled: widget.changeAnimationsEnabled,
+                    runningVerificationTargetIds: widget.runningVerificationTargetIds,
+                    passedVerificationTargetIds: widget.passedVerificationTargetIds,
+                    failedVerificationTargetIds: widget.failedVerificationTargetIds,
                   ),
                 ),
               ),
@@ -485,6 +494,14 @@ class _InfoPanel extends StatelessWidget {
             if (component.featureIds.isEmpty) const _Item('Module-level component · no strong Feature mapping'),
             _Item(expanded ? 'L4 Implementation expanded' : 'Activate to reveal implementation files'),
           ],
+          if (node.test case final test?) ...[
+            const SizedBox(height: 8),
+            _Item('${test.kind} · ${test.path}'),
+            if (test.categories.isNotEmpty) _Item('Categories: ${test.categories.join(', ')}'),
+            if (test.featureIds.isNotEmpty) _Item('Validates Feature: ${test.featureIds.join(', ')}'),
+            if (test.contractIds.isNotEmpty) _Item('Validates contract/API: ${test.contractIds.join(', ')}'),
+            if (test.capabilityIds.isNotEmpty) _Item('Validates capability: ${test.capabilityIds.join(', ')}'),
+          ],
           if (node.implementationPath case final implementationPath?) ...[
             const SizedBox(height: 8),
             _Item(implementationPath),
@@ -501,7 +518,7 @@ class _InfoPanel extends StatelessWidget {
           for (final edge in relationships) _Item('${edge.type} · ${edge.from} → ${edge.to}\n${edge.label}'),
           const SizedBox(height: 20),
           const Text(
-            '點 Module → Feature → Component 逐層展開；Component 再展開 L4 implementation · 左鍵/一指旋轉 · 右鍵拖曳平移 · 兩指縮放＋平移 · 滾輪縮放 · 方向鍵選節點 · Enter/Space 啟動',
+            '點 Module → Feature → Component/Test 逐層展開；Component 再展開 L4 implementation · 左鍵/一指旋轉 · 右鍵拖曳平移 · 兩指縮放＋平移 · 滾輪縮放 · 方向鍵選節點 · Enter/Space 啟動',
             style: TextStyle(color: Color(0xFF8FA5BD), fontSize: 11, height: 1.45),
           ),
         ],
@@ -556,6 +573,9 @@ class _GraphPainter extends CustomPainter {
     required this.changedEntityIds,
     required this.impactedModuleIds,
     required this.changeAnimationsEnabled,
+    required this.runningVerificationTargetIds,
+    required this.passedVerificationTargetIds,
+    required this.failedVerificationTargetIds,
   }) : super(repaint: activityPulse);
 
   final GraphData data;
@@ -568,6 +588,9 @@ class _GraphPainter extends CustomPainter {
   final Set<String> changedEntityIds;
   final Set<String> impactedModuleIds;
   final bool changeAnimationsEnabled;
+  final Set<String> runningVerificationTargetIds;
+  final Set<String> passedVerificationTargetIds;
+  final Set<String> failedVerificationTargetIds;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -615,21 +638,38 @@ class _GraphPainter extends CustomPainter {
       final changePulse = changeAnimationsEnabled
           ? (math.sin(activityPulse.value * math.pi * 2) + 1) / 2
           : 0.5;
+      final verificationStatus = failedVerificationTargetIds.contains(edge.from) ||
+              failedVerificationTargetIds.contains(edge.to)
+          ? 'failed'
+          : runningVerificationTargetIds.contains(edge.from) || runningVerificationTargetIds.contains(edge.to)
+              ? 'running'
+              : passedVerificationTargetIds.contains(edge.from) || passedVerificationTargetIds.contains(edge.to)
+                  ? 'passed'
+                  : null;
       final baseColor = _edgeColor(edge.type);
-      final color = changedRelation ? const Color(0xFFFBBF24) : baseColor;
+      final verificationColor = _verificationColor(verificationStatus);
+      final color = changedRelation
+          ? const Color(0xFFFBBF24)
+          : verificationStatus != null && edge.type == 'validated-by'
+              ? verificationColor
+              : baseColor;
       final paint = Paint()
         ..color = color.withValues(
           alpha: changedRelation
               ? 0.72 + changePulse * 0.25
-              : spotlightId == null
-                  ? 0.58
-                  : (incident ? 0.95 : 0.07),
+              : verificationStatus != null && edge.type == 'validated-by'
+                  ? 0.92
+                  : spotlightId == null
+                      ? 0.58
+                      : (incident ? 0.95 : 0.07),
         )
         ..strokeWidth = changedRelation
             ? 2.6 + changePulse * 1.8
-            : incident && spotlightId != null
-                ? 2.4
-                : 1.45;
+            : verificationStatus != null && edge.type == 'validated-by'
+                ? 2.8
+                : incident && spotlightId != null
+                    ? 2.4
+                    : 1.45;
       canvas.drawLine(from.offset, to.offset, paint);
       _drawArrow(
         canvas,
@@ -647,6 +687,13 @@ class _GraphPainter extends CustomPainter {
       final agentActive = node.id == activityNodeId;
       final changed = changedEntityIds.contains(node.id);
       final impacted = node.kind == 'module' && impactedModuleIds.contains(node.id);
+      final verificationStatus = failedVerificationTargetIds.contains(node.id)
+          ? 'failed'
+          : runningVerificationTargetIds.contains(node.id)
+              ? 'running'
+              : passedVerificationTargetIds.contains(node.id)
+                  ? 'passed'
+                  : null;
       _drawNode(
         canvas,
         node,
@@ -656,6 +703,7 @@ class _GraphPainter extends CustomPainter {
         agentActive: agentActive,
         changed: changed,
         impacted: impacted,
+        verificationStatus: verificationStatus,
       );
     }
   }
@@ -698,6 +746,7 @@ class _GraphPainter extends CustomPainter {
     required bool agentActive,
     required bool changed,
     required bool impacted,
+    required String? verificationStatus,
   }) {
     final child = node.isChild;
     final radius = child
@@ -705,6 +754,7 @@ class _GraphPainter extends CustomPainter {
             'capability' => 6.0,
             'component' => 5.8,
             'implementation' => 4.3,
+            'test' => 5.4,
             _ => 5.3,
           }
         : math.max(8.0, 12 * projected.scale);
@@ -714,6 +764,7 @@ class _GraphPainter extends CustomPainter {
       'feature' => const Color(0xFF93C5FD),
       'component' => const Color(0xFF34D399),
       'implementation' => const Color(0xFFA7F3D0),
+      'test' => const Color(0xFF4ADE80),
       _ when node.rank == 3 => const Color(0xFF22D3EE),
       _ => const Color(0xFF60A5FA),
     };
@@ -748,6 +799,28 @@ class _GraphPainter extends CustomPainter {
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2.0 + changePulse * 1.4,
       );
+    }
+
+    if (verificationStatus != null) {
+      final pulse = verificationStatus == 'passed'
+          ? 0.35
+          : (math.sin(activityPulse.value * math.pi * 2) + 1) / 2;
+      final color = _verificationColor(verificationStatus);
+      canvas.drawCircle(
+        projected.offset,
+        radius + 10 + pulse * 5,
+        Paint()
+          ..color = color.withValues(alpha: verificationStatus == 'passed' ? 0.72 : 0.72 + pulse * 0.24)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = verificationStatus == 'failed' ? 3.0 + pulse * 1.5 : 2.2 + pulse,
+      );
+      if (verificationStatus == 'failed') {
+        canvas.drawCircle(
+          projected.offset,
+          radius + 6,
+          Paint()..color = color.withValues(alpha: 0.08 + pulse * 0.05),
+        );
+      }
     }
 
     if (agentActive) {
@@ -835,8 +908,16 @@ class _GraphPainter extends CustomPainter {
         'fabric-suggests' => const Color(0xFFFBBF24),
         'external-service' => const Color(0xFF22D3EE),
         'shared-capability' => const Color(0xFFF472B6),
+        'validated-by' => const Color(0xFF4ADE80),
         'detail' => const Color(0xFF34D399),
         _ => const Color(0xFFA78BFA),
+      };
+
+  Color _verificationColor(String? status) => switch (status) {
+        'failed' => const Color(0xFFF87171),
+        'running' => const Color(0xFF67E8F9),
+        'passed' => const Color(0xFF86EFAC),
+        _ => const Color(0xFF94A3B8),
       };
 
   @override

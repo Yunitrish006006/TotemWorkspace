@@ -18,6 +18,7 @@
     <span class="pill" id="stats">loading</span>
     <span class="pill live-local" id="liveLocal" hidden>LIVE LOCAL</span>
     <span class="pill change-intelligence" id="changeIntelligence" hidden>CHANGE</span>
+    <span class="pill verification-state" id="verificationState" hidden>VERIFY</span>
     <span class="pill agent-activity" id="agentActivity" hidden>AGENT</span>
     <button id="promptToggle" type="button" hidden>Prompt OFF</button>
     <button id="localStatus" type="button" hidden>本機狀態</button>
@@ -26,7 +27,7 @@
     <button id="overview" type="button">總覽</button>
     <button id="expandAll3d" type="button">全展開</button>
     <div class="filter-wrap">
-      <button id="edgeFilters" type="button" aria-expanded="false" aria-controls="edgeFilterPanel">線條 7/7</button>
+      <button id="edgeFilters" type="button" aria-expanded="false" aria-controls="edgeFilterPanel">線條 8/8</button>
       <div id="edgeFilterPanel" class="edge-filter" hidden>
         <b>線條種類</b>
         <label><input type="checkbox" data-edge-filter="hard-core" checked><i class="dot hard"></i>Hard Core</label>
@@ -36,6 +37,7 @@
         <label><input type="checkbox" data-edge-filter="observer-provider" checked><i class="dot compat"></i>Observer provider</label>
         <label><input type="checkbox" data-edge-filter="external-service" checked><i class="dot service"></i>External service</label>
         <label><input type="checkbox" data-edge-filter="shared-capability" checked><i class="dot capability"></i>Shared Core capability</label>
+        <label><input type="checkbox" data-edge-filter="validated-by" checked><i class="dot verification"></i>Validated by Test</label>
         <small>展開模組後，只保留能落到實際 feature / capability endpoint 的跨模組線。</small>
         <div class="filter-actions">
           <button id="edgeFilterAll" type="button">全部</button>
@@ -65,6 +67,7 @@
       <span><i class="dot compat"></i>Runtime / Observer / EventBus</span>
       <span><i class="dot service"></i>External service</span>
       <span><i class="dot capability"></i>Shared Core capability</span>
+      <span><i class="dot verification"></i>Validated by Test</span>
       <span><i class="dot generated"></i>Generated code detail</span>
     </div>
   </main>

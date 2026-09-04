@@ -411,6 +411,128 @@ class ChangeIntelligence {
   }
 }
 
+class VerificationStateEntry {
+  const VerificationStateEntry({
+    required this.target,
+    required this.status,
+    required this.sequence,
+    required this.timestamp,
+    required this.summary,
+    required this.resolved,
+    required this.testId,
+    required this.moduleId,
+    required this.featureIds,
+    required this.componentIds,
+    required this.contractIds,
+    required this.capabilityIds,
+  });
+
+  final String target;
+  final String status;
+  final int sequence;
+  final String timestamp;
+  final String? summary;
+  final bool resolved;
+  final String? testId;
+  final String? moduleId;
+  final List<String> featureIds;
+  final List<String> componentIds;
+  final List<String> contractIds;
+  final List<String> capabilityIds;
+
+  factory VerificationStateEntry.fromJson(Map<String, dynamic> json) => VerificationStateEntry(
+        target: json['target'] as String? ?? '',
+        status: json['status'] as String? ?? 'unknown',
+        sequence: (json['sequence'] as num?)?.toInt() ?? 0,
+        timestamp: json['timestamp'] as String? ?? '',
+        summary: json['summary'] as String?,
+        resolved: json['resolved'] as bool? ?? false,
+        testId: json['testId'] as String?,
+        moduleId: json['moduleId'] as String?,
+        featureIds: GraphData.strings(json['featureIds']),
+        componentIds: GraphData.strings(json['componentIds']),
+        contractIds: GraphData.strings(json['contractIds']),
+        capabilityIds: GraphData.strings(json['capabilityIds']),
+      );
+}
+
+class VerificationActivePlan {
+  const VerificationActivePlan({
+    required this.modules,
+    required this.risks,
+    required this.requiredCategories,
+    required this.requirementIds,
+  });
+
+  final List<String> modules;
+  final List<String> risks;
+  final List<String> requiredCategories;
+  final List<String> requirementIds;
+
+  factory VerificationActivePlan.fromJson(Map<String, dynamic> json) => VerificationActivePlan(
+        modules: GraphData.strings(json['modules']),
+        risks: GraphData.strings(json['risks']),
+        requiredCategories: GraphData.strings(json['requiredCategories']),
+        requirementIds: GraphData.strings(json['requirementIds']),
+      );
+}
+
+class VerificationState {
+  const VerificationState({
+    required this.schemaVersion,
+    required this.generatedAt,
+    required this.updatedAt,
+    required this.entries,
+    required this.runningCount,
+    required this.passedCount,
+    required this.failedCount,
+    required this.unresolvedCount,
+    required this.runningTargetIds,
+    required this.passedTargetIds,
+    required this.failedTargetIds,
+    required this.activePlan,
+  });
+
+  final int schemaVersion;
+  final String generatedAt;
+  final String? updatedAt;
+  final List<VerificationStateEntry> entries;
+  final int runningCount;
+  final int passedCount;
+  final int failedCount;
+  final int unresolvedCount;
+  final Set<String> runningTargetIds;
+  final Set<String> passedTargetIds;
+  final Set<String> failedTargetIds;
+  final VerificationActivePlan activePlan;
+
+  bool get hasState => entries.isNotEmpty;
+  bool get hasFailures => failedCount > 0;
+
+  factory VerificationState.fromJson(Map<String, dynamic> json) {
+    final summary = Map<String, dynamic>.from(json['summary'] as Map? ?? const <String, dynamic>{});
+    return VerificationState(
+      schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 1,
+      generatedAt: json['generatedAt'] as String? ?? '',
+      updatedAt: json['updatedAt'] as String?,
+      entries: (json['entries'] as List? ?? const <Object>[])
+          .whereType<Map>()
+          .map((entry) => VerificationStateEntry.fromJson(Map<String, dynamic>.from(entry)))
+          .toList(growable: false),
+      runningCount: (summary['running'] as num?)?.toInt() ?? 0,
+      passedCount: (summary['passed'] as num?)?.toInt() ?? 0,
+      failedCount: (summary['failed'] as num?)?.toInt() ?? 0,
+      unresolvedCount: (summary['unresolved'] as num?)?.toInt() ?? 0,
+      runningTargetIds: GraphData.strings(json['runningTargetIds']).toSet(),
+      passedTargetIds: GraphData.strings(json['passedTargetIds']).toSet(),
+      failedTargetIds: GraphData.strings(json['failedTargetIds']).toSet(),
+      activePlan: VerificationActivePlan.fromJson(
+        Map<String, dynamic>.from(json['activePlan'] as Map? ?? const <String, dynamic>{}),
+      ),
+    );
+  }
+}
+
 class LocalWorkspaceClient {
   LocalWorkspaceClient(this.baseUrl, {http.Client? client}) : _client = client ?? http.Client();
 
@@ -472,6 +594,12 @@ class LocalWorkspaceClient {
     final response = await _client.get(_uri('/api/change-intelligence')).timeout(const Duration(seconds: 6));
     _requireSuccess(response, 'change intelligence');
     return ChangeIntelligence.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<VerificationState> verificationState() async {
+    final response = await _client.get(_uri('/api/verification-state')).timeout(const Duration(seconds: 6));
+    _requireSuccess(response, 'verification state');
+    return VerificationState.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   Future<AgentActivityEvent> submitPrompt(
