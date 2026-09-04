@@ -30,6 +30,7 @@
   var adapterPolling = null;
   var replayPolling = null;
   var replayTimeline = null;
+  var latestAdapterStatus = null;
   var replayActive = false;
   var latestLiveActivity = null;
   var latestLiveSemanticActivity = null;
@@ -167,24 +168,36 @@
 
   function renderAgentAdapter(payload) {
     var adapter = payload || {};
+    latestAdapterStatus = adapter;
     var configured = adapter.configured === true;
     var available = adapter.available === true;
     var busy = adapter.busy === true;
-    var failed = adapter.lastTask && adapter.lastTask.state === "failed";
+    var sessions = replayTimeline && Array.isArray(replayTimeline.sessions) ? replayTimeline.sessions : [];
+    var replaySession = sessions.length ? sessions[sessions.length - 1] : null;
+    var task = adapter.currentTask || adapter.lastTask || replaySession;
+    var state = busy && adapter.currentTask
+      ? "RUNNING"
+      : adapter.lastTask
+        ? String(adapter.lastTask.state || "unknown").toUpperCase()
+        : replaySession
+          ? (replaySession.state === "running" ? "INTERRUPTED" : String(replaySession.state || "unknown").toUpperCase())
+          : available
+            ? "READY"
+            : configured
+              ? "UNAVAILABLE"
+              : "OFF";
+    var taskId = task && (task.id || task.taskId);
     adapterBadge.hidden = false;
-    adapterBadge.dataset.status = !configured ? "off" : !available ? "unavailable" : busy ? "busy" : failed ? "failed" : "ready";
-    adapterBadge.textContent = !configured
-      ? "ADAPTER OFF"
-      : !available
-        ? "CODEX UNAVAILABLE"
-        : busy
-          ? "CODEX BUSY · " + ((adapter.currentTask && adapter.currentTask.id) || "running")
-          : failed
-            ? "CODEX READY · last failed"
-            : "CODEX READY";
-    adapterBadge.title = adapter.reason || adapter.version || adapter.kind || "";
-    var task = adapter.currentTask || adapter.lastTask;
-    if (task && task.orchestration) renderOrchestrationSummary(task.orchestration);
+    adapterBadge.dataset.status = state.toLowerCase();
+    adapterBadge.textContent = "AGENT · " + state + (taskId ? " · " + taskId : "");
+    var detail = [];
+    if (task && task.summary) detail.push(task.summary);
+    if (task && (task.completedAt || task.endedAt)) detail.push("ended " + (task.completedAt || task.endedAt));
+    if (task && task.error) detail.push(task.error);
+    if (state === "INTERRUPTED") detail.push("Replay shows a running task, but this Bridge no longer owns it.");
+    adapterBadge.title = detail.join("\n") || adapter.reason || adapter.version || adapter.kind || "";
+    var orchestrationTask = adapter.currentTask || adapter.lastTask;
+    if (orchestrationTask && orchestrationTask.orchestration) renderOrchestrationSummary(orchestrationTask.orchestration);
   }
 
   async function fetchAgentAdapter() {
@@ -385,6 +398,7 @@
 
   function renderReplayTimeline(payload) {
     replayTimeline = payload || null;
+    if (latestAdapterStatus) renderAgentAdapter(latestAdapterStatus);
     var hasEvents = payload && Number(payload.eventCount || 0) > 0;
     replayBar.hidden = !hasEvents || !settings || settings.replayEnabled === false;
     if (!hasEvents) return;
