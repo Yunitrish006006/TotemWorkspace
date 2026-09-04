@@ -902,9 +902,9 @@
   }
 
   function drawChild(ctx, node, projected, selected, connected) {
-    var radius = node.type === "capability" ? 6 : node.type === "component" ? 5.8 : node.type === "implementation" ? 4.3 : 5.25;
-    var stroke = selected ? "#ffffff" : node.type === "capability" ? "#f472b6" : node.type === "component" ? "#34d399" : node.type === "implementation" ? "#a7f3d0" : ((node.source && node.source.softContractIds) || []).length ? "#fbbf24" : "#8095ad";
-    var fill = node.type === "capability" ? "#f472b6" : node.type === "component" ? "#34d399" : node.type === "implementation" ? "#a7f3d0" : "#93c5fd";
+    var radius = node.type === "capability" ? 6 : node.type === "component" ? 5.8 : node.type === "implementation" ? 4.3 : node.type === "test" ? 5.4 : 5.25;
+    var stroke = selected ? "#ffffff" : node.type === "capability" ? "#f472b6" : node.type === "component" ? "#34d399" : node.type === "implementation" ? "#a7f3d0" : node.type === "test" ? "#4ade80" : ((node.source && node.source.softContractIds) || []).length ? "#fbbf24" : "#8095ad";
+    var fill = node.type === "capability" ? "#f472b6" : node.type === "component" ? "#34d399" : node.type === "implementation" ? "#a7f3d0" : node.type === "test" ? "#4ade80" : "#93c5fd";
     var text = short(node.label, 40);
 
     ctx.globalAlpha = spotlightId ? (connected ? 1 : 0.22) : 1;
@@ -1066,17 +1066,27 @@
       return projected.get(a.id).z - projected.get(b.id).z;
     }).forEach(function (node) {
       var p = projected.get(node.id);
-      var child = node.type === "feature" || node.type === "component" || node.type === "implementation" || node.type === "capability";
+      var child = node.type === "feature" || node.type === "component" || node.type === "implementation" || node.type === "capability" || node.type === "test";
       var selected = spotlightId === node.id || keyboardFocusId === node.id;
       var connected = connectedToSpotlight(currentScene, node.id);
       var activityRadius = child
-        ? (node.type === "capability" ? 6 : node.type === "component" ? 5.8 : node.type === "implementation" ? 4.3 : 5.25)
+        ? (node.type === "capability" ? 6 : node.type === "component" ? 5.8 : node.type === "implementation" ? 4.3 : node.type === "test" ? 5.4 : 5.25)
         : Math.max(8, 12 * p.scale);
+      var verificationStatus = failedVerificationTargets.has(node.id)
+        ? "failed"
+        : runningVerificationTargets.has(node.id)
+          ? "running"
+          : passedVerificationTargets.has(node.id)
+            ? "passed"
+            : null;
       if (node.type === "module" && impactedModules.has(node.id)) {
         drawChangeHalo(ctx, p, activityRadius, "impact");
       }
       if (changedEntityIds.has(node.id)) {
         drawChangeHalo(ctx, p, activityRadius, "change");
+      }
+      if (verificationStatus) {
+        drawVerificationHalo(ctx, p, activityRadius, verificationStatus);
       }
       if (node.id === agentActivityNodeId) {
         drawAgentActivityHalo(ctx, p, activityRadius, agentActivity && agentActivity.type);
@@ -1139,7 +1149,7 @@
 
   function keyboardNodes() {
     return scene().nodes.filter(function (node) {
-      return node.type === "module" || node.type === "external" || node.type === "feature" || node.type === "component" || node.type === "implementation" || node.type === "capability";
+      return node.type === "module" || node.type === "external" || node.type === "feature" || node.type === "component" || node.type === "implementation" || node.type === "capability" || node.type === "test";
     });
   }
 
@@ -1219,6 +1229,7 @@
       }
       var moduleFeatures = features.filter(function (feature) { return feature.ownerId === node.id; });
       var moduleComponents = components.filter(function (component) { return component.moduleId === node.id; });
+      var moduleTests = tests.filter(function (test) { return test.moduleId === node.id; });
       var moduleCapabilities = capabilities.filter(function (capability) { return capability.consumerModuleId === node.id || capability.providerModuleId === node.id; });
       var expandedModules = modules.filter(function (module) { return expanded.has(module.id); }).length;
       setInfo((node.source && node.source.name) || node.label, (node.source && node.source.role) || "", [
@@ -1232,6 +1243,7 @@
             "L2 curated features: " + moduleFeatures.length,
             "L3 inferred components: " + moduleComponents.length,
             "Mapped components: " + moduleComponents.filter(function (component) { return (component.featureIds || []).length; }).length,
+            "Test entities: " + moduleTests.length,
             "Shared capabilities: " + moduleCapabilities.length
           ]
         },
@@ -1268,6 +1280,9 @@
       var featureComponents = components.filter(function (component) {
         return (component.featureIds || []).includes(feature.id);
       });
+      var featureTests = tests.filter(function (test) {
+        return (test.featureIds || []).includes(feature.id);
+      });
       setInfo(node.label, feature.summary || "", [
         {
           title: "L3 Components",
@@ -1276,6 +1291,12 @@
                 return component.label + "｜" + component.mappingConfidence + "｜" + component.fileCount + " files";
               })
             : ["No strongly mapped component evidence"]
+        },
+        {
+          title: "Validated by",
+          items: featureTests.length
+            ? featureTests.map(function (test) { return test.kind + "｜" + test.path; })
+            : ["No confidently linked Test entity"]
         },
         {
           title: "Shared capability links",
@@ -1316,6 +1337,26 @@
         {
           title: "Surface evidence",
           items: (component.surfaceKinds || []).concat((component.symbols || []).slice(0, 8))
+        }
+      ]);
+    } else if (node.type === "test") {
+      var test = node.source || {};
+      setInfo(node.label, (test.kind || "test") + " verification evidence", [
+        {
+          title: "Test path",
+          items: [test.path || node.label]
+        },
+        {
+          title: "Validated Feature",
+          items: test.featureIds || []
+        },
+        {
+          title: "Validated contract / API",
+          items: (test.contractIds || []).concat(test.capabilityIds || [])
+        },
+        {
+          title: "Verification categories",
+          items: test.categories || []
         }
       ]);
     } else if (node.type === "implementation") {
