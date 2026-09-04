@@ -151,18 +151,26 @@ flutter_build_ready() {
   [[ "$expected" == "$actual" ]]
 }
 
+generate_flutter_graph_asset() {
+  require_command node
+  echo "Flutter viewer: generating graph asset..."
+  node "$ROOT/scripts/render-flutter-graph.mjs" >/dev/null
+}
+
 ensure_flutter_build() {
   require_command node
   mkdir -p "$(dirname "$FLUTTER_STAMP")"
 
   case "$FLUTTER_BUILD_MODE" in
     auto)
+      generate_flutter_graph_asset
       if flutter_build_ready; then
         echo "Flutter viewer: READY (cached build)"
         return 0
       fi
       ;;
     always)
+      generate_flutter_graph_asset
       ;;
     never)
       if [[ -f "$ROOT/viewer_flutter/build/web/index.html" ]]; then
