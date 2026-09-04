@@ -726,7 +726,8 @@ class _AgentAdapterStrip extends StatelessWidget {
     final error = last?.error;
     final color = switch (state) {
       'RUNNING' => const Color(0xFF67E8F9),
-      'FAILED' || 'INTERRUPTED' => const Color(0xFFF87171),
+      'FAILED' => const Color(0xFFF87171),
+      'INTERRUPTED' => const Color(0xFFF87171),
       'COMPLETED' => const Color(0xFF86EFAC),
       _ => const Color(0xFF94A3B8),
     };
