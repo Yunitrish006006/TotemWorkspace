@@ -377,15 +377,16 @@ class _Toolbar extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('TOTEM Architecture · Flutter Phase 3',
+                  Text('TOTEM Architecture · Semantic LOD',
                       style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
-                  Text('feature clusters · relation-aware endpoints · shared graph model',
+                  Text('Module → Feature → Component → Implementation',
                       style: TextStyle(color: Color(0xFF8FA5BD), fontSize: 11)),
                 ],
               ),
             ),
             _Pill('${data.modules.length} modules'),
             _Pill('${data.features.length} features'),
+            _Pill('${data.components.length} components'),
             _Pill('${data.contracts.length} contracts'),
             _Pill('${data.sharedCapabilities.length} shared'),
             PopupMenuButton<String>(
