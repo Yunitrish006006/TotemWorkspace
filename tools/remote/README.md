@@ -54,6 +54,12 @@ You can also bootstrap explicitly:
 bash tools/remote/bootstrap-flutter.sh install
 ```
 
+Before the Flutter build, the controller regenerates the shared graph asset so a clean checkout has the file declared by `viewer_flutter/pubspec.yaml`:
+
+```bash
+node scripts/render-flutter-graph.mjs
+```
+
 Then it runs:
 
 ```bash
