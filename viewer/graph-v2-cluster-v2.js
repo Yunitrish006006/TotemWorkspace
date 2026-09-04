@@ -1003,6 +1003,8 @@
     var runningVerificationTargets = new Set(Array.isArray(verificationState.runningTargetIds) ? verificationState.runningTargetIds : []);
     var passedVerificationTargets = new Set(Array.isArray(verificationState.passedTargetIds) ? verificationState.passedTargetIds : []);
     var failedVerificationTargets = new Set(Array.isArray(verificationState.failedTargetIds) ? verificationState.failedTargetIds : []);
+    var replayGraphState = window.__TOTEM_REPLAY_GRAPH_STATE__ || {};
+    var historicalEntityIds = new Set(Array.isArray(replayGraphState.entityIds) ? replayGraphState.entityIds : []);
     var agentActivityNodeId = null;
     if (agentActivity) {
       if (agentActivity.componentId && byId.has(agentActivity.componentId)) agentActivityNodeId = agentActivity.componentId;
@@ -1010,6 +1012,7 @@
       else if (agentActivity.moduleId && byId.has(agentActivity.moduleId)) agentActivityNodeId = agentActivity.moduleId;
     }
     currentScene.clusters.forEach(function (cluster) {
+      if (historicalEntityIds.size && !historicalEntityIds.has(cluster.ownerId)) return;
       var p = projected.get(cluster.ownerId);
       if (!p) return;
       var state = !spotlightId ? "normal" : cluster.ownerId === spotlightOwner ? "active" : related.has(cluster.ownerId) ? "related" : "dim";
@@ -1018,6 +1021,7 @@
 
     var labels = [];
     currentScene.edges.forEach(function (edge) {
+      if (historicalEntityIds.size && (!historicalEntityIds.has(edge.from) || !historicalEntityIds.has(edge.to))) return;
       var a = projected.get(edge.from);
       var b = projected.get(edge.to);
       if (!a || !b) return;
@@ -1065,6 +1069,7 @@
     currentScene.nodes.slice().sort(function (a, b) {
       return projected.get(a.id).z - projected.get(b.id).z;
     }).forEach(function (node) {
+      if (historicalEntityIds.size && !historicalEntityIds.has(node.id)) return;
       var p = projected.get(node.id);
       var child = node.type === "feature" || node.type === "component" || node.type === "implementation" || node.type === "capability" || node.type === "test";
       var selected = spotlightId === node.id || keyboardFocusId === node.id;
@@ -1148,7 +1153,10 @@
   }
 
   function keyboardNodes() {
+    var replayGraphState = window.__TOTEM_REPLAY_GRAPH_STATE__ || {};
+    var historicalEntityIds = new Set(Array.isArray(replayGraphState.entityIds) ? replayGraphState.entityIds : []);
     return scene().nodes.filter(function (node) {
+      if (historicalEntityIds.size && !historicalEntityIds.has(node.id)) return false;
       return node.type === "module" || node.type === "external" || node.type === "feature" || node.type === "component" || node.type === "implementation" || node.type === "capability" || node.type === "test";
     });
   }
