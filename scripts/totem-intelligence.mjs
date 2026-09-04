@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { buildCodeIndex, refreshCodeIndex, searchCode } from "../intelligence/code-index.mjs";
 import { buildContextPack } from "../intelligence/context-pack.mjs";
+import { buildOrchestrationPlan } from "../intelligence/orchestration-plan.mjs";
 import { defaultReposRoot, graphForModule, impactAnalysis, knowledgeSummary, loadKnowledge, resolveTask, testPlan, workspaceStatus } from "../intelligence/workspace-knowledge.mjs";
 import { renderGraphV2 } from "./render-graph-v2.mjs";
 
@@ -39,6 +40,15 @@ switch (command) {
     break;
   case "resolve":
     print(resolveTask(args.join(" "), knowledge));
+    break;
+  case "orchestrate":
+    print(buildOrchestrationPlan({
+      query: args[0] ?? "",
+      moduleId: args[1] || null,
+      changedModules: parseList(args[2]),
+      changedFiles: parseList(args[3]),
+      knowledge
+    }));
     break;
   case "graph":
     print(graphForModule(args[0], { depth: Number(args[1] || 1), knowledge }));
@@ -122,9 +132,10 @@ switch (command) {
     console.error(`Usage:
   node scripts/totem-intelligence.mjs summary
   node scripts/totem-intelligence.mjs resolve "<task>"
+  node scripts/totem-intelligence.mjs orchestrate "<task>" [module-id] [changed-modules] [changed-files]
   node scripts/totem-intelligence.mjs graph <totem-module-id> [depth]
   node scripts/totem-intelligence.mjs search "<query>" [module1,module2] [limit]
-  node scripts/totem-intelligence.mjs context "<task>" [primary|worker|reviewer] [module-id] [maxTokens]
+  node scripts/totem-intelligence.mjs context "<task>" [primary|explorer|architect|worker|reviewer] [module-id] [maxTokens]
   node scripts/totem-intelligence.mjs impact "<file1,file2>" "<module1,module2>"
   node scripts/totem-intelligence.mjs test-plan "<task>" "<module1,module2>" "<file1,file2>"
   node scripts/totem-intelligence.mjs status
