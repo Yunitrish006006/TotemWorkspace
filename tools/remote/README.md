@@ -214,3 +214,24 @@ CODEX BUSY        one task is already running
 ```
 
 Phase 5 allows one active task at a time. When a task settles, the Bridge automatically refreshes the code index, generated graph data, and Phase 3 change intelligence.
+
+## Development Replay
+
+Phase 6 replay state is local to the remote TotemWorkspace checkout:
+
+```text
+.totem-index/development-replay.json
+```
+
+It survives Bridge/tmux restarts and is ignored by Git. Check the current replay
+range without opening the Viewer:
+
+```bash
+node scripts/totem-activity.mjs status
+node scripts/totem-activity.mjs replay
+node scripts/totem-activity.mjs replay 42
+```
+
+In the Flutter root and `/legacy/`, use the REPLAY slider to select an historical
+activity sequence and press `LIVE` to return to current state. The browser still
+talks only to the loopback Bridge through the existing SSH port forward.
