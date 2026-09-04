@@ -227,3 +227,23 @@ Phase 1 is complete when:
 - a prompt can be accepted by the bridge and represented as an activity event without pretending an agent executed it,
 - Pages build packages both maintained surfaces,
 - Node 20/22, Flutter analyze/test/Wasm, local bridge security tests and viewer parity tests all pass.
+
+
+## Remote SSH local-root parity
+
+VS Code Remote-SSH is a first-class local-development topology. The browser always
+talks to a loopback endpoint forwarded through SSH; the Bridge never needs a
+public bind.
+
+The route contract is intentionally identical in development and production:
+
+```text
+/           Flutter production UI
+/legacy/    maintained JavaScript rollback/debug viewer
+/api/*      Local Agent Bridge API
+```
+
+The remote controller fingerprints `viewer_flutter/` and rebuilds the local
+Flutter Wasm output only when the source changes. tmux is preferred for the
+background process, with nohup + PID state under `.totem-index/` as the
+no-sudo fallback.
