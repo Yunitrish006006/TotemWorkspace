@@ -16,6 +16,9 @@ class GraphView extends StatefulWidget {
     this.activityModuleId,
     this.activityType,
     this.autoExpandAgentFocus = true,
+    this.changedEntityIds = const <String>{},
+    this.impactedModuleIds = const <String>{},
+    this.changeAnimationsEnabled = true,
   });
 
   final GraphData data;
@@ -24,6 +27,9 @@ class GraphView extends StatefulWidget {
   final String? activityModuleId;
   final String? activityType;
   final bool autoExpandAgentFocus;
+  final Set<String> changedEntityIds;
+  final Set<String> impactedModuleIds;
+  final bool changeAnimationsEnabled;
 
   @override
   State<GraphView> createState() => _GraphViewState();
@@ -221,6 +227,9 @@ class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMix
                             : widget.activityModuleId,
                     activityType: widget.activityType,
                     activityPulse: _activityPulse,
+                    changedEntityIds: widget.changedEntityIds,
+                    impactedModuleIds: widget.impactedModuleIds,
+                    changeAnimationsEnabled: widget.changeAnimationsEnabled,
                   ),
                 ),
               ),
@@ -544,6 +553,9 @@ class _GraphPainter extends CustomPainter {
     required this.activityNodeId,
     required this.activityType,
     required this.activityPulse,
+    required this.changedEntityIds,
+    required this.impactedModuleIds,
+    required this.changeAnimationsEnabled,
   }) : super(repaint: activityPulse);
 
   final GraphData data;
@@ -553,6 +565,9 @@ class _GraphPainter extends CustomPainter {
   final String? activityNodeId;
   final String? activityType;
   final Animation<double> activityPulse;
+  final Set<String> changedEntityIds;
+  final Set<String> impactedModuleIds;
+  final bool changeAnimationsEnabled;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -594,12 +609,34 @@ class _GraphPainter extends CustomPainter {
       final to = projected[edge.to];
       if (from == null || to == null) continue;
       final incident = spotlightId == null || edge.from == spotlightId || edge.to == spotlightId;
-      final color = _edgeColor(edge.type);
+      final changedRelation = changedEntityIds.any(
+        (id) => edge.id == id || edge.id.startsWith('$id:'),
+      );
+      final changePulse = changeAnimationsEnabled
+          ? (math.sin(activityPulse.value * math.pi * 2) + 1) / 2
+          : 0.5;
+      final baseColor = _edgeColor(edge.type);
+      final color = changedRelation ? const Color(0xFFFBBF24) : baseColor;
       final paint = Paint()
-        ..color = color.withValues(alpha: spotlightId == null ? 0.58 : (incident ? 0.95 : 0.07))
-        ..strokeWidth = incident && spotlightId != null ? 2.4 : 1.45;
+        ..color = color.withValues(
+          alpha: changedRelation
+              ? 0.72 + changePulse * 0.25
+              : spotlightId == null
+                  ? 0.58
+                  : (incident ? 0.95 : 0.07),
+        )
+        ..strokeWidth = changedRelation
+            ? 2.6 + changePulse * 1.8
+            : incident && spotlightId != null
+                ? 2.4
+                : 1.45;
       canvas.drawLine(from.offset, to.offset, paint);
-      _drawArrow(canvas, from.offset, to.offset, color.withValues(alpha: incident ? 0.9 : 0.07));
+      _drawArrow(
+        canvas,
+        from.offset,
+        to.offset,
+        color.withValues(alpha: changedRelation ? 0.96 : (incident ? 0.9 : 0.07)),
+      );
     }
 
     final ordered = [...scene.nodes]..sort((a, b) => projected[a.id]!.depth.compareTo(projected[b.id]!.depth));
@@ -608,6 +645,8 @@ class _GraphPainter extends CustomPainter {
       final nodeSelected = node.id == selectedId;
       final nodeConnected = spotlightId == null || connected.contains(node.id) || node.ownerId == scene.ownerOf(spotlightId);
       final agentActive = node.id == activityNodeId;
+      final changed = changedEntityIds.contains(node.id);
+      final impacted = node.kind == 'module' && impactedModuleIds.contains(node.id);
       _drawNode(
         canvas,
         node,
@@ -615,6 +654,8 @@ class _GraphPainter extends CustomPainter {
         selected: nodeSelected,
         connected: nodeConnected,
         agentActive: agentActive,
+        changed: changed,
+        impacted: impacted,
       );
     }
   }
@@ -655,6 +696,8 @@ class _GraphPainter extends CustomPainter {
     required bool selected,
     required bool connected,
     required bool agentActive,
+    required bool changed,
+    required bool impacted,
   }) {
     final child = node.isChild;
     final radius = child
@@ -676,6 +719,36 @@ class _GraphPainter extends CustomPainter {
     };
     final stroke = node.feature?.hasCrossModuleRelations == true ? const Color(0xFFFBBF24) : fill;
     final alpha = connected ? 1.0 : 0.18;
+    final changePulse = changeAnimationsEnabled
+        ? (math.sin(activityPulse.value * math.pi * 2) + 1) / 2
+        : 0.5;
+
+    if (impacted) {
+      canvas.drawCircle(
+        projected.offset,
+        radius + 14,
+        Paint()
+          ..color = const Color(0xFFA78BFA).withValues(alpha: 0.55)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.2,
+      );
+      canvas.drawCircle(
+        projected.offset,
+        radius + 10,
+        Paint()..color = const Color(0xFFA78BFA).withValues(alpha: 0.06),
+      );
+    }
+
+    if (changed) {
+      canvas.drawCircle(
+        projected.offset,
+        radius + 9 + changePulse * 5,
+        Paint()
+          ..color = const Color(0xFFFBBF24).withValues(alpha: 0.7 + changePulse * 0.25)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2.0 + changePulse * 1.4,
+      );
+    }
 
     if (agentActive) {
       final pulse = (math.sin(activityPulse.value * math.pi * 2) + 1) / 2;
