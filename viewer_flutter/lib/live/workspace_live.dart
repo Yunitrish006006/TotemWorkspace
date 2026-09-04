@@ -240,6 +240,172 @@ class AgentActivityBatch {
   }
 }
 
+class ChangeEntity {
+  const ChangeEntity({
+    required this.id,
+    required this.type,
+    required this.moduleId,
+    required this.moduleIds,
+  });
+
+  final String id;
+  final String type;
+  final String? moduleId;
+  final List<String> moduleIds;
+
+  factory ChangeEntity.fromJson(Map<String, dynamic> json) => ChangeEntity(
+        id: json['id'] as String? ?? '',
+        type: json['type'] as String? ?? 'unknown',
+        moduleId: json['moduleId'] as String?,
+        moduleIds: (json['moduleIds'] as List? ?? const <Object>[])
+            .whereType<String>()
+            .toList(growable: false),
+      );
+}
+
+class ChangeSemanticDiff {
+  const ChangeSemanticDiff({
+    required this.added,
+    required this.modified,
+    required this.removed,
+    required this.changedEntityIds,
+  });
+
+  final List<ChangeEntity> added;
+  final List<ChangeEntity> modified;
+  final List<ChangeEntity> removed;
+  final List<String> changedEntityIds;
+
+  int get changedCount => changedEntityIds.length;
+
+  static List<ChangeEntity> _entities(dynamic raw) => (raw as List? ?? const <Object>[])
+      .whereType<Map>()
+      .map((entry) => ChangeEntity.fromJson(Map<String, dynamic>.from(entry)))
+      .toList(growable: false);
+
+  factory ChangeSemanticDiff.fromJson(Map<String, dynamic> json) => ChangeSemanticDiff(
+        added: _entities(json['added']),
+        modified: _entities(json['modified']),
+        removed: _entities(json['removed']),
+        changedEntityIds: (json['changedEntityIds'] as List? ?? const <Object>[])
+            .whereType<String>()
+            .toList(growable: false),
+      );
+}
+
+class ChangeGitFile {
+  const ChangeGitFile({
+    required this.moduleId,
+    required this.repoName,
+    required this.path,
+    required this.status,
+    required this.previousPath,
+    required this.componentIds,
+    required this.featureIds,
+    required this.implementationIds,
+  });
+
+  final String moduleId;
+  final String repoName;
+  final String path;
+  final String status;
+  final String? previousPath;
+  final List<String> componentIds;
+  final List<String> featureIds;
+  final List<String> implementationIds;
+
+  factory ChangeGitFile.fromJson(Map<String, dynamic> json) {
+    List<String> strings(String key) => (json[key] as List? ?? const <Object>[])
+        .whereType<String>()
+        .toList(growable: false);
+    return ChangeGitFile(
+      moduleId: json['moduleId'] as String? ?? '',
+      repoName: json['repoName'] as String? ?? '',
+      path: json['path'] as String? ?? '',
+      status: json['status'] as String? ?? 'M',
+      previousPath: json['previousPath'] as String?,
+      componentIds: strings('componentIds'),
+      featureIds: strings('featureIds'),
+      implementationIds: strings('implementationIds'),
+    );
+  }
+}
+
+class ChangeImpact {
+  const ChangeImpact({
+    required this.touchedModules,
+    required this.impactedModules,
+    required this.contractIds,
+    required this.risks,
+    required this.requiresIndependentReview,
+  });
+
+  final List<String> touchedModules;
+  final List<String> impactedModules;
+  final List<String> contractIds;
+  final List<String> risks;
+  final bool requiresIndependentReview;
+
+  factory ChangeImpact.fromJson(Map<String, dynamic> json) {
+    List<String> strings(String key) => (json[key] as List? ?? const <Object>[])
+        .whereType<String>()
+        .toList(growable: false);
+    return ChangeImpact(
+      touchedModules: strings('touchedModules'),
+      impactedModules: strings('impactedModules'),
+      contractIds: strings('contractIds'),
+      risks: strings('risks'),
+      requiresIndependentReview: json['requiresIndependentReview'] as bool? ?? false,
+    );
+  }
+}
+
+class ChangeIntelligence {
+  const ChangeIntelligence({
+    required this.schemaVersion,
+    required this.generatedAt,
+    required this.beforeEntityCount,
+    required this.afterEntityCount,
+    required this.gitChanges,
+    required this.semanticDiff,
+    required this.impact,
+  });
+
+  final int schemaVersion;
+  final String generatedAt;
+  final int beforeEntityCount;
+  final int afterEntityCount;
+  final List<ChangeGitFile> gitChanges;
+  final ChangeSemanticDiff semanticDiff;
+  final ChangeImpact impact;
+
+  bool get hasChanges => gitChanges.isNotEmpty || semanticDiff.changedEntityIds.isNotEmpty;
+  Set<String> get changedEntityIds => semanticDiff.changedEntityIds.toSet();
+  Set<String> get impactedModuleIds => impact.impactedModules.toSet();
+
+  factory ChangeIntelligence.fromJson(Map<String, dynamic> json) {
+    final before = Map<String, dynamic>.from(json['before'] as Map? ?? const <String, dynamic>{});
+    final after = Map<String, dynamic>.from(json['after'] as Map? ?? const <String, dynamic>{});
+    final rawGit = json['gitChanges'] as List? ?? const <Object>[];
+    return ChangeIntelligence(
+      schemaVersion: json['schemaVersion'] as int? ?? 1,
+      generatedAt: json['generatedAt'] as String? ?? '',
+      beforeEntityCount: before['entityCount'] as int? ?? 0,
+      afterEntityCount: after['entityCount'] as int? ?? 0,
+      gitChanges: rawGit
+          .whereType<Map>()
+          .map((entry) => ChangeGitFile.fromJson(Map<String, dynamic>.from(entry)))
+          .toList(growable: false),
+      semanticDiff: ChangeSemanticDiff.fromJson(
+        Map<String, dynamic>.from(json['semanticDiff'] as Map? ?? const <String, dynamic>{}),
+      ),
+      impact: ChangeImpact.fromJson(
+        Map<String, dynamic>.from(json['impact'] as Map? ?? const <String, dynamic>{}),
+      ),
+    );
+  }
+}
+
 class LocalWorkspaceClient {
   LocalWorkspaceClient(this.baseUrl, {http.Client? client}) : _client = client ?? http.Client();
 
@@ -297,6 +463,12 @@ class LocalWorkspaceClient {
     return AgentActivityBatch.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
+  Future<ChangeIntelligence> changeIntelligence() async {
+    final response = await _client.get(_uri('/api/change-intelligence')).timeout(const Duration(seconds: 6));
+    _requireSuccess(response, 'change intelligence');
+    return ChangeIntelligence.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
   Future<AgentActivityEvent> submitPrompt(
     String prompt, {
     String? moduleId,
@@ -320,7 +492,7 @@ class LocalWorkspaceClient {
     );
   }
 
-  Future<void> refresh({List<String> modules = const <String>[]}) async {
+  Future<ChangeIntelligence> refresh({List<String> modules = const <String>[]}) async {
     final response = await _client
         .post(
           _uri('/api/refresh'),
@@ -329,6 +501,10 @@ class LocalWorkspaceClient {
         )
         .timeout(const Duration(seconds: 90));
     _requireSuccess(response, 'workspace refresh');
+    final payload = jsonDecode(response.body) as Map<String, dynamic>;
+    return ChangeIntelligence.fromJson(
+      Map<String, dynamic>.from(payload['changeIntelligence'] as Map? ?? const <String, dynamic>{}),
+    );
   }
 
   void close() => _client.close();
