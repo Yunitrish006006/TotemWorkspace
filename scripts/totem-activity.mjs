@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const DEFAULT_BASE = process.env.TOTEM_LOCAL_API?.replace(/\/$/, "") || "http://127.0.0.1:8765";
+const DEFAULT_BASE = process.env.TOTEM_LOCAL_API?.replace(/\/$/, "") || "http://127.0.0.1:18765";
 
 function usage() {
   process.stdout.write(`Totem local activity bridge helper
@@ -22,7 +22,7 @@ Emit options:
   --task <task-id>
 
 Environment:
-  TOTEM_LOCAL_API=http://127.0.0.1:8765
+  TOTEM_LOCAL_API=http://127.0.0.1:18765
 `);
 }
 
