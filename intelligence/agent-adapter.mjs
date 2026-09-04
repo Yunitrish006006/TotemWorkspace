@@ -277,6 +277,37 @@ export function createAgentAdapter({
         featureId: task.featureId,
         summary: `MCP ${boundedText(item.server, 80) ?? "server"}/${boundedText(item.tool, 120) ?? "tool"}`
       });
+      return;
+    }
+
+    if (item.type === "command_execution" && event.type === "item.completed") {
+      const command = boundedText(item.command, 500) ?? "";
+      const successful = item.exit_code == null
+        ? item.status === "completed"
+        : Number(item.exit_code) === 0;
+      if (!successful || !command) return;
+
+      const milestoneType = /(^|\s)gh\s+pr\s+merge(?:\s|$)/i.test(command)
+        ? "pr_merged"
+        : /(^|\s)gh\s+pr\s+create(?:\s|$)/i.test(command)
+          ? "pr_created"
+          : /(^|\s)git\s+commit(?:\s|$)/i.test(command)
+            ? "commit_created"
+            : null;
+      if (!milestoneType) return;
+
+      emit({
+        type: milestoneType,
+        source: "codex-adapter",
+        taskId: task.id,
+        moduleId: task.moduleId,
+        featureId: task.featureId,
+        summary: milestoneType === "commit_created"
+          ? "Git commit completed"
+          : milestoneType === "pr_created"
+            ? "GitHub pull request created"
+            : "GitHub pull request merged"
+      });
     }
   }
 
