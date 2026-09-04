@@ -110,6 +110,14 @@ void main() {
             'externalNodes': <Object>[],
             'contracts': <Object>[],
             'sharedCapabilities': <Object>[],
+            'verification': <String, Object>{
+              'schemaVersion': 1,
+              'generatedAt': 'now',
+              'tests': <Object>[],
+              'relations': <Object>[],
+              'requirements': <Object>[],
+              'coverage': <Object>[],
+            },
             'code': <String, Object>{'nodes': <Object>[]},
           }),
           200,
@@ -138,6 +146,52 @@ void main() {
             'changeAnimationsEnabled': true,
             'autoExpandAgentFocus': true,
             'replayEnabled': true,
+          }),
+          200,
+        );
+      }
+      if (request.url.path == '/api/verification-state') {
+        return http.Response(
+          jsonEncode(<String, Object>{
+            'schemaVersion': 1,
+            'generatedAt': 'now',
+            'updatedAt': 'now',
+            'entries': <Object>[
+              <String, Object>{
+                'target': 'test:totem-core:src/test/CoreTest.java',
+                'status': 'failed',
+                'sequence': 9,
+                'timestamp': 'now',
+                'summary': 'fixture failed',
+                'resolved': true,
+                'testId': 'test:totem-core:src/test/CoreTest.java',
+                'moduleId': 'totem-core',
+                'featureIds': <String>['totem-core.feature-5'],
+                'componentIds': <String>['component:totem-core:api'],
+                'contractIds': <String>[],
+                'capabilityIds': <String>[],
+              },
+            ],
+            'summary': <String, Object>{
+              'running': 0,
+              'passed': 0,
+              'failed': 1,
+              'unresolved': 0,
+            },
+            'runningTargetIds': <String>[],
+            'passedTargetIds': <String>[],
+            'failedTargetIds': <String>[
+              'test:totem-core:src/test/CoreTest.java',
+              'totem-core',
+              'totem-core.feature-5',
+              'component:totem-core:api',
+            ],
+            'activePlan': <String, Object>{
+              'modules': <String>['totem-core'],
+              'risks': <String>['shared-contract'],
+              'requiredCategories': <String>['unit-tests', 'cross-module-build'],
+              'requirementIds': <String>[],
+            },
           }),
           200,
         );
@@ -290,6 +344,12 @@ void main() {
 
     final promptEvent = await client.submitPrompt('inspect outline api');
     expect(promptEvent.type, 'prompt_submitted');
+
+    final verification = await client.verificationState();
+    expect(verification.failedCount, 1);
+    expect(verification.hasFailures, isTrue);
+    expect(verification.failedTargetIds, contains('totem-core.feature-5'));
+    expect(verification.activePlan.requiredCategories, contains('cross-module-build'));
 
     final initialChange = await client.changeIntelligence();
     expect(initialChange.gitChanges.single.moduleId, 'totem-core');
