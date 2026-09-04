@@ -9,6 +9,7 @@ import {
   buildChangeIntelligence,
   collectGitChanges,
   loadChangeIntelligence,
+  mapGitChangesToSemantic,
   saveChangeIntelligence
 } from "../intelligence/change-intelligence.mjs";
 import { defaultReposRoot, loadKnowledge, workspaceStatus } from "../intelligence/workspace-knowledge.mjs";
@@ -314,7 +315,7 @@ function replayFrame(sequence) {
   });
 }
 
-function refreshWorkspaceChanges(requestedModules = []) {
+function refreshWorkspaceChanges(requestedModules = [], activityContext = {}) {
   const knowledge = loadKnowledge();
   const reposRoot = defaultReposRoot(knowledge.root);
   const requested = (requestedModules ?? []).filter((id) => knowledge.moduleById.has(id));
@@ -343,9 +344,16 @@ function refreshWorkspaceChanges(requestedModules = []) {
   );
   const rendered = renderGraphV2({ knowledge, index: refreshed.index });
   if (changeIntelligence.gitChanges.length || changeIntelligence.semanticDiff.changedEntityIds.length) {
+    const changedModuleIds = [...new Set(changeIntelligence.gitChanges.map((entry) => entry.moduleId).filter(Boolean))];
+    const changedFeatureIds = [...new Set(changeIntelligence.gitChanges.flatMap((entry) => entry.featureIds ?? []).filter(Boolean))];
+    const changedComponentIds = [...new Set(changeIntelligence.gitChanges.flatMap((entry) => entry.componentIds ?? []).filter(Boolean))];
     const event = appendActivity({
       type: "git_diff_updated",
       source: "bridge",
+      taskId: activityContext.taskId ?? null,
+      moduleId: changedModuleIds.length === 1 ? changedModuleIds[0] : null,
+      featureId: changedFeatureIds.length === 1 ? changedFeatureIds[0] : null,
+      componentId: changedComponentIds.length === 1 ? changedComponentIds[0] : null,
       summary: `${changeIntelligence.gitChanges.length} files · ${changeIntelligence.semanticDiff.changedEntityIds.length} semantic entities · ${changeIntelligence.impact.impactedModules.length} impacted modules`
     }, { source: "bridge" });
     recordReplayCheckpoint(knowledge.root, {
@@ -721,14 +729,76 @@ export function createLocalViewerServer({
 } = {}) {
   const knowledge = loadKnowledge();
   const reposRoot = defaultReposRoot(knowledge.root);
+  const liveRefreshModules = new Set();
+  let liveRefreshTaskId = null;
+  let liveRefreshTimer = null;
+
+  function enrichSemanticEdit(event) {
+    if (!event || !["file_edit", "symbol_edit"].includes(event.type) || !event.moduleId || !event.file) return event;
+    const activeKnowledge = loadKnowledge();
+    const graph = buildGraphViewModel({
+      knowledge: activeKnowledge,
+      index: loadCodeIndex({ knowledge: activeKnowledge })
+    });
+    const mapped = mapGitChangesToSemantic([
+      {
+        moduleId: event.moduleId,
+        repoName: activeKnowledge.moduleById.get(event.moduleId)?.repoName ?? event.moduleId,
+        path: event.file,
+        status: "M"
+      }
+    ], { beforeGraph: graph, afterGraph: graph })[0];
+    return {
+      ...event,
+      componentId: event.componentId ?? (mapped?.componentIds?.length === 1 ? mapped.componentIds[0] : null),
+      featureId: event.featureId ?? (mapped?.featureIds?.length === 1 ? mapped.featureIds[0] : null)
+    };
+  }
+
+  function flushLiveRefresh() {
+    if (liveRefreshTimer) {
+      clearTimeout(liveRefreshTimer);
+      liveRefreshTimer = null;
+    }
+    const modules = [...liveRefreshModules];
+    const taskId = liveRefreshTaskId;
+    liveRefreshModules.clear();
+    liveRefreshTaskId = null;
+    if (!modules.length) return;
+    try {
+      refreshWorkspaceChanges(modules, { taskId });
+    } catch {
+      // Live semantic refresh is best-effort; task completion still performs the final refresh.
+    }
+  }
+
+  function scheduleLiveRefresh(moduleId, taskId) {
+    if (!moduleId || !knowledge.moduleById.has(moduleId)) return;
+    liveRefreshModules.add(moduleId);
+    if (taskId) liveRefreshTaskId = taskId;
+    if (liveRefreshTimer) clearTimeout(liveRefreshTimer);
+    liveRefreshTimer = setTimeout(flushLiveRefresh, 850);
+  }
+
   const agentAdapter = providedAgentAdapter ?? createAgentAdapter({
     workspaceRoot: knowledge.root,
     reposRoot,
     knowledge,
     env: agentEnv,
-    onActivity: (event) => appendActivity(event, { source: "codex-adapter" }),
-    onTaskSettled: async () => {
-      refreshWorkspaceChanges([]);
+    onActivity: (event) => {
+      const enriched = enrichSemanticEdit(event);
+      const recorded = appendActivity(enriched, { source: "codex-adapter" });
+      if ((recorded.type === "file_edit" || recorded.type === "symbol_edit") && recorded.moduleId) {
+        scheduleLiveRefresh(recorded.moduleId, recorded.taskId);
+      }
+      return recorded;
+    },
+    onTaskSettled: async (task) => {
+      if (liveRefreshTimer) clearTimeout(liveRefreshTimer);
+      liveRefreshTimer = null;
+      liveRefreshModules.clear();
+      liveRefreshTaskId = null;
+      refreshWorkspaceChanges([], { taskId: task?.id ?? null });
     }
   });
   const currentGraph = buildGraphViewModel({
@@ -771,7 +841,10 @@ export function createLocalViewerServer({
       json(res, 500, { error: error instanceof Error ? error.message : String(error) });
     }
   });
-  server.on("close", () => agentAdapter?.close?.());
+  server.on("close", () => {
+    if (liveRefreshTimer) clearTimeout(liveRefreshTimer);
+    agentAdapter?.close?.();
+  });
   return server;
 }
 

@@ -162,7 +162,27 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
     try {
       final batch = await client.activity(after: _activitySequence);
       if (!mounted || batch.events.isEmpty) return;
-      setState(() => _mergeActivity(batch));
+      GraphData? graph;
+      ChangeIntelligence? change;
+      if (batch.events.any((event) => event.type == 'git_diff_updated')) {
+        try {
+          graph = await client.graphData();
+          change = await client.changeIntelligence();
+        } catch (error) {
+          if (mounted) {
+            setState(() {
+              _liveError = error.toString();
+              _liveErrorSource = 'live-graph-refresh';
+            });
+          }
+        }
+      }
+      if (!mounted) return;
+      setState(() {
+        _mergeActivity(batch);
+        if (graph != null) _data = graph;
+        if (change != null) _change = change;
+      });
     } catch (error) {
       if (!mounted) return;
       setState(() { _liveError = error.toString(); _liveErrorSource = 'activity'; });
@@ -477,7 +497,22 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
     final isLocal = _client != null && live != null;
     final replaying = _replayFrame != null && !_replayFrame!.live;
     final liveActivity = _activity.isEmpty ? null : _activity.last;
+    AgentActivityEvent? liveSemanticActivity;
+    final activeTaskId = _adapter?.currentTask?.id;
+    if (activeTaskId != null) {
+      for (final event in _activity.reversed) {
+        if (event.taskId != activeTaskId) continue;
+        final semanticTarget = event.componentId != null || event.featureId != null || event.moduleId != null;
+        final semanticEdit = event.type == 'file_edit' || event.type == 'symbol_edit' || event.type == 'git_diff_updated';
+        if (semanticTarget && semanticEdit) {
+          liveSemanticActivity = event;
+          break;
+        }
+      }
+    }
+    liveSemanticActivity ??= liveActivity;
     final displayedActivity = replaying ? _replayFrame!.activity : liveActivity;
+    final displayedGraphActivity = replaying ? _replayFrame!.activity : liveSemanticActivity;
     final displayedChange = replaying ? _replayFrame!.changeIntelligence : _change;
     final displayedVerification = replaying ? _replayFrame!.verificationState : _verification;
     final historicalEntityIds = replaying ? _replayFrame!.historicalEntityIds : const <String>{};
@@ -527,10 +562,10 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
           Expanded(
             child: GraphView(
               data: _data,
-              activityFeatureId: displayedActivity?.featureId,
-              activityComponentId: displayedActivity?.componentId,
-              activityModuleId: displayedActivity?.moduleId,
-              activityType: displayedActivity?.type,
+              activityFeatureId: displayedGraphActivity?.featureId,
+              activityComponentId: displayedGraphActivity?.componentId,
+              activityModuleId: displayedGraphActivity?.moduleId,
+              activityType: displayedGraphActivity?.type,
               autoExpandAgentFocus: _settings.autoExpandAgentFocus,
               changedEntityIds: displayedChange?.changedEntityIds ?? const <String>{},
               impactedModuleIds: displayedChange?.impactedModuleIds ?? const <String>{},

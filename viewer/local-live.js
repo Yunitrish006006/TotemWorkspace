@@ -32,6 +32,7 @@
   var replayTimeline = null;
   var replayActive = false;
   var latestLiveActivity = null;
+  var latestLiveSemanticActivity = null;
   var activityAnimation = null;
   var changeAnimation = null;
   var verificationAnimation = null;
@@ -279,20 +280,42 @@
     }
   }
 
+  function hasSemanticTarget(event) {
+    return !!(event && (event.componentId || event.featureId || event.moduleId));
+  }
+
+  function isSemanticEdit(event) {
+    return !!(event && (event.type === "file_edit" || event.type === "symbol_edit" || event.type === "git_diff_updated"));
+  }
+
   function renderActivity(event) {
     if (!event || !settings || settings.agentActivityEnabled === false) {
       activityBadge.hidden = true;
       window.__TOTEM_AGENT_ACTIVITY__ = null;
       return;
     }
-    window.__TOTEM_AGENT_ACTIVITY__ = event;
+    var activeTask = window.__TOTEM_AGENT_ADAPTER__ && window.__TOTEM_AGENT_ADAPTER__.currentTask
+      ? window.__TOTEM_AGENT_ADAPTER__.currentTask
+      : null;
+    if (isSemanticEdit(event) && hasSemanticTarget(event)) {
+      latestLiveSemanticActivity = event;
+    }
+    if ((event.type === "task_completed" || event.type === "task_failed") &&
+        latestLiveSemanticActivity && latestLiveSemanticActivity.taskId === event.taskId) {
+      latestLiveSemanticActivity = null;
+    }
+    var semanticFocus = latestLiveSemanticActivity &&
+      (!activeTask || !latestLiveSemanticActivity.taskId || latestLiveSemanticActivity.taskId === activeTask.id)
+      ? latestLiveSemanticActivity
+      : event;
+    window.__TOTEM_AGENT_ACTIVITY__ = hasSemanticTarget(semanticFocus) ? semanticFocus : event;
     var target = event.componentId || event.featureId || event.moduleId || event.file || event.symbol || event.test || "";
     activityBadge.hidden = false;
     activityBadge.textContent = "AGENT · " + event.type + (target ? " · " + target : "") + (event.summary ? " · " + event.summary : "");
     activityBadge.title = event.timestamp || "";
     var renderer = window.__TOTEM_CLUSTER_3D_V2__;
     if (renderer && typeof renderer.focusActivity === "function") {
-      renderer.focusActivity(event, settings.autoExpandAgentFocus !== false);
+      renderer.focusActivity(window.__TOTEM_AGENT_ACTIVITY__, settings.autoExpandAgentFocus !== false);
     } else {
       requestAgentDraw();
     }
@@ -308,6 +331,13 @@
       activitySequence = Number(payload.latestSequence || activitySequence);
       var events = Array.isArray(payload.events) ? payload.events : [];
       if (events.length) {
+        events.forEach(function (event) {
+          if (isSemanticEdit(event) && hasSemanticTarget(event)) latestLiveSemanticActivity = event;
+          if ((event.type === "task_completed" || event.type === "task_failed") &&
+              latestLiveSemanticActivity && latestLiveSemanticActivity.taskId === event.taskId) {
+            latestLiveSemanticActivity = null;
+          }
+        });
         latestLiveActivity = events[events.length - 1];
         if (!replayActive) renderActivity(latestLiveActivity);
       }

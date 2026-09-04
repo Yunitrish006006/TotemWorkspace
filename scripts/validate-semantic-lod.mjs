@@ -67,8 +67,12 @@ for (const fragment of [
 ]) {
   assert.ok(flutterView.includes(fragment), `Flutter interaction is missing: ${fragment}`);
 }
-assert.ok(flutterHost.includes("activityComponentId: displayedActivity?.componentId"),
-  "Flutter host must forward Agent Activity component IDs");
+assert.ok(flutterHost.includes("activityComponentId: displayedGraphActivity?.componentId"),
+  "Flutter host must forward persistent semantic Agent Activity component IDs");
+assert.ok(flutterHost.includes("event.type == 'file_edit' || event.type == 'symbol_edit' || event.type == 'git_diff_updated'"),
+  "Flutter must preserve the latest targeted edit while a task remains active");
+assert.ok(flutterHost.includes("event.componentId != null || event.featureId != null || event.moduleId != null"),
+  "Flutter semantic focus must fall back through component/feature/module targets");
 assert.ok(flutterHost.includes("autoExpandAgentFocus: _settings.autoExpandAgentFocus"),
   "Flutter Agent Activity expansion must respect shared viewer settings");
 
@@ -87,10 +91,14 @@ for (const fragment of [
 }
 assert.ok(!legacy.includes('type: "category"'), "legacy module expansion must not fall back to generic code-category nodes");
 
-assert.ok(live.includes('renderer.focusActivity(event, settings.autoExpandAgentFocus !== false)'),
-  "legacy Agent Activity must auto-expand the same semantic path");
+assert.ok(live.includes('renderer.focusActivity(window.__TOTEM_AGENT_ACTIVITY__, settings.autoExpandAgentFocus !== false)'),
+  "legacy Agent Activity must auto-expand the preserved semantic edit path");
 assert.ok(live.includes("event.componentId || event.featureId || event.moduleId"),
   "legacy activity target label must prioritize components");
+assert.ok(live.includes("latestLiveSemanticActivity"),
+  "legacy viewer must preserve the latest targeted semantic edit instead of losing focus to targetless activity");
+assert.ok(live.includes("event.type === \"file_edit\" || event.type === \"symbol_edit\" || event.type === \"git_diff_updated\""),
+  "legacy semantic focus must track edits and incremental graph refresh activity");
 
 for (const phrase of ["Progressive semantic LOD", "Component", "Implementation"]) {
   assert.ok(plan.includes(phrase), `AI development plan is missing semantic LOD term: ${phrase}`);
