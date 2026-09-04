@@ -246,7 +246,7 @@ assert.ok(graphSource.includes("verification,"), "graph payload must publish ver
 
 for (const fragment of [
   'pathname === "/api/verification-state"',
-  "recordVerificationEvent(ROOT, event)",
+  "recordVerificationEvent(ROOT, recorded)",
   "verificationStatePayload",
 ]) {
   assert.ok(serverSource.includes(fragment), `Bridge verification API missing: ${fragment}`);
