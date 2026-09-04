@@ -328,7 +328,22 @@ The Bridge exposes the latest result at `GET /api/change-intelligence`.
 a `git_diff_updated` Agent Activity event when either Git files or semantic
 entities changed.
 
-Phase 3 semantic snapshots currently include Module, Feature, Component,
-Implementation and relation identities. Test entities remain deferred to Phase 4.
+Phase 3 semantic snapshots include Module, Feature, Component, Implementation
+and relation identities. Full before/after snapshot identities and fingerprints
+are persisted locally. Test entities remain deferred to Phase 4.
+
+`affectedEntityIds` is the union of structural semantic diff IDs and
+Git-to-semantic mappings, so a method-body-only edit still highlights its Module,
+Feature, Component and Implementation even when the architecture shape itself did
+not change.
+
+Both maintained viewer surfaces consume the same payload:
+- Flutter renders a CHANGE strip, animated changed entity/relation rings, and
+  impacted-module halos.
+- Legacy 3D renders the same changed IDs, relation transitions and impacted-module
+  halos through the local live adapter.
+- `changeAnimationsEnabled = false` disables pulsing while retaining static
+  change/impact indication.
+
 All Git paths exposed to the browser are repository-relative; absolute local paths
 are never included.
