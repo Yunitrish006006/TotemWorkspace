@@ -18,6 +18,7 @@ assert.ok(serverSource.includes('pathname === "/api/graph-data"'), "graph-data e
 assert.ok(serverSource.includes('pathname === "/api/refresh"'), "refresh endpoint is required");
 assert.ok(serverSource.includes('pathname === "/api/viewer-settings"'), "viewer settings endpoint is required");
 assert.ok(serverSource.includes('pathname === "/api/activity"'), "agent activity endpoint is required");
+assert.ok(serverSource.includes('pathname === "/api/change-intelligence"'), "Phase 3 change-intelligence endpoint is required");
 assert.ok(serverSource.includes('pathname === "/api/prompt"'), "prompt intake endpoint is required");
 assert.ok(serverSource.includes('"https://yunitrish006006.github.io"'), "official TotemWorkspace Pages origin must be explicitly allowlisted");
 assert.ok(serverSource.includes('"agent-adapter-required"'), "prompt intake must not claim direct agent execution");
