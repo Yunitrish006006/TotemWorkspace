@@ -42,6 +42,10 @@ assert.ok(liveSource.includes('host === "yunitrish006006.github.io"'), "legacy P
 assert.ok(liveSource.includes("window.setInterval(poll, 5000)"), "local status must refresh periodically");
 assert.ok(liveSource.includes("window.location.reload()"), "successful local refresh must reload regenerated graph data");
 
+const settingsPath = path.join(ROOT, ".totem-index", "viewer-settings.json");
+const settingsBackup = fs.existsSync(settingsPath) ? fs.readFileSync(settingsPath) : null;
+if (fs.existsSync(settingsPath)) fs.rmSync(settingsPath);
+
 const server = createLocalViewerServer();
 await new Promise((resolve, reject) => {
   server.once("error", reject);
@@ -176,6 +180,12 @@ try {
   assert.ok((await page.text()).includes("viewer/local-live.js"));
 } finally {
   await new Promise((resolve) => server.close(resolve));
+  if (settingsBackup == null) {
+    if (fs.existsSync(settingsPath)) fs.rmSync(settingsPath);
+  } else {
+    fs.mkdirSync(path.dirname(settingsPath), { recursive: true });
+    fs.writeFileSync(settingsPath, settingsBackup);
+  }
 }
 
 console.log("Local live viewer validation passed: loopback-only bind, approved Pages CORS, shared settings, prompt gating, activity ingestion/polling, local-path redaction, repo status, and refresh wiring are present.");
