@@ -74,7 +74,8 @@ for (const behavior of [
   'settings.agentActivityEnabled === false',
   'settings.promptEnabled === true',
   'host === "yunitrish006006.github.io"',
-  'window.__TOTEM_AGENT_ACTIVITY__ = event',
+  'window.__TOTEM_AGENT_ACTIVITY__ = hasSemanticTarget(semanticFocus) ? semanticFocus : event',
+  'latestLiveSemanticActivity',
   'window.setInterval(requestAgentDraw, 80)'
 ]) {
   assert.ok(legacyLive.includes(behavior), `legacy local adapter parity is missing: ${behavior}`);
