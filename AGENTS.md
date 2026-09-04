@@ -38,6 +38,18 @@ the 11 active Totem repositories. It is not a Minecraft mod.
   newer than the recorded snapshot. The workspace snapshot still defines the
   documented cross-module contract until deliberately refreshed.
 
+## Adaptive orchestration rules
+
+- TotemWorkspace owns the deterministic orchestration decision for non-trivial Totem work. Use `orchestration_plan` (or the deterministic CLI fallback) rather than inventing a different role split in free-form prompts.
+- `primary-only` means no subagent should be spawned. Small changes must not pay orchestration overhead merely because multi-agent tooling is available.
+- Subagent count is bounded by the plan. Current policy caps planned subagents at four and parallel write workers at two.
+- Explorer, Architect, and Reviewer assignments are read-only. Worker assignments may write only inside their assigned single Totem module.
+- Shared contracts/protocols must be stabilized in the discovery/architecture wave before parallel worker writes begin.
+- Subagents must be told they are not alone in the workspace, must not revert unrelated work, and must not recursively spawn further subagents.
+- If the Codex runtime does not expose reliable multi-agent execution, execute the same plan sequentially in Primary while preserving assignment boundaries and independent-review intent.
+- Do not infer or fabricate actual subagent lifecycle from `codex exec --json` when structured spawn telemetry is absent. `orchestration_planned` records the TotemWorkspace decision, not proof that a child agent was created.
+- After implementation, re-run `impact`, `test_plan`, and an independent reviewer when the orchestration plan requires it.
+
 ## V2 viewer isolation rules
 
 - `graph-v2.html` is a static renderer shell and must contain no module, feature,

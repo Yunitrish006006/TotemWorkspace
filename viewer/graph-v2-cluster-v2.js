@@ -828,6 +828,7 @@
     if (type === "task_failed" || type === "test_failed" || type === "deployment_failed") return "#f87171";
     if (type === "test_passed" || type === "task_completed" || type === "deployment_completed") return "#86efac";
     if (type === "file_edit" || type === "symbol_edit" || type === "git_diff_updated") return "#fbbf24";
+    if (type === "orchestration_planned") return "#c4b5fd";
     return "#67e8f9";
   }
 

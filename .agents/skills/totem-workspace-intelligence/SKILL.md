@@ -10,18 +10,22 @@ Use the TotemWorkspace knowledge engine as the first narrowing layer for non-tri
 ## Retrieval order
 
 1. Before broad `grep`, repository-wide search, or reading several modules, call the `totemWorkspace.resolve_task` MCP tool when it is available.
-2. Call `totemWorkspace.context_pack` for the current audience:
+2. For any non-trivial task, call `totemWorkspace.orchestration_plan`. Treat its mode, subagent budget, execution waves, and read/write/module boundaries as authoritative workflow constraints.
+3. Call `totemWorkspace.context_pack` for the current audience:
    - `primary`: architecture/routing context with a small code slice.
+   - `explorer`: read-only implementation/symbol discovery across the bounded module set.
+   - `architect`: read-only contract/protocol/ownership analysis before parallel writes.
    - `worker`: one module's implementation context plus required contracts.
    - `reviewer`: relevant contracts, diff-adjacent code, and validation obligations.
-3. Search code only inside the modules selected by the graph unless evidence requires expansion. `search` and `context_pack` automatically check those selected modules and incrementally replace chunks for changed/new/deleted files before retrieval.
-4. Use `totemWorkspace.graph` when changing a shared API or when dependency direction is unclear.
-5. Use `totemWorkspace.refresh_index` manually only for diagnostics, explicit maintenance, or a forced complete rebuild; normal narrowed retrieval does not require a manual refresh.
+4. Search code only inside the modules selected by the graph unless evidence requires expansion. `search` and `context_pack` automatically check those selected modules and incrementally replace chunks for changed/new/deleted files before retrieval.
+5. Use `totemWorkspace.graph` when changing a shared API or when dependency direction is unclear.
+6. Use `totemWorkspace.refresh_index` manually only for diagnostics, explicit maintenance, or a forced complete rebuild; normal narrowed retrieval does not require a manual refresh.
 
 If the MCP server is unavailable, use the deterministic CLI from the TotemWorkspace repository:
 
 ```sh
 node scripts/totem-intelligence.mjs resolve "<task>"
+node scripts/totem-intelligence.mjs orchestrate "<task>"
 node scripts/totem-intelligence.mjs context "<task>" primary
 node scripts/totem-intelligence.mjs search "<query>" totem-remnant,totem-nexus
 node scripts/totem-intelligence.mjs refresh-index totem-remnant,totem-nexus
@@ -41,14 +45,17 @@ node scripts/totem-intelligence.mjs render-graph
 
 Minimize direct repository-wide reading by the primary coordinator.
 
-Prefer subagents for:
-- broad exploration and symbol tracing,
-- repetitive module implementation,
-- build-log diagnosis,
-- compatibility investigation,
-- independent integration review.
+Do not decide subagent count ad hoc. Follow the TotemWorkspace orchestration plan.
 
-Give each subagent a bounded context pack and explicit module/file ownership. Stabilize shared contracts before parallel module writes.
+- `primary-only`: Primary performs the task; spawn no subagents.
+- `assisted`: use the single bounded discovery/architecture role and optional independent reviewer from the plan.
+- `bounded-parallel`: run only the planned bounded workers after discovery; keep worker writes module-local.
+- `guarded-parallel`: stabilize contracts with Architect before worker writes, then run independent review.
+- Never exceed the plan's subagent/concurrency budget.
+- Tell every child agent that it cannot spawn further agents and must not revert work outside its assignment.
+- If multi-agent tools are unavailable, execute the same waves sequentially in Primary instead of discarding the plan.
+
+Give each role its matching bounded context pack. Stabilize shared contracts before parallel module writes.
 
 ## After implementation
 

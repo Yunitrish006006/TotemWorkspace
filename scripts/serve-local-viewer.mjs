@@ -27,6 +27,10 @@ import {
   replayVerificationStateAt
 } from "../intelligence/development-replay.mjs";
 import { createAgentAdapter } from "../intelligence/agent-adapter.mjs";
+import {
+  buildOrchestrationPlan,
+  orchestrationPlanSummary
+} from "../intelligence/orchestration-plan.mjs";
 import { renderGraphV2 } from "./render-graph-v2.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -55,6 +59,7 @@ const ACTIVITY_TYPES = new Set([
   "task_completed",
   "task_failed",
   "prompt_submitted",
+  "orchestration_planned",
   "feature_selected",
   "file_read",
   "file_edit",
@@ -209,7 +214,9 @@ function normalizeActivityEvent(value = {}, { source = "bridge" } = {}) {
     ["status", 80],
     ["from", 200],
     ["to", 200],
-    ["taskId", 160]
+    ["taskId", 160],
+    ["orchestrationId", 160],
+    ["orchestrationMode", 64]
   ];
   for (const [key, max] of fields) {
     const text = boundedText(value[key], max);
@@ -470,6 +477,7 @@ async function handleApi(req, res, url, { agentAdapter } = {}) {
       activitySchemaVersion: 3,
       verificationSchemaVersion: 1,
       replaySchemaVersion: 1,
+      orchestrationSchemaVersion: 1,
       agentAdapterSchemaVersion: 1,
       promptExecution: adapterStatus.available ? adapterStatus.kind : "agent-adapter-required",
       agentAdapter: {
@@ -493,6 +501,29 @@ async function handleApi(req, res, url, { agentAdapter } = {}) {
       currentTask: null,
       lastTask: null
     });
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/orchestration-plan") {
+    const args = await readJsonBody(req);
+    const query = boundedText(args.query ?? args.prompt, PROMPT_LIMIT);
+    if (!query) {
+      json(res, 400, { error: "query is required" });
+      return true;
+    }
+    try {
+      const plan = buildOrchestrationPlan({
+        query,
+        moduleId: boundedText(args.moduleId, 128),
+        featureId: boundedText(args.featureId, 160),
+        changedModules: Array.isArray(args.changedModules) ? args.changedModules : [],
+        changedFiles: Array.isArray(args.changedFiles) ? args.changedFiles : [],
+        knowledge: loadKnowledge()
+      });
+      json(res, 200, plan);
+    } catch (error) {
+      json(res, 400, { error: error instanceof Error ? error.message : String(error) });
+    }
     return true;
   }
 
@@ -603,6 +634,24 @@ async function handleApi(req, res, url, { agentAdapter } = {}) {
       featureId: args.featureId,
       summary: prompt.length <= 220 ? prompt : `${prompt.slice(0, 217)}...`
     }, { source: "viewer" });
+    const orchestration = buildOrchestrationPlan({
+      query: prompt,
+      moduleId: boundedText(args.moduleId, 128),
+      featureId: boundedText(args.featureId, 160),
+      knowledge: loadKnowledge()
+    });
+    const orchestrationId = `orchestration:${event.sequence}`;
+    const orchestrationSummary = orchestrationPlanSummary(orchestration);
+    appendActivity({
+      type: "orchestration_planned",
+      source: "bridge",
+      moduleId: args.moduleId,
+      featureId: args.featureId,
+      orchestrationId,
+      orchestrationMode: orchestration.mode,
+      status: String(orchestration.score),
+      summary: `${orchestration.mode} · score ${orchestration.score} · ${orchestrationSummary.subagents} subagents · ${orchestrationSummary.roles.join(", ") || "primary"}`
+    }, { source: "bridge" });
 
     const adapterStatus = agentAdapter?.status?.();
     if (!agentAdapter || !adapterStatus?.available) {
@@ -611,7 +660,8 @@ async function handleApi(req, res, url, { agentAdapter } = {}) {
         execution: "agent-adapter-unavailable",
         event,
         task: null,
-        adapter: adapterStatus ?? null
+        adapter: adapterStatus ?? null,
+        orchestration
       });
       return true;
     }
@@ -621,14 +671,16 @@ async function handleApi(req, res, url, { agentAdapter } = {}) {
         prompt,
         moduleId: args.moduleId,
         featureId: args.featureId,
-        summary: event.summary
+        summary: event.summary,
+        orchestrationPlan: orchestration
       });
       json(res, 202, {
         status: "accepted",
         execution: "codex",
         event,
         task,
-        adapter: agentAdapter.status()
+        adapter: agentAdapter.status(),
+        orchestration
       });
     } catch (error) {
       const code = error?.code;
@@ -637,7 +689,8 @@ async function handleApi(req, res, url, { agentAdapter } = {}) {
         error: error instanceof Error ? error.message : String(error),
         execution: "not-started",
         event,
-        adapter: agentAdapter.status()
+        adapter: agentAdapter.status(),
+        orchestration
       });
     }
     return true;

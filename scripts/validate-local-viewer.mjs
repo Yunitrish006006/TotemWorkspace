@@ -20,6 +20,7 @@ assert.ok(serverSource.includes('pathname === "/api/viewer-settings"'), "viewer 
 assert.ok(serverSource.includes('pathname === "/api/activity"'), "agent activity endpoint is required");
 assert.ok(serverSource.includes('pathname === "/api/change-intelligence"'), "Phase 3 change-intelligence endpoint is required");
 assert.ok(serverSource.includes('pathname === "/api/agent-adapter"'), "Phase 5 agent-adapter endpoint is required");
+assert.ok(serverSource.includes('pathname === "/api/orchestration-plan"'), "Phase 7 orchestration-plan endpoint is required");
 assert.ok(serverSource.includes('pathname === "/api/replay"'), "Phase 6 replay timeline endpoint is required");
 assert.ok(serverSource.includes('pathname === "/api/replay/frame"'), "Phase 6 replay frame endpoint is required");
 assert.ok(serverSource.includes('pathname === "/api/verification-state"'), "Phase 4 verification-state endpoint is required");
@@ -124,6 +125,7 @@ try {
   assert.equal(healthPayload.activitySchemaVersion, 3);
   assert.equal(healthPayload.verificationSchemaVersion, 1);
   assert.equal(healthPayload.replaySchemaVersion, 1);
+  assert.equal(healthPayload.orchestrationSchemaVersion, 1);
   assert.equal(healthPayload.agentAdapterSchemaVersion, 1);
   assert.equal(healthPayload.promptExecution, "codex");
   assert.equal(healthPayload.agentAdapter.available, true);
@@ -150,6 +152,17 @@ try {
   const adapterPayload = await adapterStatus.json();
   assert.equal(adapterPayload.kind, "codex");
   assert.equal(adapterPayload.available, true);
+
+  const planned = await fetch(`${base}/api/orchestration-plan`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ query: "inspect TotemAutomata gathering outline", moduleId: "totem-automata" })
+  });
+  assert.equal(planned.status, 200);
+  const plannedPayload = await planned.json();
+  assert.equal(plannedPayload.schemaVersion, 1);
+  assert.ok(["primary-only", "assisted", "bounded-parallel", "guarded-parallel"].includes(plannedPayload.mode));
+  assert.ok(plannedPayload.assignments.length <= 4);
 
   const preflight = await fetch(`${base}/api/refresh`, {
     method: "OPTIONS",
@@ -205,8 +218,11 @@ try {
   assert.equal(promptPayload.execution, "codex");
   assert.equal(promptPayload.event.type, "prompt_submitted");
   assert.equal(promptPayload.task.id, "task:http-fixture:1");
+  assert.equal(promptPayload.orchestration.schemaVersion, 1);
+  assert.ok(promptPayload.orchestration.score >= 0);
   assert.equal(dispatchedPrompts.length, 1);
   assert.equal(dispatchedPrompts[0].prompt, "inspect TotemAutomata gathering outline");
+  assert.equal(dispatchedPrompts[0].orchestrationPlan.schemaVersion, 1);
 
   const activityPost = await fetch(`${base}/api/activity`, {
     method: "POST",
@@ -229,8 +245,8 @@ try {
   const activityPayload = await activity.json();
   assert.ok(activityPayload.latestSequence >= 2);
   assert.deepEqual(
-    activityPayload.events.slice(-2).map((event) => event.type),
-    ["prompt_submitted", "file_edit"]
+    activityPayload.events.slice(-3).map((event) => event.type),
+    ["prompt_submitted", "orchestration_planned", "file_edit"]
   );
 
   const testTarget = "test:totem-core:src/test/java/example/BridgeFixtureTest.java";

@@ -29,6 +29,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
   ChangeIntelligence? _change;
   VerificationState? _verification;
   AgentAdapterStatus? _adapter;
+  OrchestrationSummary? _orchestration;
   DevelopmentReplayTimeline? _replayTimeline;
   DevelopmentReplayFrame? _replayFrame;
   double? _replayDraftSequence;
@@ -100,6 +101,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
         _change = change;
         _verification = verification;
         _adapter = adapter;
+        _orchestration = adapter.currentTask?.orchestration ?? adapter.lastTask?.orchestration;
         _replayTimeline = replayTimeline;
         _replayDraftSequence = replayTimeline.latestSequence.toDouble();
         _mergeActivity(activity);
@@ -189,6 +191,9 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
       if (!mounted) return;
       setState(() {
         _adapter = adapter;
+        _orchestration = adapter.currentTask?.orchestration
+            ?? adapter.lastTask?.orchestration
+            ?? _orchestration;
         _liveError = null;
       });
     } catch (error) {
@@ -285,6 +290,9 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
           _activitySequence = math.max(_activitySequence, event.sequence);
         }
         if (submission.adapter != null) _adapter = submission.adapter;
+        _orchestration = submission.orchestration?.summary
+            ?? submission.task?.orchestration
+            ?? _orchestration;
         _liveError = submission.execution == 'agent-adapter-unavailable'
             ? (_adapter?.reason ?? 'Agent adapter unavailable')
             : null;
@@ -499,6 +507,8 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
               onChangeEnd: (value) => unawaited(_selectReplaySequence(value.round())),
               onLive: _goReplayLive,
             ),
+          if (isLocal && _orchestration != null)
+            _OrchestrationStrip(summary: _orchestration!),
           if (isLocal && _adapter != null)
             _AgentAdapterStrip(status: _adapter!),
           if (isLocal && displayedChange?.hasChanges == true)
@@ -600,6 +610,42 @@ class _ReplayScrubber extends StatelessWidget {
             label: const Text('LIVE'),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _OrchestrationStrip extends StatelessWidget {
+  const _OrchestrationStrip({required this.summary});
+
+  final OrchestrationSummary summary;
+
+  @override
+  Widget build(BuildContext context) {
+    final roles = summary.roles.isEmpty ? 'Primary only' : summary.roles.join(', ');
+    final color = switch (summary.mode) {
+      'guarded-parallel' => const Color(0xFFF0ABFC),
+      'bounded-parallel' => const Color(0xFFC4B5FD),
+      'assisted' => const Color(0xFF93C5FD),
+      _ => const Color(0xFF94A3B8),
+    };
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      decoration: const BoxDecoration(
+        color: Color(0xFF151026),
+        border: Border(bottom: BorderSide(color: Color(0xFF4C3A70))),
+      ),
+      child: Text(
+        'ORCH · ${summary.mode} · score ${summary.score} · ${summary.subagents} subagents · $roles · benefit ${summary.estimatedBenefit}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.25,
+        ),
       ),
     );
   }

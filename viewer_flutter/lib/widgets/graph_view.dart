@@ -911,6 +911,7 @@ class _GraphPainter extends CustomPainter {
     if (value == 'file_edit' || value == 'symbol_edit' || value == 'git_diff_updated') {
       return const Color(0xFFFBBF24);
     }
+    if (value == 'orchestration_planned') return const Color(0xFFC4B5FD);
     return const Color(0xFF67E8F9);
   }
 

@@ -35,6 +35,7 @@ V1 使用本機 lexical／symbol code index，不需要 embedding、向量資料
 
 ```sh
 node scripts/totem-intelligence.mjs resolve "死亡背包跟 Nexus 同步有問題"
+node scripts/totem-intelligence.mjs orchestrate "死亡背包跟 Nexus 同步有問題"
 node scripts/totem-intelligence.mjs build-index
 node scripts/totem-intelligence.mjs context "銅魁儡背包防巢狀" primary
 ```
@@ -125,6 +126,8 @@ Phase 4 加入 Verification Graph：實際被 code index 掃到的 Test / GameTe
 Phase 5 加入 opt-in Codex Agent Adapter：只有主機端設定 `TOTEM_AGENT_ADAPTER=codex` 時，Prompt 才會透過 `codex exec --json` 建立真實 Codex task；瀏覽器不能指定 executable、cwd、sandbox、model 或 CLI flags。Bridge 會輸出 `task_started / task_completed / task_failed`，把 Codex JSONL 的 file change / MCP activity 映射回既有 activity graph，task 結束後自動重新索引並更新 Phase 3 change intelligence。Adapter 未啟用或 Codex 不可用時，Prompt 只記錄為 submitted，不會假裝 agent 已開始。
 
 Phase 6 加入 Development Replay：Bridge 會把 bounded activity、task session、commit/PR/deployment milestone 與 refresh checkpoint 持久化到 `.totem-index/development-replay.json`，重啟後 sequence 不歸零。Flutter 與 legacy 都有 timeline scrubber；拖到歷史 sequence 時會重建該時點的 Activity、Phase 3 change/impact、Phase 4 verification 狀態，並依 checkpoint 隱藏當時尚不存在的 graph entity/edge；按 `LIVE` 回到最新狀態。
+
+Phase 7 加入 Adaptive Orchestration：每次非 trivial Prompt 由 TotemWorkspace 依 Module span、跨模組 contract、TotemCore/shared surface、risk 與 verification breadth 計算 deterministic orchestration score，選擇 `primary-only / assisted / bounded-parallel / guarded-parallel`。Planner 最多規劃 4 個 subagents、2 個平行 write workers；Explorer／Architect／Reviewer 唯讀，Worker 僅能寫入單一指派模組。MCP、CLI、Bridge、Codex prompt envelope、Flutter／legacy ORCH 狀態與 Replay 都使用同一份 plan；若 runtime 沒有 multi-agent 能力，Primary 依同一 waves 序列執行，不會捨棄邊界或假造 child-agent telemetry。
 
 ### VS Code Remote-SSH / tmux Bridge
 

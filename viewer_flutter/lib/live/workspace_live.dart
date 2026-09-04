@@ -533,6 +533,117 @@ class VerificationState {
   }
 }
 
+class OrchestrationSummary {
+  const OrchestrationSummary({
+    required this.mode,
+    required this.score,
+    required this.modules,
+    required this.subagents,
+    required this.roles,
+    required this.maxParallelWorkers,
+    required this.estimatedBenefit,
+  });
+
+  final String mode;
+  final int score;
+  final List<String> modules;
+  final int subagents;
+  final List<String> roles;
+  final int maxParallelWorkers;
+  final String estimatedBenefit;
+
+  factory OrchestrationSummary.fromJson(Map<String, dynamic> json) => OrchestrationSummary(
+        mode: json['mode'] as String? ?? 'primary-only',
+        score: (json['score'] as num?)?.toInt() ?? 0,
+        modules: GraphData.strings(json['modules']),
+        subagents: (json['subagents'] as num?)?.toInt() ?? 0,
+        roles: GraphData.strings(json['roles']),
+        maxParallelWorkers: (json['maxParallelWorkers'] as num?)?.toInt() ?? 0,
+        estimatedBenefit: json['estimatedBenefit'] as String? ?? 'none',
+      );
+}
+
+class OrchestrationAssignment {
+  const OrchestrationAssignment({
+    required this.id,
+    required this.role,
+    required this.modules,
+    required this.phase,
+    required this.writeAllowed,
+    required this.purpose,
+  });
+
+  final String id;
+  final String role;
+  final List<String> modules;
+  final String phase;
+  final bool writeAllowed;
+  final String purpose;
+
+  factory OrchestrationAssignment.fromJson(Map<String, dynamic> json) => OrchestrationAssignment(
+        id: json['id'] as String? ?? '',
+        role: json['role'] as String? ?? '',
+        modules: GraphData.strings(json['modules']),
+        phase: json['phase'] as String? ?? '',
+        writeAllowed: json['writeAllowed'] as bool? ?? false,
+        purpose: json['purpose'] as String? ?? '',
+      );
+}
+
+class OrchestrationPlan {
+  const OrchestrationPlan({
+    required this.schemaVersion,
+    required this.mode,
+    required this.score,
+    required this.modules,
+    required this.assignments,
+    required this.maxSubagents,
+    required this.maxParallelWorkers,
+    required this.estimatedBenefit,
+  });
+
+  final int schemaVersion;
+  final String mode;
+  final int score;
+  final List<String> modules;
+  final List<OrchestrationAssignment> assignments;
+  final int maxSubagents;
+  final int maxParallelWorkers;
+  final String estimatedBenefit;
+
+  OrchestrationSummary get summary => OrchestrationSummary(
+        mode: mode,
+        score: score,
+        modules: modules,
+        subagents: assignments.length,
+        roles: assignments.map((entry) => entry.role).toList(growable: false),
+        maxParallelWorkers: maxParallelWorkers,
+        estimatedBenefit: estimatedBenefit,
+      );
+
+  factory OrchestrationPlan.fromJson(Map<String, dynamic> json) {
+    final rationale = Map<String, dynamic>.from(
+      json['rationale'] as Map? ?? const <String, dynamic>{},
+    );
+    final limits = Map<String, dynamic>.from(
+      json['limits'] as Map? ?? const <String, dynamic>{},
+    );
+    return OrchestrationPlan(
+      schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 1,
+      mode: json['mode'] as String? ?? 'primary-only',
+      score: (json['score'] as num?)?.toInt() ?? 0,
+      modules: GraphData.strings(rationale['modules']),
+      assignments: (json['assignments'] as List? ?? const <Object>[])
+          .whereType<Map>()
+          .map((entry) => OrchestrationAssignment.fromJson(Map<String, dynamic>.from(entry)))
+          .toList(growable: false),
+      maxSubagents: (limits['maxSubagents'] as num?)?.toInt() ?? 0,
+      maxParallelWorkers: (limits['maxParallelWorkers'] as num?)?.toInt() ?? 0,
+      estimatedBenefit: json['estimatedBenefit'] as String? ?? 'none',
+    );
+  }
+}
+
 class AgentTask {
   const AgentTask({
     required this.id,
@@ -545,6 +656,7 @@ class AgentTask {
     required this.completedAt,
     required this.summary,
     required this.error,
+    required this.orchestration,
   });
 
   final String id;
@@ -557,6 +669,7 @@ class AgentTask {
   final String? completedAt;
   final String? summary;
   final String? error;
+  final OrchestrationSummary? orchestration;
 
   factory AgentTask.fromJson(Map<String, dynamic> json) => AgentTask(
         id: json['id'] as String? ?? '',
@@ -569,6 +682,11 @@ class AgentTask {
         completedAt: json['completedAt'] as String?,
         summary: json['summary'] as String?,
         error: json['error'] as String?,
+        orchestration: json['orchestration'] is Map
+            ? OrchestrationSummary.fromJson(
+                Map<String, dynamic>.from(json['orchestration'] as Map),
+              )
+            : null,
       );
 }
 
@@ -635,6 +753,7 @@ class PromptSubmission {
     required this.event,
     required this.task,
     required this.adapter,
+    required this.orchestration,
   });
 
   final String status;
@@ -642,10 +761,12 @@ class PromptSubmission {
   final AgentActivityEvent event;
   final AgentTask? task;
   final AgentAdapterStatus? adapter;
+  final OrchestrationPlan? orchestration;
 
   factory PromptSubmission.fromJson(Map<String, dynamic> json) {
     final rawTask = json['task'];
     final rawAdapter = json['adapter'];
+    final rawOrchestration = json['orchestration'];
     return PromptSubmission(
       status: json['status'] as String? ?? 'accepted',
       execution: json['execution'] as String? ?? 'unknown',
@@ -655,6 +776,9 @@ class PromptSubmission {
       task: rawTask is Map ? AgentTask.fromJson(Map<String, dynamic>.from(rawTask)) : null,
       adapter: rawAdapter is Map
           ? AgentAdapterStatus.fromJson(Map<String, dynamic>.from(rawAdapter))
+          : null,
+      orchestration: rawOrchestration is Map
+          ? OrchestrationPlan.fromJson(Map<String, dynamic>.from(rawOrchestration))
           : null,
     );
   }
@@ -897,6 +1021,28 @@ class LocalWorkspaceClient {
     final response = await _client.get(_uri('/api/agent-adapter')).timeout(const Duration(seconds: 4));
     _requireSuccess(response, 'agent adapter status');
     return AgentAdapterStatus.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<OrchestrationPlan> orchestrationPlan(
+    String query, {
+    String? moduleId,
+    String? featureId,
+  }) async {
+    final response = await _client
+        .post(
+          _uri('/api/orchestration-plan'),
+          headers: const {'content-type': 'application/json'},
+          body: jsonEncode({
+            'query': query,
+            if (moduleId != null) 'moduleId': moduleId,
+            if (featureId != null) 'featureId': featureId,
+          }),
+        )
+        .timeout(const Duration(seconds: 6));
+    _requireSuccess(response, 'orchestration plan');
+    return OrchestrationPlan.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<DevelopmentReplayTimeline> replayTimeline() async {

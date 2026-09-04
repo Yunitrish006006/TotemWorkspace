@@ -1,5 +1,6 @@
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
+import { orchestrationPlanSummary } from "./orchestration-plan.mjs";
 
 const ADAPTER_SCHEMA_VERSION = 1;
 const TASK_SCHEMA_VERSION = 1;
@@ -51,8 +52,36 @@ function publicTask(task) {
     startedAt: task.startedAt,
     completedAt: task.completedAt ?? null,
     summary: task.summary ?? null,
-    error: task.error ?? null
+    error: task.error ?? null,
+    orchestration: task.orchestration ?? null
   });
+}
+
+function orchestrationEnvelope(plan) {
+  if (!plan) return [];
+  const lines = [
+    "",
+    "TotemWorkspace adaptive orchestration plan:",
+    `Mode: ${plan.mode}; score: ${plan.score}; estimated benefit: ${plan.estimatedBenefit}.`,
+    `Subagent budget: ${plan.limits?.recommendedSubagents ?? 0}/${plan.limits?.maxSubagents ?? 0}; max parallel workers: ${plan.limits?.maxParallelWorkers ?? 0}.`,
+    "The Primary agent owns integration and the final answer."
+  ];
+  for (const wave of plan.executionWaves ?? []) {
+    lines.push(`Wave ${wave.phase} (parallel=${wave.parallel}): ${(wave.assignments ?? []).join(", ")}`);
+  }
+  for (const item of plan.assignments ?? []) {
+    lines.push(
+      `Assignment ${item.id}: role=${item.role}; modules=${(item.modules ?? []).join(",") || "none"}; writeAllowed=${item.writeAllowed}; purpose=${item.purpose}`
+    );
+  }
+  lines.push(
+    "If this Codex runtime exposes multi-agent/subagent tools, follow this plan and do not exceed the subagent budget.",
+    "Tell every spawned subagent that it must not spawn further subagents and must respect its read/write/module boundary.",
+    "Do not spawn any subagent for a primary-only plan.",
+    "If multi-agent execution is unavailable, execute the same waves sequentially in Primary while preserving the same boundaries.",
+    "Do not invent delegation telemetry; TotemWorkspace records the orchestration plan separately from actual runtime agent lifecycle."
+  );
+  return lines;
 }
 
 function promptEnvelope(request) {
@@ -65,6 +94,7 @@ function promptEnvelope(request) {
   ];
   if (request.moduleId) lines.push(`Semantic module focus: ${request.moduleId}`);
   if (request.featureId) lines.push(`Semantic feature focus: ${request.featureId}`);
+  lines.push(...orchestrationEnvelope(request.orchestrationPlan));
   lines.push("", "User request:", request.prompt);
   return lines.join("\n");
 }
@@ -340,6 +370,9 @@ export function createAgentAdapter({
       completedAt: null,
       summary: boundedText(request.summary ?? prompt, 220),
       error: null,
+      orchestration: request.orchestrationPlan
+        ? orchestrationPlanSummary(request.orchestrationPlan)
+        : null,
       settled: false
     };
     state.activeTask = task;

@@ -98,13 +98,70 @@ try {
   assert.equal(adapter.status().busy, false);
   assert.match(adapter.status().version, /codex-cli/);
 
+  const orchestrationPlan = {
+    schemaVersion: 1,
+    mode: "bounded-parallel",
+    score: 7,
+    estimatedBenefit: "high",
+    assignments: [
+      {
+        id: "explorer:scope",
+        role: "explorer",
+        modules: ["totem-alchemy"],
+        phase: "discovery",
+        dependsOn: [],
+        writeAllowed: false,
+        contextAudience: "explorer",
+        maxContextTokens: 6000,
+        purpose: "Confirm brewing implementation scope."
+      },
+      {
+        id: "worker:totem-alchemy",
+        role: "worker",
+        modules: ["totem-alchemy"],
+        phase: "implementation",
+        dependsOn: ["explorer:scope"],
+        writeAllowed: true,
+        contextAudience: "worker",
+        maxContextTokens: 9000,
+        purpose: "Implement the bounded Alchemy change."
+      }
+    ],
+    executionWaves: [
+      { phase: "discovery", parallel: true, assignments: ["explorer:scope"] },
+      { phase: "implementation", parallel: false, assignments: ["worker:totem-alchemy"] }
+    ],
+    rationale: {
+      modules: ["totem-alchemy"],
+      contractIds: [],
+      criticalContractIds: [],
+      risks: [],
+      highRisks: [],
+      validationCategories: ["build"],
+      requiresIndependentReview: true
+    },
+    limits: {
+      maxSubagents: 4,
+      recommendedSubagents: 2,
+      maxParallelWorkers: 1,
+      duplicateRepositoryReads: "avoid",
+      workerWriteScope: "module-bounded"
+    },
+    fallback: {
+      whenMultiAgentUnavailable: "execute sequentially",
+      smallTaskRule: "primary-only plans must not spawn subagents"
+    }
+  };
   const task = adapter.dispatch({
     prompt: "Fix the brewing flow and validate it.",
     moduleId: "totem-alchemy",
-    featureId: "totem-alchemy.feature-1"
+    featureId: "totem-alchemy.feature-1",
+    orchestrationPlan
   });
   assert.equal(task.state, "running");
   assert.equal(task.adapter, "codex");
+  assert.equal(task.orchestration?.mode, "bounded-parallel");
+  assert.equal(task.orchestration?.subagents, 2);
   assert.equal(adapter.status().busy, true);
   assert.equal(spawned.length, 1);
   assert.equal(spawned[0].command, "codex-fixture");
@@ -131,6 +188,11 @@ try {
   await tick();
   assert.match(stdin, /TotemWorkspace local Codex agent adapter/);
   assert.match(stdin, /Semantic module focus: totem-alchemy/);
+  assert.match(stdin, /TotemWorkspace adaptive orchestration plan/);
+  assert.match(stdin, /Mode: bounded-parallel; score: 7/);
+  assert.match(stdin, /Assignment explorer:scope/);
+  assert.match(stdin, /must not spawn further subagents/);
+  assert.match(stdin, /Do not spawn any subagent for a primary-only plan/);
   assert.match(stdin, /Fix the brewing flow/);
 
   child.stdout.write('{"type":"thread.started","thread_id":"thread-fixture"}\n');

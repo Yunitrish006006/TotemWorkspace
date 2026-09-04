@@ -33,6 +33,7 @@ for (const endpoint of [
   "/api/activity",
   "/api/prompt",
   "/api/agent-adapter",
+  "/api/orchestration-plan",
   "/api/replay",
   "/api/replay/frame"
 ]) {
@@ -48,6 +49,7 @@ assert.ok(!server.includes('node:child_process'), "Phase 1 browser prompt intake
 for (const id of [
   'id="agentActivity"',
   'id="agentAdapter"',
+  'id="orchestrationState"',
   'id="replayBar"',
   'id="replaySlider"',
   'id="replayLive"',
@@ -65,6 +67,7 @@ for (const behavior of [
   'apiUrl("/api/activity?after="',
   'apiUrl("/api/prompt")',
   'apiUrl("/api/agent-adapter")',
+  'renderOrchestration(payload.orchestration)',
   'apiUrl("/api/replay")',
   'apiUrl("/api/replay/frame?sequence=" +',
   'window.__TOTEM_REPLAY_GRAPH_STATE__ = frame.graphState || null',
@@ -94,6 +97,9 @@ for (const behavior of [
   "Future<AgentActivityBatch> activity",
   "Future<PromptSubmission> submitPrompt",
   "Future<AgentAdapterStatus> agentAdapterStatus()",
+  "Future<OrchestrationPlan> orchestrationPlan(",
+  "class OrchestrationSummary",
+  "class OrchestrationPlan",
   "Future<DevelopmentReplayTimeline> replayTimeline()",
   "Future<DevelopmentReplayFrame> replayFrame(int sequence)"
 ]) {
@@ -104,6 +110,7 @@ for (const behavior of [
   "ViewerSettings _settings = ViewerSettings.defaults",
   "_ActivityStrip(event: displayedActivity)",
   "_AgentAdapterStrip(status: _adapter!)",
+  "_OrchestrationStrip(summary: _orchestration!)",
   "_ReplayScrubber(",
   "historicalEntityIds: historicalEntityIds",
   "if (isLocal && _settings.promptEnabled)",
@@ -122,6 +129,7 @@ for (const behavior of [
   "activityPulse: _activityPulse",
   "if (agentActive)",
   "Color _activityColor",
+  "orchestration_planned",
   "historicalEntityIds"
 ]) {
   assert.ok(flutterGraph.includes(behavior), `Flutter activity overlay is missing: ${behavior}`);
@@ -152,4 +160,4 @@ assert.ok(localValidation.includes("published TotemWorkspace Pages must be able 
 assert.ok(localValidation.includes("Prompt must default to OFF"), "local bridge regression must protect Prompt default-off behavior");
 assert.ok(localValidation.includes("Agent Activity must remain independent of Prompt"), "local bridge regression must protect Prompt/Activity independence");
 
-console.log("AI development viewer validation passed: Flutter owns both Pages and local Bridge roots, /legacy/ remains synchronized, prompt/activity/agent-adapter/replay semantics stay shared, and the Bridge remains loopback-only and explicitly adapter-gated.");
+console.log("AI development viewer validation passed: Flutter owns both Pages and local Bridge roots, /legacy/ remains synchronized, prompt/activity/orchestration/agent-adapter/replay semantics stay shared, and the Bridge remains loopback-only and explicitly adapter-gated.");

@@ -3,10 +3,11 @@ import readline from "node:readline";
 import { buildCodeIndex, loadCodeIndex, refreshCodeIndex, searchCode } from "../intelligence/code-index.mjs";
 import { buildContextPack } from "../intelligence/context-pack.mjs";
 import { defaultReposRoot, graphForModule, impactAnalysis, knowledgeSummary, loadKnowledge, resolveTask, testPlan, workspaceStatus } from "../intelligence/workspace-knowledge.mjs";
+import { buildOrchestrationPlan } from "../intelligence/orchestration-plan.mjs";
 import { renderGraphV2 } from "../scripts/render-graph-v2.mjs";
 
 const SERVER_NAME = "totem-workspace-intelligence";
-const SERVER_VERSION = "0.3.0";
+const SERVER_VERSION = "0.4.0";
 
 function jsonSchema(properties, required = []) {
   return { type: "object", additionalProperties: false, properties, required };
@@ -17,6 +18,17 @@ const TOOLS = Object.freeze([
     name: "resolve_task",
     description: "Resolve a Totem development request to likely modules, feature branches, dependency contracts, risks, and useful subagent roles before broad repository reading.",
     inputSchema: jsonSchema({ query: { type: "string", minLength: 1 } }, ["query"])
+  },
+  {
+    name: "orchestration_plan",
+    description: "Build a deterministic adaptive orchestration plan: complexity score, Primary/subagent mode, bounded role assignments, execution waves, write scopes, and fallback when multi-agent execution is unavailable.",
+    inputSchema: jsonSchema({
+      query: { type: "string", minLength: 1 },
+      module_id: { type: ["string", "null"], default: null },
+      feature_id: { type: ["string", "null"], default: null },
+      changed_modules: { type: "array", items: { type: "string" }, default: [] },
+      changed_files: { type: "array", items: { type: "string" }, default: [] }
+    }, ["query"])
   },
   {
     name: "graph",
@@ -40,7 +52,7 @@ const TOOLS = Object.freeze([
     description: "Build a bounded task-specific context pack for the primary coordinator, a module worker, or a reviewer. Code retrieval automatically refreshes changed chunks in the selected modules.",
     inputSchema: jsonSchema({
       query: { type: "string", minLength: 1 },
-      audience: { type: "string", enum: ["primary", "worker", "reviewer"], default: "primary" },
+      audience: { type: "string", enum: ["primary", "explorer", "architect", "worker", "reviewer"], default: "primary" },
       module_id: { type: ["string", "null"], default: null },
       max_tokens: { type: "integer", minimum: 1000, maximum: 40000, default: 8000 },
       include_code: { type: "boolean", default: true }
@@ -158,6 +170,15 @@ function callTool(name, args = {}) {
   switch (name) {
     case "resolve_task":
       return resolveTask(args.query, knowledge);
+    case "orchestration_plan":
+      return buildOrchestrationPlan({
+        query: args.query,
+        moduleId: args.module_id ?? null,
+        featureId: args.feature_id ?? null,
+        changedModules: args.changed_modules ?? [],
+        changedFiles: args.changed_files ?? [],
+        knowledge
+      });
     case "graph":
       return graphForModule(args.module_id, { depth: args.depth ?? 1, knowledge });
     case "search": {
