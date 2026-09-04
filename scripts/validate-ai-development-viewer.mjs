@@ -102,12 +102,12 @@ for (const behavior of [
 
 for (const behavior of [
   "ViewerSettings _settings = ViewerSettings.defaults",
-  "_ActivityStrip(event: _activity.last)",
+  "_ActivityStrip(event: displayedActivity)",
   "_AgentAdapterStrip(status: _adapter!)",
   "_ReplayScrubber(",
   "historicalEntityIds: historicalEntityIds",
   "if (isLocal && _settings.promptEnabled)",
-  "if (isLocal && _settings.agentActivityEnabled && _activity.isNotEmpty)",
+  "if (isLocal && _settings.agentActivityEnabled && displayedActivity != null)",
   "Switch.adaptive",
   "onPromptChanged"
 ]) {
@@ -127,7 +127,7 @@ for (const behavior of [
   assert.ok(flutterGraph.includes(behavior), `Flutter activity overlay is missing: ${behavior}`);
 }
 assert.ok(
-  flutterHost.includes("if (isLocal && _settings.agentActivityEnabled && _activity.isNotEmpty)") &&
+  flutterHost.includes("if (isLocal && _settings.agentActivityEnabled && displayedActivity != null)") &&
     flutterHost.includes("if (isLocal && _settings.promptEnabled)"),
   "Prompt visibility and Agent Activity visibility must remain independent"
 );
