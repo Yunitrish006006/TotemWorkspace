@@ -72,17 +72,19 @@ async function main(argv) {
   }
 
   if (command === "status") {
-    const [health, settings, activity, verification] = await Promise.all([
+    const [health, settings, activity, verification, adapter] = await Promise.all([
       request("/api/health"),
       request("/api/viewer-settings"),
       request("/api/activity?after=0"),
-      request("/api/verification-state")
+      request("/api/verification-state"),
+      request("/api/agent-adapter")
     ]);
     process.stdout.write(`${JSON.stringify({
       health,
       settings,
       latestSequence: activity.latestSequence,
       latestEvent: activity.events?.at(-1) ?? null,
+      agentAdapter: adapter,
       verification: {
         summary: verification.summary,
         activePlan: verification.activePlan,
