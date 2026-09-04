@@ -23,9 +23,11 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
   Timer? _poller;
   Timer? _activityPoller;
   Timer? _verificationPoller;
+  Timer? _adapterPoller;
   ViewerSettings _settings = ViewerSettings.defaults;
   ChangeIntelligence? _change;
   VerificationState? _verification;
+  AgentAdapterStatus? _adapter;
   final List<AgentActivityEvent> _activity = <AgentActivityEvent>[];
   int _activitySequence = 0;
   bool _probing = true;
@@ -46,6 +48,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
     _poller?.cancel();
     _activityPoller?.cancel();
     _verificationPoller?.cancel();
+    _adapterPoller?.cancel();
     _client?.close();
     super.dispose();
   }
@@ -70,6 +73,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
         client.activity(),
         client.changeIntelligence(),
         client.verificationState(),
+        client.agentAdapterStatus(),
       ]);
       if (!mounted) {
         client.close();
@@ -80,12 +84,14 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
       final activity = results[2] as AgentActivityBatch;
       final change = results[3] as ChangeIntelligence;
       final verification = results[4] as VerificationState;
+      final adapter = results[5] as AgentAdapterStatus;
       setState(() {
         _client = client;
         _live = status;
         _settings = settings;
         _change = change;
         _verification = verification;
+        _adapter = adapter;
         _mergeActivity(activity);
         _probing = false;
         _liveError = null;
@@ -94,6 +100,8 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
       _activityPoller = Timer.periodic(const Duration(seconds: 1), (_) => unawaited(_pollActivity()));
       _verificationPoller =
           Timer.periodic(const Duration(seconds: 2), (_) => unawaited(_pollVerification()));
+      _adapterPoller =
+          Timer.periodic(const Duration(seconds: 2), (_) => unawaited(_pollAdapter()));
     } catch (error) {
       client.close();
       if (mounted) {
@@ -161,6 +169,22 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
     }
   }
 
+  Future<void> _pollAdapter() async {
+    final client = _client;
+    if (client == null) return;
+    try {
+      final adapter = await client.agentAdapterStatus();
+      if (!mounted) return;
+      setState(() {
+        _adapter = adapter;
+        _liveError = null;
+      });
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _liveError = error.toString());
+    }
+  }
+
   Future<void> _setPromptEnabled(bool enabled) async {
     final client = _client;
     if (client == null || _savingSettings) return;
@@ -185,14 +209,18 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
     if (client == null || value.isEmpty || _submittingPrompt || !_settings.promptEnabled) return;
     setState(() => _submittingPrompt = true);
     try {
-      final event = await client.submitPrompt(value);
+      final submission = await client.submitPrompt(value);
+      final event = submission.event;
       if (!mounted) return;
       setState(() {
         if (!_activity.any((existing) => existing.sequence == event.sequence)) {
           _activity.add(event);
           _activitySequence = math.max(_activitySequence, event.sequence);
         }
-        _liveError = null;
+        if (submission.adapter != null) _adapter = submission.adapter;
+        _liveError = submission.execution == 'agent-adapter-unavailable'
+            ? (_adapter?.reason ?? 'Agent adapter unavailable')
+            : null;
       });
     } catch (error) {
       if (mounted) setState(() => _liveError = error.toString());
@@ -389,6 +417,8 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
             onInventory: _showCodeInventory,
             onPromptChanged: isLocal ? _setPromptEnabled : null,
           ),
+          if (isLocal && _adapter != null)
+            _AgentAdapterStrip(status: _adapter!),
           if (isLocal && _change?.hasChanges == true)
             _ChangeStrip(change: _change!),
           if (isLocal && _verification != null && (_verification!.hasState || _verification!.activePlan.modules.isNotEmpty))
@@ -417,6 +447,50 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
             ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+class _AgentAdapterStrip extends StatelessWidget {
+  const _AgentAdapterStrip({required this.status});
+
+  final AgentAdapterStatus status;
+
+  @override
+  Widget build(BuildContext context) {
+    final task = status.currentTask ?? status.lastTask;
+    final color = !status.configured || !status.available
+        ? const Color(0xFF94A3B8)
+        : status.busy
+            ? const Color(0xFF67E8F9)
+            : task?.state == 'failed'
+                ? const Color(0xFFF87171)
+                : const Color(0xFF86EFAC);
+    final detail = status.busy
+        ? (status.currentTask?.id ?? 'running')
+        : status.lastTask?.state == 'failed'
+            ? 'last failed'
+            : status.available
+                ? (status.version ?? 'ready')
+                : (status.reason ?? 'disabled');
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      decoration: const BoxDecoration(
+        color: Color(0xFF0C1118),
+        border: Border(bottom: BorderSide(color: Color(0xFF334155))),
+      ),
+      child: Text(
+        'AGENT ADAPTER · ${status.label} · $detail',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: color,
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.25,
+        ),
       ),
     );
   }
@@ -569,7 +643,7 @@ class _PromptPanelState extends State<_PromptPanel> {
                 onSubmitted: (_) => _submit(),
                 decoration: const InputDecoration(
                   isDense: true,
-                  hintText: '輸入 Prompt（目前送入 Local Bridge；Agent adapter 接手後才會真正執行）',
+                  hintText: '輸入 Prompt（Codex adapter READY 時會直接建立 task；OFF/UNAVAILABLE 不會假裝執行）',
                   border: OutlineInputBorder(),
                 ),
               ),
