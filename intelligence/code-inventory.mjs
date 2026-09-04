@@ -468,7 +468,8 @@ function isEventSurface(record) {
   if (/(?:Event|Events|Callback|Callbacks|Hook|Hooks|Listener|Subscriber)$/.test(record.label)) return true;
   return /\b(?:ServerTickEvents|ClientTickEvents|ServerLifecycleEvents|ServerPlayConnectionEvents|UseBlockCallback|AttackBlockCallback|CommandRegistrationCallback)\b[\s\S]*?\.register\s*\(/.test(record.text) ||
     /\bGameRuleEvents\s*\.\s*changeCallback\s*\([^)]*\)\s*\.\s*register\s*\(/.test(record.text) ||
-    /\.EVENT\.register\s*\(/.test(record.text);
+    /\.EVENT\.register\s*\(/.test(record.text) ||
+    /\bTotemEventBus\.(?:publish|subscribe)\s*\(/.test(record.text);
 }
 
 function isCommandSurface(record) {
