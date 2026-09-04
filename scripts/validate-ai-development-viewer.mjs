@@ -38,6 +38,8 @@ for (const endpoint of [
 assert.ok(server.includes('"https://yunitrish006006.github.io"'), "official Pages origin must be explicitly allowlisted");
 assert.ok(server.includes("access-control-allow-private-network"), "Pages-to-loopback private network preflight must be supported");
 assert.ok(server.includes('"agent-adapter-required"'), "Prompt intake must explicitly remain adapter-gated");
+assert.ok(server.includes('const FLUTTER_WEB_ROOT = path.join(ROOT, "viewer_flutter", "build", "web")'), "local bridge root must use the Flutter web build");
+assert.ok(server.includes('decoded === "/legacy" || decoded === "/legacy/"'), "legacy maintained surface must remain mounted under /legacy/");
 assert.ok(!server.includes('node:child_process'), "Phase 1 browser prompt intake must not gain direct shell execution");
 
 for (const id of [
@@ -132,4 +134,4 @@ assert.ok(localValidation.includes("published TotemWorkspace Pages must be able 
 assert.ok(localValidation.includes("Prompt must default to OFF"), "local bridge regression must protect Prompt default-off behavior");
 assert.ok(localValidation.includes("Agent Activity must remain independent of Prompt"), "local bridge regression must protect Prompt/Activity independence");
 
-console.log("AI development viewer validation passed: both maintained Pages surfaces share prompt/activity semantics, the bridge remains local and adapter-gated, and repo onboarding is registry-driven.");
+console.log("AI development viewer validation passed: Flutter owns both Pages and local Bridge roots, /legacy/ remains synchronized, prompt/activity semantics stay shared, and the Bridge remains loopback-only and adapter-gated.");
