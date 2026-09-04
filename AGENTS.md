@@ -80,3 +80,17 @@ the 11 active Totem repositories. It is not a Minecraft mod.
   CI correctness.
 - Visual changes must follow the workspace Totem art-direction rules and be
   checked at desktop and mobile sizes.
+
+## Remote development bridge rules
+
+- Remote development is a first-class VS Code Remote-SSH use case.
+- The supported default Bridge endpoint is `127.0.0.1:18765`; keep Flutter,
+  legacy Pages, CLI helpers, SSH documentation, and remote tooling synchronized
+  when changing it.
+- `tools/remote/bridge.sh` owns tmux lifecycle for the remote Bridge. Keep it
+  loopback-only and never change it to bind `0.0.0.0`.
+- Remote Bridge logs and runtime state belong under ignored `.totem-index/`;
+  never commit host-specific paths, credentials, passwords, SSH keys, or tmux
+  runtime state.
+- VS Code tasks may invoke repository tooling, but must not embed host passwords
+  or private SSH configuration.
