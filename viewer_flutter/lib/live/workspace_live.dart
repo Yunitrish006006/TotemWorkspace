@@ -368,6 +368,7 @@ class ChangeIntelligence {
     required this.afterEntityCount,
     required this.gitChanges,
     required this.semanticDiff,
+    required this.affectedEntityIds,
     required this.impact,
   });
 
@@ -377,10 +378,11 @@ class ChangeIntelligence {
   final int afterEntityCount;
   final List<ChangeGitFile> gitChanges;
   final ChangeSemanticDiff semanticDiff;
+  final List<String> affectedEntityIds;
   final ChangeImpact impact;
 
   bool get hasChanges => gitChanges.isNotEmpty || semanticDiff.changedEntityIds.isNotEmpty;
-  Set<String> get changedEntityIds => semanticDiff.changedEntityIds.toSet();
+  Set<String> get changedEntityIds => affectedEntityIds.toSet();
   Set<String> get impactedModuleIds => impact.impactedModules.toSet();
 
   factory ChangeIntelligence.fromJson(Map<String, dynamic> json) {
@@ -399,6 +401,9 @@ class ChangeIntelligence {
       semanticDiff: ChangeSemanticDiff.fromJson(
         Map<String, dynamic>.from(json['semanticDiff'] as Map? ?? const <String, dynamic>{}),
       ),
+      affectedEntityIds: (json['affectedEntityIds'] as List? ?? const <Object>[])
+          .whereType<String>()
+          .toList(growable: false),
       impact: ChangeImpact.fromJson(
         Map<String, dynamic>.from(json['impact'] as Map? ?? const <String, dynamic>{}),
       ),
