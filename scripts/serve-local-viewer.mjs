@@ -841,10 +841,11 @@ export function createLocalViewerServer({
       json(res, 500, { error: error instanceof Error ? error.message : String(error) });
     }
   });
-  server.on("close", () => {
+  server.totemShutdown = (reason = "Bridge shutdown interrupted active Codex task") => {
     if (liveRefreshTimer) clearTimeout(liveRefreshTimer);
-    agentAdapter?.close?.();
-  });
+    agentAdapter?.close?.(reason);
+  };
+  server.on("close", () => server.totemShutdown());
   return server;
 }
 
@@ -873,5 +874,17 @@ export function startLocalViewer({ host = DEFAULT_HOST, port = DEFAULT_PORT } = 
 }
 
 if (path.resolve(process.argv[1] ?? "") === fileURLToPath(import.meta.url)) {
-  startLocalViewer({ port: parsePort(process.argv.slice(2)) });
+  const server = startLocalViewer({ port: parsePort(process.argv.slice(2)) });
+  let shuttingDown = false;
+  const shutdown = (signal) => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    server.totemShutdown?.(`Bridge received ${signal}; active Codex task interrupted`);
+    server.close(() => process.exit(0));
+    const timeout = setTimeout(() => process.exit(1), 3000);
+    timeout.unref?.();
+  };
+  for (const signal of ["SIGTERM", "SIGINT", "SIGHUP"]) {
+    process.once(signal, () => shutdown(signal));
+  }
 }

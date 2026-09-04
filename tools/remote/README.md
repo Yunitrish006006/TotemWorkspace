@@ -209,9 +209,13 @@ Expected Viewer states:
 ```text
 ADAPTER OFF       host has not enabled dispatch
 CODEX UNAVAILABLE adapter requested but Codex probe failed
-CODEX READY       Prompt can start a task
-CODEX BUSY        one task is already running
+RUNNING           the submitted Codex task is still active
+COMPLETED         the previous task finished successfully
+FAILED            the previous task terminated with an error
+INTERRUPTED       replay has a running task but the current Bridge no longer owns it
 ```
+
+`bash tools/remote/bridge.sh status` reports the same task lifecycle from the terminal. Replay provides the persistent fallback, so a completed/failed task remains visible after a browser reload or Bridge restart.
 
 Phase 5 allows one active task at a time. When a task settles, the Bridge automatically refreshes the code index, generated graph data, and Phase 3 change intelligence.
 
@@ -235,3 +239,23 @@ node scripts/totem-activity.mjs replay 42
 In the Flutter root and `/legacy/`, use the REPLAY slider to select an historical
 activity sequence and press `LIVE` to return to current state. The browser still
 talks only to the loopback Bridge through the existing SSH port forward.
+
+
+## Safe restart / redeploy
+
+A normal `stop` or `restart` now refuses to shut down the Local Bridge while Codex is BUSY. This prevents a viewer deployment from accidentally terminating an active coding task.
+
+```bash
+bash tools/remote/bridge.sh status
+bash tools/remote/bridge.sh restart
+```
+
+If the task is still running, `restart` exits without stopping the Bridge. In an emergency only, bypass the guard explicitly:
+
+```bash
+TOTEM_BRIDGE_FORCE=1 bash tools/remote/bridge.sh restart
+```
+
+A forced shutdown marks the active task failed/interrupted before terminating Codex, so Development Replay does not leave an unexplained running session.
+
+Deploying only the GitHub Pages/frontend surface does not stop the remote Local Bridge or its Codex child process. The browser may reconnect, but the active task continues on the remote host.

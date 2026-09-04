@@ -13,6 +13,7 @@ FLUTTER_BUILD_MODE="${TOTEM_FLUTTER_BUILD_MODE:-auto}"
 FLUTTER_VERSION="${TOTEM_FLUTTER_VERSION:-3.47.0}"
 FLUTTER_HOME="${TOTEM_FLUTTER_HOME:-${XDG_DATA_HOME:-$HOME/.local/share}/totem-workspace/flutter/$FLUTTER_VERSION}"
 FLUTTER_BOOTSTRAP="${TOTEM_FLUTTER_BOOTSTRAP:-auto}"
+FORCE="${TOTEM_BRIDGE_FORCE:-0}"
 ACTION="${1:-status}"
 
 usage() {
@@ -43,6 +44,7 @@ Environment:
   TOTEM_CODEX_CWD=<path inside Totem workspace>
   TOTEM_CODEX_SANDBOX=workspace-write|read-only
   TOTEM_CODEX_MODEL=<optional model id>
+  TOTEM_BRIDGE_FORCE=1   # bypass active-task stop/restart guard
 EOF
 }
 
@@ -68,6 +70,25 @@ pid_running() {
 health_ok() {
   curl -fsS --max-time 1 "http://$HOST:$PORT/api/health" 2>/dev/null |
     grep -q '"mode"[[:space:]]*:[[:space:]]*"local"'
+}
+
+agent_busy() {
+  curl -fsS --max-time 1 "http://$HOST:$PORT/api/agent-adapter" 2>/dev/null |
+    node -e 'let s="";process.stdin.on("data",c=>s+=c);process.stdin.on("end",()=>{try{process.exit(JSON.parse(s).busy===true?0:1)}catch{process.exit(1)}})'
+}
+
+guard_agent_idle() {
+  local action="$1"
+  if [[ "$FORCE" == "1" ]]; then
+    echo "Active-task guard bypassed for $action (TOTEM_BRIDGE_FORCE=1)."
+    return 0
+  fi
+  if health_ok && agent_busy; then
+    echo "Refusing Bridge $action: Codex has an active task." >&2
+    echo "Wait until the Viewer shows COMPLETED/FAILED, or inspect: bash tools/remote/bridge.sh status" >&2
+    echo "Emergency override: TOTEM_BRIDGE_FORCE=1 bash tools/remote/bridge.sh $action" >&2
+    return 7
+  fi
 }
 
 port_in_use() {
@@ -208,6 +229,36 @@ ensure_flutter_build() {
   echo "Flutter viewer: BUILT"
 }
 
+show_agent_status() {
+  local adapter_json replay_json
+  adapter_json="$(curl -fsS --max-time 1 "http://$HOST:$PORT/api/agent-adapter" 2>/dev/null || true)"
+  replay_json="$(curl -fsS --max-time 1 "http://$HOST:$PORT/api/replay" 2>/dev/null || true)"
+  if [[ -z "$adapter_json" ]]; then
+    echo "agent: UNKNOWN (Bridge API unavailable)"
+    return 0
+  fi
+  node - "$adapter_json" "$replay_json" <<'NODE'
+const adapter = JSON.parse(process.argv[2] || "{}");
+let replay = {};
+try { replay = JSON.parse(process.argv[3] || "{}"); } catch {}
+const sessions = Array.isArray(replay.sessions) ? replay.sessions : [];
+const latest = sessions.length ? sessions[sessions.length - 1] : null;
+const current = adapter.currentTask || null;
+const last = adapter.lastTask || null;
+if (adapter.busy && current) {
+  console.log(`agent: RUNNING ${current.id}${current.summary ? " · " + current.summary : ""}`);
+} else if (last) {
+  const state = String(last.state || "unknown").toUpperCase();
+  console.log(`agent: ${state} ${last.id}${last.completedAt ? " · " + last.completedAt : ""}`);
+} else if (latest) {
+  const state = latest.state === "running" ? "INTERRUPTED" : String(latest.state || "unknown").toUpperCase();
+  console.log(`agent: ${state} ${latest.taskId || latest.id}${latest.endedAt ? " · " + latest.endedAt : ""}`);
+} else {
+  console.log(adapter.available ? "agent: READY · no recorded task" : `agent: ${adapter.configured ? "UNAVAILABLE" : "OFF"}`);
+}
+NODE
+}
+
 show_status() {
   local owner="none"
   if tmux_running; then
@@ -219,6 +270,7 @@ show_status() {
 
   if health_ok; then
     echo "bridge: HEALTHY http://$HOST:$PORT"
+    show_agent_status
     return 0
   elif port_in_use; then
     echo "bridge: PORT $PORT IS IN USE, but Totem Bridge health check failed"
@@ -401,9 +453,11 @@ case "$ACTION" in
     start_bridge
     ;;
   stop)
+    guard_agent_idle stop
     stop_bridge
     ;;
   restart)
+    guard_agent_idle restart
     stop_bridge
     start_bridge
     ;;
