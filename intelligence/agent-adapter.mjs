@@ -463,8 +463,12 @@ export function createAgentAdapter({
     return publicTask(task);
   }
 
-  function close() {
+  function close(reason = "Bridge shutdown interrupted active task") {
+    const task = state.activeTask;
     const child = state.child;
+    if (task && !task.settled) {
+      void settle(task, "failed", reason);
+    }
     if (child && !child.killed) {
       try {
         child.kill("SIGTERM");
