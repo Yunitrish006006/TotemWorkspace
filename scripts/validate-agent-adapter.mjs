@@ -347,7 +347,7 @@ for (const fragment of [
   'agentAdapter.dispatch({',
   'execution: "agent-adapter-unavailable"',
   'execution: "codex"',
-  'onTaskSettled: async () =>',
+  'onTaskSettled: async (task) =>',
   'refreshWorkspaceChanges([])',
 ]) {
   assert.ok(serverSource.includes(fragment), `Bridge Phase 5 integration missing: ${fragment}`);
