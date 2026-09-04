@@ -365,7 +365,7 @@ for (const fragment of [
 for (const fragment of [
   "_AgentAdapterStrip(status: _adapter!)",
   "client.agentAdapterStatus()",
-  "submission.execution == 'agent-adapter-unavailable'",
+  "if (submission.adapter != null) _adapter = submission.adapter",
 ]) {
   assert.ok(flutterHost.includes(fragment), `Flutter Phase 5 host missing: ${fragment}`);
 }
@@ -376,6 +376,7 @@ for (const fragment of [
 ]) {
   assert.ok(legacyLive.includes(fragment), `legacy Phase 5 live adapter missing: ${fragment}`);
 }
+assert.ok(!flutterHost.includes("_liveError = submission.execution == 'agent-adapter-unavailable'"), "expected adapter-unavailable state must stay in the adapter strip instead of becoming a generic Local API warning");
 assert.ok(legacyHtml.includes('id="agentAdapter"'), "legacy Agent Adapter badge is required");
 
 console.log("Phase 5 agent-adapter validation passed: opt-in Codex exec JSONL dispatch, safe argv/stdin boundary, single-task gate, lifecycle/file/MCP event mapping, failure semantics, and Flutter/legacy adapter status parity are present.");
