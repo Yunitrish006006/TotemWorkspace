@@ -34,8 +34,9 @@ assert.ok(serverSource.includes("workspaceStatus({ knowledge, reposRoot })"), "s
 assert.ok(serverSource.includes("refreshCodeIndex({"), "refresh endpoint must reuse incremental code-index refresh");
 assert.ok(serverSource.includes("renderGraphV2({ knowledge, index: refreshed.index })"), "refresh endpoint must regenerate graph data");
 assert.ok(serverSource.includes("setTimeout(flushLiveRefresh, 850)"), "Codex edits must debounce module-scoped live semantic refresh");
-assert.ok(serverSource.includes("componentId: event.componentId ?? (componentIds.length === 1 ? componentIds[0] : null)"), "live file edits must enrich known component coordinates");
-assert.ok(serverSource.includes("featureId: event.featureId ?? (featureIds.length === 1 ? featureIds[0] : null)"), "live file edits must enrich known feature coordinates");
+assert.ok(serverSource.includes("mapGitChangesToSemantic(["), "live file edits must reuse Phase 3 semantic file mapping");
+assert.ok(serverSource.includes("componentId: event.componentId ?? (mapped?.componentIds?.length === 1 ? mapped.componentIds[0] : null)"), "live file edits must enrich known component coordinates");
+assert.ok(serverSource.includes("featureId: event.featureId ?? (mapped?.featureIds?.length === 1 ? mapped.featureIds[0] : null)"), "live file edits must enrich known feature coordinates");
 assert.ok(serverSource.includes("moduleId: changedModuleIds.length === 1 ? changedModuleIds[0] : null"), "incremental graph refresh must preserve module fallback activity coordinates");
 assert.ok(serverSource.includes("componentId: changedComponentIds.length === 1 ? changedComponentIds[0] : null"), "incremental graph refresh must expose a unique refreshed component when available");
 assert.ok(serverSource.includes("prepareApiCors(req, res)"), "Flutter dev access must pass through loopback-only CORS validation");
