@@ -64,6 +64,7 @@ Initial event families:
 - `task_completed`
 - `task_failed`
 - `prompt_submitted`
+- `orchestration_planned`
 - `feature_selected`
 - `file_read`
 - `file_edit`
@@ -207,6 +208,23 @@ Validation must derive active-module count from registry data rather than perman
 - timeline scrubber,
 - graph state reconstruction,
 - commit/PR/deployment milestones.
+
+### Phase 7 — Adaptive Orchestration
+
+- deterministic complexity score from Module / Contract / Risk / Verification evidence,
+- primary-only / assisted / bounded-parallel / guarded-parallel modes,
+- bounded Explorer / Architect / Worker / Reviewer assignments,
+- maximum subagent and worker concurrency budgets,
+- module-local write scopes and read-only analysis/review roles,
+- shared MCP / CLI / Bridge / Codex prompt / Viewer orchestration contract,
+- sequential Primary fallback when multi-agent execution is unavailable,
+- no fabricated subagent lifecycle when runtime telemetry is missing.
+
+### Phase 8 — Symbol Intelligence (planned)
+
+- controlled L5 method / field / handler entities,
+- calls / reads / writes / uses-api relations,
+- symbol-level activity, impact, verification and replay.
 
 ## Security requirements
 
@@ -624,3 +642,80 @@ node scripts/totem-activity.mjs replay <sequence>
 
 `status` includes replay sequence/event/session/milestone counts; `replay`
 prints the timeline or one reconstructed frame.
+
+
+## Phase 7 — Adaptive Orchestration implementation
+
+Phase 7 moves subagent selection out of free-form Primary prompting and into
+TotemWorkspace intelligence.
+
+### Deterministic planning
+
+`intelligence/orchestration-plan.mjs` combines existing evidence rather than
+model prose:
+
+```text
+resolve_task
+  + module span
+  + contract surface / critical contract types
+  + TotemCore/shared surface
+  + risk tags
+  + test_plan verification breadth
+  + optional post-edit impact
+    → orchestration score
+```
+
+Modes:
+
+```text
+0–2   primary-only
+3–5   assisted
+6–9   bounded-parallel
+10+   guarded-parallel
+```
+
+Current safety/efficiency budget:
+
+```text
+max planned subagents = 4
+max parallel write workers = 2
+worker write scope = exactly one module
+explorer / architect / reviewer = read-only
+nested subagent spawning = prohibited
+```
+
+### Assignment waves
+
+Assignments include stable IDs, role, modules, phase, dependencies, write
+permission, context audience/token budget, purpose, and expected deliverable.
+
+The execution graph is discovery → implementation → review. Shared contracts and
+protocols must be stabilized before parallel workers write.
+
+### Shared integration
+
+The same planner is exposed through:
+
+- MCP `orchestration_plan`,
+- `totem-intelligence.mjs orchestrate`,
+- role-aware `context_pack`,
+- `POST /api/orchestration-plan`,
+- every Viewer `POST /api/prompt`,
+- the Codex adapter prompt envelope,
+- Flutter + legacy ORCH status surfaces,
+- `orchestration_planned` replay activity.
+
+The planner is authoritative for **whether delegation is worthwhile and what its
+boundaries are**. Codex remains responsible for executing the plan using whatever
+multi-agent capabilities the installed runtime actually exposes.
+
+When multi-agent execution is unavailable, Primary executes the same assignment
+waves sequentially. A `primary-only` plan must never spawn a child agent.
+
+### Telemetry boundary
+
+`orchestration_planned` records the intended TotemWorkspace plan. It must not be
+misrepresented as an actual spawn/delegation event. Until the Codex exec JSON
+stream exposes reliable structured child-agent lifecycle, TotemWorkspace does not
+fabricate agent-created/agent-completed events.
+
