@@ -22,8 +22,10 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
   WorkspaceLiveStatus? _live;
   Timer? _poller;
   Timer? _activityPoller;
+  Timer? _verificationPoller;
   ViewerSettings _settings = ViewerSettings.defaults;
   ChangeIntelligence? _change;
+  VerificationState? _verification;
   final List<AgentActivityEvent> _activity = <AgentActivityEvent>[];
   int _activitySequence = 0;
   bool _probing = true;
@@ -43,6 +45,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
   void dispose() {
     _poller?.cancel();
     _activityPoller?.cancel();
+    _verificationPoller?.cancel();
     _client?.close();
     super.dispose();
   }
@@ -66,6 +69,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
         client.viewerSettings(),
         client.activity(),
         client.changeIntelligence(),
+        client.verificationState(),
       ]);
       if (!mounted) {
         client.close();
@@ -75,17 +79,21 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
       final settings = results[1] as ViewerSettings;
       final activity = results[2] as AgentActivityBatch;
       final change = results[3] as ChangeIntelligence;
+      final verification = results[4] as VerificationState;
       setState(() {
         _client = client;
         _live = status;
         _settings = settings;
         _change = change;
+        _verification = verification;
         _mergeActivity(activity);
         _probing = false;
         _liveError = null;
       });
       _poller = Timer.periodic(const Duration(seconds: 5), (_) => unawaited(_pollStatus()));
       _activityPoller = Timer.periodic(const Duration(seconds: 1), (_) => unawaited(_pollActivity()));
+      _verificationPoller =
+          Timer.periodic(const Duration(seconds: 2), (_) => unawaited(_pollVerification()));
     } catch (error) {
       client.close();
       if (mounted) {
@@ -131,6 +139,22 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
       final batch = await client.activity(after: _activitySequence);
       if (!mounted || batch.events.isEmpty) return;
       setState(() => _mergeActivity(batch));
+    } catch (error) {
+      if (!mounted) return;
+      setState(() => _liveError = error.toString());
+    }
+  }
+
+  Future<void> _pollVerification() async {
+    final client = _client;
+    if (client == null || _refreshing) return;
+    try {
+      final verification = await client.verificationState();
+      if (!mounted) return;
+      setState(() {
+        _verification = verification;
+        _liveError = null;
+      });
     } catch (error) {
       if (!mounted) return;
       setState(() => _liveError = error.toString());
@@ -189,11 +213,13 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
       final results = await Future.wait<Object>([
         client.graphData(),
         client.workspaceStatus(),
+        client.verificationState(),
       ]);
       if (!mounted) return;
       setState(() {
         _data = results[0] as GraphData;
         _live = results[1] as WorkspaceLiveStatus;
+        _verification = results[2] as VerificationState;
         _change = change;
       });
     } catch (error) {
@@ -365,6 +391,8 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
           ),
           if (isLocal && _change?.hasChanges == true)
             _ChangeStrip(change: _change!),
+          if (isLocal && _verification != null && (_verification!.hasState || _verification!.activePlan.modules.isNotEmpty))
+            _VerificationStrip(state: _verification!),
           if (isLocal && _settings.agentActivityEnabled && _activity.isNotEmpty)
             _ActivityStrip(event: _activity.last),
           if (isLocal && _settings.promptEnabled)
@@ -383,6 +411,9 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
               changedEntityIds: _change?.changedEntityIds ?? const <String>{},
               impactedModuleIds: _change?.impactedModuleIds ?? const <String>{},
               changeAnimationsEnabled: _settings.changeAnimationsEnabled,
+              runningVerificationTargetIds: _verification?.runningTargetIds ?? const <String>{},
+              passedVerificationTargetIds: _verification?.passedTargetIds ?? const <String>{},
+              failedVerificationTargetIds: _verification?.failedTargetIds ?? const <String>{},
             ),
           ),
         ],
@@ -414,6 +445,49 @@ class _ChangeStrip extends StatelessWidget {
         overflow: TextOverflow.ellipsis,
         style: const TextStyle(
           color: Color(0xFFFBBF24),
+          fontSize: 11,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 0.25,
+        ),
+      ),
+    );
+  }
+}
+
+class _VerificationStrip extends StatelessWidget {
+  const _VerificationStrip({required this.state});
+
+  final VerificationState state;
+
+  @override
+  Widget build(BuildContext context) {
+    final plan = state.activePlan;
+    final status = state.failedCount > 0
+        ? 'FAIL ${state.failedCount}'
+        : state.runningCount > 0
+            ? 'RUN ${state.runningCount}'
+            : state.passedCount > 0
+                ? 'PASS ${state.passedCount}'
+                : 'READY';
+    final color = state.failedCount > 0
+        ? const Color(0xFFF87171)
+        : state.runningCount > 0
+            ? const Color(0xFF67E8F9)
+            : const Color(0xFF86EFAC);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+      decoration: const BoxDecoration(
+        color: Color(0xFF08130F),
+        border: Border(bottom: BorderSide(color: Color(0xFF28503F))),
+      ),
+      child: Text(
+        'VERIFY · $status · ${state.passedCount} passed · ${state.failedCount} failed'
+        '${plan.requiredCategories.isEmpty ? '' : ' · required ${plan.requiredCategories.length}'}',
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          color: color,
           fontSize: 11,
           fontWeight: FontWeight.w700,
           letterSpacing: 0.25,
