@@ -11,6 +11,7 @@ const edgeFilterKeys = <String>[
   'observer-provider',
   'external-service',
   'shared-capability',
+  'validated-by',
 ];
 
 const edgeFilterLabels = <String, String>{
@@ -21,6 +22,7 @@ const edgeFilterLabels = <String, String>{
   'observer-provider': 'Observer provider',
   'external-service': 'External service',
   'shared-capability': 'Shared capability',
+  'validated-by': 'Validated by',
 };
 
 class Vec3 {
@@ -106,6 +108,7 @@ class VisualNode {
     this.feature,
     this.capability,
     this.component,
+    this.test,
     this.implementationPath,
   });
 
@@ -119,10 +122,15 @@ class VisualNode {
   final GraphFeature? feature;
   final GraphSharedCapability? capability;
   final GraphComponent? component;
+  final GraphTest? test;
   final String? implementationPath;
 
   bool get isChild =>
-      kind == 'feature' || kind == 'capability' || kind == 'component' || kind == 'implementation';
+      kind == 'feature' ||
+      kind == 'capability' ||
+      kind == 'component' ||
+      kind == 'implementation' ||
+      kind == 'test';
 }
 
 class VisualEdge {
@@ -245,11 +253,17 @@ GraphScene buildGraphScene(
     final unmappedComponents = data.componentsForModule(moduleId)
         .where((component) => component.featureIds.isEmpty)
         .toList(growable: false);
-    final radius = _clusterRadius(moduleFeatures.length + syntheticCapabilities.length + unmappedComponents.length);
+    final unmappedTests = data.testsForModule(moduleId)
+        .where((test) => test.featureIds.isEmpty)
+        .toList(growable: false);
+    final radius = _clusterRadius(
+      moduleFeatures.length + syntheticCapabilities.length + unmappedComponents.length + unmappedTests.length,
+    );
     clusters.add(VisualCluster(
       ownerId: moduleId,
       radius: radius,
-      childCount: moduleFeatures.length + syntheticCapabilities.length + unmappedComponents.length,
+      childCount:
+          moduleFeatures.length + syntheticCapabilities.length + unmappedComponents.length + unmappedTests.length,
     ));
 
     for (final feature in moduleFeatures) {
@@ -324,6 +338,35 @@ GraphScene buildGraphScene(
         retargeted: true,
       ));
     }
+
+    for (final test in unmappedTests.take(8)) {
+      final position = _relationAwareScatter(
+        parent.position,
+        test.id,
+        'test',
+        radius,
+        moduleId,
+        anchors,
+        const [],
+      );
+      nodes.add(VisualNode(
+        id: test.id,
+        label: 'TEST · ${test.label}',
+        kind: 'test',
+        rank: parent.rank,
+        position: position,
+        ownerId: moduleId,
+        test: test,
+      ));
+      edges.add(VisualEdge(
+        id: 'validated-by-module:$moduleId:${test.id}',
+        from: moduleId,
+        to: test.id,
+        type: 'validated-by',
+        label: 'module test evidence',
+        retargeted: true,
+      ));
+    }
   }
 
   for (final featureId in expanded.toList()..sort()) {
@@ -350,6 +393,30 @@ GraphScene buildGraphScene(
         to: component.id,
         type: 'detail',
         label: 'responsibility',
+        retargeted: true,
+      ));
+    }
+
+    final tests = data.testsForFeature(featureId).take(8).toList(growable: false);
+    for (final test in tests) {
+      if (!nodes.any((node) => node.id == test.id)) {
+        final position = _scatter(parent.position, test.id, 'test', radius * 0.92);
+        nodes.add(VisualNode(
+          id: test.id,
+          label: 'TEST · ${test.label}',
+          kind: 'test',
+          rank: parent.rank,
+          position: position,
+          ownerId: feature.ownerId,
+          test: test,
+        ));
+      }
+      edges.add(VisualEdge(
+        id: 'validated-by:${feature.id}:${test.id}',
+        from: feature.id,
+        to: test.id,
+        type: 'validated-by',
+        label: 'validated by',
         retargeted: true,
       ));
     }
