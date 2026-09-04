@@ -387,7 +387,9 @@ for (const fragment of [
   'execution: "codex"',
   'onTaskSettled: async (task) =>',
   'refreshWorkspaceChanges([], { taskId: task?.id ?? null })',
-  'agentAdapter?.close?.("Bridge shutdown interrupted active Codex task")',
+  'server.totemShutdown = (reason = "Bridge shutdown interrupted active Codex task") =>',
+  'agentAdapter?.close?.(reason)',
+  'server.totemShutdown?.(`Bridge received ${signal}; active Codex task interrupted`)',
   'process.once(signal, () => shutdown(signal))',
 ]) {
   assert.ok(serverSource.includes(fragment), `Bridge Phase 5 integration missing: ${fragment}`);
