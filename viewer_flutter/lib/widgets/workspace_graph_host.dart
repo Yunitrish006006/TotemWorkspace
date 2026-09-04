@@ -369,8 +369,10 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
             child: GraphView(
               data: _data,
               activityFeatureId: latestActivity?.featureId,
+              activityComponentId: latestActivity?.componentId,
               activityModuleId: latestActivity?.moduleId,
               activityType: latestActivity?.type,
+              autoExpandAgentFocus: _settings.autoExpandAgentFocus,
             ),
           ),
         ],
