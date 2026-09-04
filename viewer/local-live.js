@@ -3,6 +3,7 @@
 
   var liveBadge = document.getElementById("liveLocal");
   var changeBadge = document.getElementById("changeIntelligence");
+  var adapterBadge = document.getElementById("agentAdapter");
   var verificationBadge = document.getElementById("verificationState");
   var activityBadge = document.getElementById("agentActivity");
   var promptToggle = document.getElementById("promptToggle");
@@ -12,7 +13,7 @@
   var statusButton = document.getElementById("localStatus");
   var refreshButton = document.getElementById("refreshLocal");
   var info = document.getElementById("info");
-  if (!liveBadge || !changeBadge || !verificationBadge || !activityBadge || !promptToggle || !promptBar || !promptInput || !promptSubmit || !statusButton || !refreshButton || !info) return;
+  if (!liveBadge || !changeBadge || !adapterBadge || !verificationBadge || !activityBadge || !promptToggle || !promptBar || !promptInput || !promptSubmit || !statusButton || !refreshButton || !info) return;
 
   var latest = null;
   var settings = null;
@@ -20,6 +21,7 @@
   var polling = null;
   var activityPolling = null;
   var verificationPolling = null;
+  var adapterPolling = null;
   var activityAnimation = null;
   var changeAnimation = null;
   var verificationAnimation = null;
@@ -121,6 +123,43 @@
     });
     if (!response.ok) throw new Error("viewer settings update failed");
     renderSettings(await response.json());
+  }
+
+  function renderAgentAdapter(payload) {
+    var adapter = payload || {};
+    var configured = adapter.configured === true;
+    var available = adapter.available === true;
+    var busy = adapter.busy === true;
+    var failed = adapter.lastTask && adapter.lastTask.state === "failed";
+    adapterBadge.hidden = false;
+    adapterBadge.dataset.status = !configured ? "off" : !available ? "unavailable" : busy ? "busy" : failed ? "failed" : "ready";
+    adapterBadge.textContent = !configured
+      ? "ADAPTER OFF"
+      : !available
+        ? "CODEX UNAVAILABLE"
+        : busy
+          ? "CODEX BUSY · " + ((adapter.currentTask && adapter.currentTask.id) || "running")
+          : failed
+            ? "CODEX READY · last failed"
+            : "CODEX READY";
+    adapterBadge.title = adapter.reason || adapter.version || adapter.kind || "";
+  }
+
+  async function fetchAgentAdapter() {
+    var response = await fetch(apiUrl("/api/agent-adapter"), { cache: "no-store" });
+    if (!response.ok) throw new Error("agent adapter unavailable");
+    var payload = await response.json();
+    renderAgentAdapter(payload);
+    return payload;
+  }
+
+  async function pollAgentAdapter() {
+    if (!active) return;
+    try {
+      await fetchAgentAdapter();
+    } catch {
+      // Workspace status polling owns connection-state reporting.
+    }
   }
 
   function requestAgentDraw() {
@@ -256,6 +295,10 @@
         activitySequence = Math.max(activitySequence, Number(payload.event.sequence || 0));
         renderActivity(payload.event);
       }
+      if (payload.adapter) renderAgentAdapter(payload.adapter);
+      if (payload.execution === "agent-adapter-unavailable") {
+        liveBadge.textContent = "LIVE LOCAL · prompt recorded · agent adapter unavailable";
+      }
       promptInput.value = "";
     } catch (error) {
       liveBadge.textContent = "LIVE LOCAL · " + (error && error.message ? error.message : "prompt failed");
@@ -295,6 +338,10 @@
         if (verificationPolling) {
           window.clearInterval(verificationPolling);
           verificationPolling = null;
+        }
+        if (adapterPolling) {
+          window.clearInterval(adapterPolling);
+          adapterPolling = null;
         }
       }
     }
@@ -368,5 +415,7 @@
   polling = window.setInterval(poll, 5000);
   activityPolling = window.setInterval(pollActivity, 1000);
   verificationPolling = window.setInterval(pollVerification, 2000);
+  adapterPolling = window.setInterval(pollAgentAdapter, 2000);
   pollVerification();
+  pollAgentAdapter();
 }());
