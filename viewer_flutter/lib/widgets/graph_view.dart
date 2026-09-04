@@ -61,7 +61,9 @@ class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMix
     setState(() {
       final moduleId = component?.moduleId ?? widget.activityModuleId;
       if (moduleId != null && widget.data.moduleById(moduleId) != null) _expanded.add(moduleId);
-      final featureId = component?.featureIds.firstOrNull ?? widget.activityFeatureId;
+      final featureId = component != null && component.featureIds.isNotEmpty
+          ? component.featureIds.first
+          : widget.activityFeatureId;
       if (featureId != null && widget.data.featureById(featureId) != null) _expanded.add(featureId);
       if (component != null) _expanded.add(component.id);
     });
