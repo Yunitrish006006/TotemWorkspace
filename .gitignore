@@ -8,3 +8,6 @@ out/
 .totem-index/
 *.jar
 *.log
+
+# Generated Flutter graph asset for local/CI builds
+viewer_flutter/assets/graph-data.json
