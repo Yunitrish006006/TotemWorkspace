@@ -8,6 +8,7 @@ const flutterData = fs.readFileSync("viewer_flutter/lib/model/graph_data.dart", 
 const flutterScene = fs.readFileSync("viewer_flutter/lib/model/graph_scene.dart", "utf8");
 const flutterView = fs.readFileSync("viewer_flutter/lib/widgets/graph_view.dart", "utf8");
 const flutterHost = fs.readFileSync("viewer_flutter/lib/widgets/workspace_graph_host.dart", "utf8");
+const flutterActivityLocation = fs.readFileSync("viewer_flutter/lib/widgets/activity_location.dart", "utf8");
 const legacy = fs.readFileSync("viewer/graph-v2-cluster-v2.js", "utf8");
 const live = fs.readFileSync("viewer/local-live.js", "utf8");
 const plan = fs.readFileSync("docs/ai-development-graph-plan.md", "utf8");
@@ -60,21 +61,22 @@ assert.ok(
 for (const fragment of [
   "activityComponentId",
   "autoExpandAgentFocus",
-  "node.kind == 'feature' || node.kind == 'component'",
+  "node.kind == 'feature'",
+  "node.kind == 'component'",
   "component.mappingConfidence",
   "'component' => const Color",
   "'implementation' => const Color",
 ]) {
   assert.ok(flutterView.includes(fragment), `Flutter interaction is missing: ${fragment}`);
 }
-assert.ok(flutterHost.includes("activityComponentId: displayedGraphActivity?.componentId"),
-  "Flutter host must forward persistent semantic Agent Activity component IDs");
-assert.ok(flutterHost.includes("event.type == 'file_edit' || event.type == 'symbol_edit' || event.type == 'git_diff_updated'"),
-  "Flutter must preserve the latest targeted edit while a task remains active");
-assert.ok(flutterHost.includes("event.componentId != null || event.featureId != null || event.moduleId != null"),
-  "Flutter semantic focus must fall back through component/feature/module targets");
-assert.ok(flutterHost.includes("autoExpandAgentFocus: _settings.autoExpandAgentFocus"),
-  "Flutter Agent Activity expansion must respect shared viewer settings");
+assert.ok(flutterHost.includes("activityComponentId: graphFocusLocation?.componentId"),
+  "Flutter host must forward source-card component IDs to semantic LOD");
+assert.ok(flutterActivityLocation.includes("event.type == 'file_edit' || event.type == 'symbol_edit'"),
+  "Flutter source-card focus must only originate from a targeted edit");
+assert.ok(flutterHost.includes("_keptOpenActivityLocation ?? _hoveredActivityLocation"),
+  "Flutter semantic focus must only persist while a source card is hovered or kept open");
+assert.ok(flutterHost.includes("autoExpandAgentFocus: graphFocusLocation != null"),
+  "Flutter source-card focus must expand only the explicitly requested semantic path");
 
 for (const fragment of [
   "var components = DATA.components || []",
