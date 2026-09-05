@@ -73,6 +73,13 @@ check(agentInstructions.includes("`java -version` and `./gradlew -version` repor
 check(agentInstructions.includes("use that module's owned Modrinth publish"), "AGENTS.md 必須要求完成驗證後使用模組擁有的 Modrinth workflow");
 check(agentInstructions.includes("verify the published version by API read-back"), "AGENTS.md 必須要求 Modrinth API 回讀驗證");
 check(agentInstructions.includes("Public release is an external action"), "AGENTS.md 必須保留發佈授權與 blocker 邊界");
+check(agentInstructions.includes("**Surface-invariant orchestration**"), "AGENTS.md 必須要求所有 Codex surface 共用 TotemWorkspace 分派邏輯");
+check(agentInstructions.includes("a Codex session opened directly in any sibling active module"), "AGENTS.md 必須涵蓋從 sibling module 開啟的 Codex session");
+check(agentInstructions.includes("same plan\n  payload: mode, score, limits, waves, assignments"), "AGENTS.md 必須要求所有 Codex surface 保留相同的分派 plan payload");
+check(agentInstructions.includes("The Web adapter's orchestration envelope is the behavioral contract"), "AGENTS.md 必須將 Web Prompt orchestration envelope 設為跨介面行為契約");
+check(agentInstructions.includes("changing the starting directory must never")
+  && agentInstructions.includes("create a different delegation plan for the same task"),
+"AGENTS.md 必須禁止依 Codex 開啟目錄改變分派邏輯");
 check(releaseChecklist.includes("## 必經發布順序"), "發布檢查表必須明確列出必經發布順序");
 check(releaseChecklist.includes("`java -version` 與 `./gradlew -version` 都回報 JVM 25"), "發布檢查表必須要求 Java 25 實際驗證");
 check(releaseChecklist.includes("GitHub branch，等待必要 CI 全綠"), "發布檢查表必須在 Modrinth 前要求 GitHub push 與 CI 驗證");

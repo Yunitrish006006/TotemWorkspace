@@ -459,7 +459,8 @@ for (const fragment of [
 }
 for (const fragment of [
   "_AgentAdapterStrip(",
-  "replaySession: _replayTimeline?.sessions.isNotEmpty == true",
+  "replaySession:",
+  "_replayTimeline?.sessions.isNotEmpty == true",
   "'INTERRUPTED'",
   "'CODEX CONSOLE · ${widget.taskId} · ${taskEvents.length} events'",
   "events: _activity",

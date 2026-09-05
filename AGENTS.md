@@ -70,6 +70,20 @@ the 11 active Totem repositories. It is not a Minecraft mod.
 ## Adaptive orchestration rules
 
 - TotemWorkspace owns the deterministic orchestration decision for non-trivial Totem work. Use `orchestration_plan` (or the deterministic CLI fallback) rather than inventing a different role split in free-form prompts.
+- **Surface-invariant orchestration**: the Web Viewer/Prompt, terminal Codex,
+  IDE Codex, and a Codex session opened directly in any sibling active module
+  must call this same planner when TotemWorkspace is available. For the same
+  normalized prompt and semantic module focus, they must retain the same plan
+  payload: mode, score, limits, waves, assignments, module write boundaries,
+  and required validation. A parent workspace containing `TotemWorkspace/` is
+  enough to require the handoff; changing the starting directory must never
+  create a different delegation plan for the same task.
+- The Web adapter's orchestration envelope is the behavioral contract, not
+  browser-only decoration: Primary owns integration; read-only assignments do
+  not write; `primary-only` never delegates; and runtimes without multi-agent
+  support execute the same waves sequentially. Direct Codex need not emit
+  browser activity telemetry, but after edits it must perform the same impact,
+  test-plan, and actual module-validation lifecycle.
 - `primary-only` means no subagent should be spawned. Small changes must not pay orchestration overhead merely because multi-agent tooling is available.
 - Subagent count is bounded by the plan. Current policy caps planned subagents at four and parallel write workers at two.
 - Explorer, Architect, and Reviewer assignments are read-only. Worker assignments may write only inside their assigned single Totem module.
