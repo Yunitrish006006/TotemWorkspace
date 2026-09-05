@@ -32,6 +32,7 @@
   var verificationPolling = null;
   var adapterPolling = null;
   var replayPolling = null;
+  var conversationPolling = null;
   var replayTimeline = null;
   var latestAdapterStatus = null;
   var replayActive = false;
@@ -42,6 +43,9 @@
   var changeAnimation = null;
   var verificationAnimation = null;
   var activitySequence = 0;
+  var conversationRevision = 0;
+  var conversationDraftClientId = "legacy:" + String(Date.now()) + ":" + Math.random().toString(16).slice(2);
+  var draftDebounce = null;
   var localApiBase = null;
 
   function discoverLocalApiBase() {
@@ -433,6 +437,51 @@
     }
   }
 
+  function conversationEvents(entries) {
+    return entries.map(function (entry) {
+      return {
+        sequence: 900000000 + Number(entry.revision || 0),
+        timestamp: entry.timestamp || "",
+        type: "agent_message",
+        source: entry.source || "workspace",
+        summary: "[" + String(entry.source || "workspace").toUpperCase() + "] " + (entry.text || ""),
+        taskId: entry.taskId || null
+      };
+    });
+  }
+
+  async function pollConversation() {
+    if (!active || !settings || settings.promptEnabled !== true) return;
+    try {
+      var response = await fetch(apiUrl("/api/conversation?after=" + encodeURIComponent(conversationRevision)), { cache: "no-store" });
+      if (!response.ok) throw new Error("conversation unavailable");
+      var payload = await response.json();
+      conversationRevision = Number(payload.latestRevision || conversationRevision);
+      var events = conversationEvents(Array.isArray(payload.entries) ? payload.entries : []);
+      if (events.length) appendCodexTranscript(events);
+      var draft = payload.draft;
+      if (draft && draft.clientId !== conversationDraftClientId) {
+        activityBadge.hidden = false;
+        activityBadge.textContent = "DISCORD DRAFT · " + draft.text;
+      }
+    } catch {
+      // Activity/status polling continues when the optional conversation surface is unavailable.
+    }
+  }
+
+  function publishDraft() {
+    if (!active || !settings || settings.promptEnabled !== true) return;
+    if (draftDebounce) window.clearTimeout(draftDebounce);
+    draftDebounce = window.setTimeout(function () {
+      fetch(apiUrl("/api/conversation/draft"), {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ clientId: conversationDraftClientId, text: promptInput.value }),
+        cache: "no-store"
+      }).catch(function () {});
+    }, 450);
+  }
+
   async function submitPrompt() {
     if (!settings || settings.promptEnabled !== true || promptSubmit.disabled) return;
     var prompt = promptInput.value.trim();
@@ -444,7 +493,7 @@
       var response = await fetch(apiUrl("/api/prompt"), {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ prompt: prompt }),
+        body: JSON.stringify({ prompt: prompt, clientId: conversationDraftClientId }),
         cache: "no-store"
       });
       if (!response.ok) {
@@ -463,6 +512,7 @@
         liveBadge.textContent = "LIVE LOCAL · prompt recorded · agent adapter unavailable";
       }
       promptInput.value = "";
+      publishDraft();
     } catch (error) {
       liveBadge.textContent = "LIVE LOCAL · " + (error && error.message ? error.message : "prompt failed");
     } finally {
@@ -584,6 +634,10 @@
           window.clearInterval(replayPolling);
           replayPolling = null;
         }
+        if (conversationPolling) {
+          window.clearInterval(conversationPolling);
+          conversationPolling = null;
+        }
       }
     }
   }
@@ -627,6 +681,8 @@
     event.preventDefault();
     submitPrompt();
   });
+
+  promptInput.addEventListener("input", publishDraft);
 
   statusButton.addEventListener("click", function () {
     if (!latest) return;
@@ -680,7 +736,9 @@
       fetchReplayTimeline().catch(function () {});
     }
   }, 3000);
+  conversationPolling = window.setInterval(pollConversation, 1000);
   pollVerification();
   pollAgentAdapter();
   fetchReplayTimeline().catch(function () {});
+  pollConversation();
 }());

@@ -2,6 +2,14 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+BRIDGE_ENV_FILE="${TOTEM_BRIDGE_ENV_FILE:-$ROOT/.totem-index/bridge.env}"
+if [[ -r "$BRIDGE_ENV_FILE" ]]; then
+  set -a
+  # This file is local operator configuration (mode 0600), never repository data.
+  # shellcheck disable=SC1090
+  source "$BRIDGE_ENV_FILE"
+  set +a
+fi
 SESSION="${TOTEM_BRIDGE_SESSION:-totem-workspace-bridge}"
 HOST="127.0.0.1"
 PORT="${TOTEM_BRIDGE_PORT:-18765}"
@@ -34,6 +42,7 @@ Environment:
   TOTEM_BRIDGE_PORT=18765
   TOTEM_BRIDGE_BACKEND=auto|tmux|nohup
   TOTEM_BRIDGE_SESSION=totem-workspace-bridge
+  TOTEM_BRIDGE_ENV_FILE=.totem-index/bridge.env
   TOTEM_BRIDGE_LOG=.totem-index/remote-bridge.log
   TOTEM_FLUTTER_BUILD_MODE=auto|always|never
   TOTEM_FLUTTER_BOOTSTRAP=auto|never

@@ -25,6 +25,8 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
   Timer? _verificationPoller;
   Timer? _adapterPoller;
   Timer? _replayPoller;
+  Timer? _conversationPoller;
+  Timer? _draftDebounce;
   ViewerSettings _settings = ViewerSettings.defaults;
   ChangeIntelligence? _change;
   VerificationState? _verification;
@@ -36,12 +38,21 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
   bool _replayLoading = false;
   final List<AgentActivityEvent> _activity = <AgentActivityEvent>[];
   int _activitySequence = 0;
+  final List<DeveloperConversationEntry> _conversation = <DeveloperConversationEntry>[];
+  int _conversationRevision = 0;
+  DeveloperConversationDraft? _conversationDraft;
+  final String _conversationClientId = 'viewer:${DateTime.now().microsecondsSinceEpoch}';
   bool _probing = true;
   bool _refreshing = false;
   bool _savingSettings = false;
   bool _submittingPrompt = false;
   String? _liveError;
   String? _liveErrorSource;
+
+  bool get _conversationAvailable {
+    final host = Uri.base.host.toLowerCase();
+    return host == '127.0.0.1' || host == 'localhost' || host == '::1';
+  }
 
   @override
   void initState() {
@@ -57,6 +68,8 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
     _verificationPoller?.cancel();
     _adapterPoller?.cancel();
     _replayPoller?.cancel();
+    _conversationPoller?.cancel();
+    _draftDebounce?.cancel();
     _client?.close();
     super.dispose();
   }
@@ -117,6 +130,9 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
           Timer.periodic(const Duration(seconds: 2), (_) => unawaited(_pollAdapter()));
       _replayPoller =
           Timer.periodic(const Duration(seconds: 3), (_) => unawaited(_pollReplayTimeline()));
+      _conversationPoller =
+          _conversationAvailable ? Timer.periodic(const Duration(seconds: 1), (_) => unawaited(_pollConversation())) : null;
+      if (_conversationAvailable) unawaited(_pollConversation());
     } catch (error) {
       client.close();
       if (mounted) {
@@ -187,6 +203,51 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
       if (!mounted) return;
       setState(() { _liveError = error.toString(); _liveErrorSource = 'activity'; });
     }
+  }
+
+  void _mergeConversation(DeveloperConversationBatch batch) {
+    _conversationRevision = batch.latestRevision;
+    _conversationDraft = batch.draft;
+    for (final entry in batch.entries) {
+      if (_conversation.any((existing) => existing.revision == entry.revision)) continue;
+      _conversation.add(entry);
+    }
+    if (_conversation.length > 80) {
+      _conversation.removeRange(0, _conversation.length - 80);
+    }
+  }
+
+  Future<void> _pollConversation() async {
+    final client = _client;
+    if (client == null || !_settings.promptEnabled || !_conversationAvailable) return;
+    try {
+      final batch = await client.conversation(after: _conversationRevision);
+      if (!mounted) return;
+      setState(() => _mergeConversation(batch));
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _liveError = error.toString();
+        _liveErrorSource = 'conversation';
+      });
+    }
+  }
+
+  void _updateConversationDraft(String text) {
+    final client = _client;
+    if (client == null || !_settings.promptEnabled || !_conversationAvailable) return;
+    _draftDebounce?.cancel();
+    _draftDebounce = Timer(const Duration(milliseconds: 450), () async {
+      try {
+        await client.updateConversationDraft(_conversationClientId, text);
+      } catch (error) {
+        if (!mounted) return;
+        setState(() {
+          _liveError = error.toString();
+          _liveErrorSource = 'conversation-draft';
+        });
+      }
+    });
   }
 
   Future<void> _pollVerification() async {
@@ -303,7 +364,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
     if (client == null || value.isEmpty || _submittingPrompt || !_settings.promptEnabled) return;
     setState(() => _submittingPrompt = true);
     try {
-      final submission = await client.submitPrompt(value);
+      final submission = await client.submitPrompt(value, clientId: _conversationClientId);
       final event = submission.event;
       if (!mounted) return;
       setState(() {
@@ -563,7 +624,11 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
             _PromptPanel(
               submitting: _submittingPrompt,
               onSubmit: _submitPrompt,
+              onDraftChanged: _updateConversationDraft,
               events: _activity,
+              conversation: _conversation,
+              draft: _conversationDraft,
+              localDraftClientId: _conversationClientId,
               taskId: _adapter?.currentTask?.id ??
                   _adapter?.lastTask?.id ??
                   (_replayTimeline?.sessions.isNotEmpty == true
@@ -878,13 +943,21 @@ class _PromptPanel extends StatefulWidget {
   const _PromptPanel({
     required this.submitting,
     required this.onSubmit,
+    required this.onDraftChanged,
     required this.events,
+    required this.conversation,
+    required this.draft,
+    required this.localDraftClientId,
     required this.taskId,
   });
 
   final bool submitting;
   final ValueChanged<String> onSubmit;
+  final ValueChanged<String> onDraftChanged;
   final List<AgentActivityEvent> events;
+  final List<DeveloperConversationEntry> conversation;
+  final DeveloperConversationDraft? draft;
+  final String localDraftClientId;
   final String? taskId;
 
   @override
@@ -923,6 +996,7 @@ class _PromptPanelState extends State<_PromptPanel> {
     final value = _controller.text.trim();
     if (value.isEmpty || widget.submitting) return;
     widget.onSubmit(value);
+    widget.onDraftChanged('');
     _controller.clear();
   }
 
@@ -994,6 +1068,7 @@ class _PromptPanelState extends State<_PromptPanel> {
                     minLines: 1,
                     maxLines: 6,
                     keyboardType: TextInputType.multiline,
+                    onChanged: widget.onDraftChanged,
                     decoration: const InputDecoration(
                       isDense: true,
                       hintText: '輸入 Prompt（支援多行；送出後下方會顯示 Codex CLI 等級的執行紀錄）',
@@ -1015,6 +1090,49 @@ class _PromptPanelState extends State<_PromptPanel> {
               ],
             ),
           ),
+          if (widget.draft != null && widget.draft!.clientId != widget.localDraftClientId)
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+              color: const Color(0xFF102033),
+              child: SelectableText(
+                'DISCORD 草稿（送出前）\n${widget.draft!.text}',
+                style: const TextStyle(color: Color(0xFFBFDBFE), fontSize: 11, height: 1.35),
+              ),
+            ),
+          if (widget.conversation.isNotEmpty)
+            Container(
+              height: 118,
+              width: double.infinity,
+              decoration: const BoxDecoration(
+                color: Color(0xFF08131F),
+                border: Border(top: BorderSide(color: Color(0xFF1E3144))),
+              ),
+              child: ListView.builder(
+                padding: const EdgeInsets.fromLTRB(12, 7, 12, 7),
+                itemCount: widget.conversation.length,
+                itemBuilder: (context, index) {
+                  final entry = widget.conversation[index];
+                  final label = entry.source == 'discord'
+                      ? 'DISCORD'
+                      : entry.source == 'viewer'
+                          ? 'WEB'
+                          : 'WORKSPACE';
+                  final color = entry.kind == 'prompt'
+                      ? const Color(0xFFFDE68A)
+                      : entry.status == 'failed'
+                          ? const Color(0xFFFCA5A5)
+                          : const Color(0xFFCBD5E1);
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 5),
+                    child: SelectableText(
+                      '[$label] ${entry.text}',
+                      style: TextStyle(fontFamily: 'monospace', fontSize: 11, height: 1.3, color: color),
+                    ),
+                  );
+                },
+              ),
+            ),
           if (widget.taskId != null)
             Container(
               height: 220,

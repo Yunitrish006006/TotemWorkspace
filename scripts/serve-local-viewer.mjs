@@ -2,6 +2,7 @@
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
+import { timingSafeEqual } from "node:crypto";
 import { fileURLToPath } from "node:url";
 import { buildGraphViewModel } from "../intelligence/code-graph.mjs";
 import { loadCodeIndex, refreshCodeIndex } from "../intelligence/code-index.mjs";
@@ -28,6 +29,7 @@ import {
   replayVerificationStateAt
 } from "../intelligence/development-replay.mjs";
 import { createAgentAdapter } from "../intelligence/agent-adapter.mjs";
+import { createConversationSync } from "../intelligence/conversation-sync.mjs";
 import {
   buildOrchestrationPlan,
   orchestrationPlanSummary
@@ -145,6 +147,49 @@ function prepareApiCors(req, res) {
   }
   res.setHeader("vary", "Origin");
   return true;
+}
+
+function bearerToken(req) {
+  const value = String(req.headers.authorization ?? "");
+  const match = /^Bearer\s+(.+)$/i.exec(value);
+  return match ? match[1].trim() : null;
+}
+
+function sameSecret(expected, received) {
+  if (!expected || !received) return false;
+  const left = Buffer.from(expected);
+  const right = Buffer.from(received);
+  return left.length === right.length && timingSafeEqual(left, right);
+}
+
+function hasLoopbackConversationAccess(req) {
+  const origin = req.headers.origin;
+  return !origin || isLoopbackOrigin(origin);
+}
+
+function safeConversationProgress(event) {
+  const taskId = boundedText(event?.taskId, 160);
+  if (!taskId) return null;
+  const type = boundedText(event?.type, 64);
+  const status = boundedText(event?.status, 80);
+  const summaries = {
+    task_started: "Codex task started",
+    thread_started: "Codex session started",
+    turn_started: "Codex is processing the request",
+    command_started: "Codex is running a local command",
+    command_completed: status === "failed" ? "A local command failed" : "A local command completed",
+    tool_started: "Codex is using an integration tool",
+    tool_completed: status === "failed" ? "An integration tool failed" : "An integration tool completed",
+    file_edit: "Codex changed a workspace file",
+    todo_updated: "Codex updated its plan",
+    web_search_started: "Codex started a web search",
+    web_search_completed: "Codex completed a web search",
+    usage_updated: "Codex updated task usage",
+    task_completed: "Codex task completed",
+    task_failed: "Codex task failed"
+  };
+  const text = summaries[type];
+  return text ? { text, taskId, status } : null;
 }
 
 function publicStatus(entry) {
@@ -498,8 +543,127 @@ function serveStatic(req, res, pathname, { flutterRoot = FLUTTER_WEB_ROOT } = {}
   }
 }
 
-async function handleApi(req, res, url, { agentAdapter } = {}) {
+async function handleApi(req, res, url, { agentAdapter, conversation, conversationToken } = {}) {
   const pathname = url.pathname;
+  const conversationTokenAccepted = sameSecret(conversationToken, bearerToken(req));
+
+  async function submitPrompt(args, { source = "viewer", clientMessageId = null } = {}) {
+    const settings = loadViewerSettings();
+    if (!settings.promptEnabled) {
+      return { status: 403, payload: { error: "prompt is disabled in viewer settings" } };
+    }
+    const prompt = boundedText(args.prompt, PROMPT_LIMIT);
+    if (!prompt) {
+      return { status: 400, payload: { error: "prompt is required" } };
+    }
+    const duplicate = clientMessageId ? conversation.submission(clientMessageId) : null;
+    if (duplicate) {
+      return {
+        status: 202,
+        payload: { status: "accepted", execution: "duplicate", event: null, task: null, conversation: duplicate }
+      };
+    }
+    const conversationId = clientMessageId ?? `${source}:prompt:${Date.now()}:${activitySequence + 1}`;
+    const conversationEntry = conversation.append({
+      source,
+      kind: "prompt",
+      text: prompt,
+      clientMessageId,
+      conversationId
+    }).entry;
+    if (source === "viewer") conversation.clearDraft(args.clientId);
+    const event = appendActivity({
+      type: "prompt_submitted",
+      source,
+      moduleId: args.moduleId,
+      featureId: args.featureId,
+      summary: `Prompt submitted from ${source}`
+    }, { source });
+    const orchestration = buildOrchestrationPlan({
+      query: prompt,
+      moduleId: boundedText(args.moduleId, 128),
+      featureId: boundedText(args.featureId, 160),
+      knowledge: loadKnowledge()
+    });
+    const orchestrationId = `orchestration:${event.sequence}`;
+    const orchestrationSummary = orchestrationPlanSummary(orchestration);
+    appendActivity({
+      type: "orchestration_planned",
+      source: "bridge",
+      moduleId: args.moduleId,
+      featureId: args.featureId,
+      orchestrationId,
+      orchestrationMode: orchestration.mode,
+      status: String(orchestration.score),
+      summary: `${orchestration.mode} · score ${orchestration.score} · ${orchestrationSummary.subagents} subagents · ${orchestrationSummary.roles.join(", ") || "primary"}`
+    }, { source: "bridge" });
+
+    const adapterStatus = agentAdapter?.status?.();
+    if (!agentAdapter || !adapterStatus?.available) {
+      conversation.append({
+        source: "workspace",
+        kind: "status",
+        text: "Prompt recorded, but the local Codex adapter is unavailable",
+        conversationId: conversationEntry.conversationId
+      });
+      return {
+        status: 202,
+        payload: {
+          status: "accepted",
+          execution: "agent-adapter-unavailable",
+          event,
+          task: null,
+          adapter: adapterStatus ?? null,
+          orchestration,
+          conversation: conversationEntry
+        }
+      };
+    }
+
+    try {
+      const task = agentAdapter.dispatch({
+        prompt,
+        moduleId: args.moduleId,
+        featureId: args.featureId,
+        summary: event.summary,
+        orchestrationPlan: orchestration
+      });
+      conversation.linkTask(task.id, conversationEntry.conversationId ?? task.id);
+      return {
+        status: 202,
+        payload: {
+          status: "accepted",
+          execution: "codex",
+          event,
+          task,
+          adapter: agentAdapter.status(),
+          orchestration,
+          conversation: conversationEntry
+        }
+      };
+    } catch (error) {
+      const code = error?.code;
+      const status = code === "AGENT_BUSY" ? 409 : code === "INVALID_PROMPT" ? 400 : 503;
+      conversation.append({
+        source: "workspace",
+        kind: "status",
+        text: code === "AGENT_BUSY" ? "Codex is already working on another prompt" : "Codex could not start this prompt",
+        status: code === "AGENT_BUSY" ? "busy" : "failed",
+        conversationId: conversationEntry.conversationId
+      });
+      return {
+        status,
+        payload: {
+          error: error instanceof Error ? error.message : String(error),
+          execution: "not-started",
+          event,
+          adapter: agentAdapter.status(),
+          orchestration,
+          conversation: conversationEntry
+        }
+      };
+    }
+  }
   if (req.method === "GET" && pathname === "/api/health") {
     const adapterStatus = agentAdapter?.status?.() ?? {
       kind: "off",
@@ -651,84 +815,102 @@ async function handleApi(req, res, url, { agentAdapter } = {}) {
     return true;
   }
 
-  if (req.method === "POST" && pathname === "/api/prompt") {
+  if (req.method === "GET" && pathname === "/api/conversation") {
+    if (!hasLoopbackConversationAccess(req) && !conversationTokenAccepted) {
+      json(res, 403, { error: "conversation is available only to the loopback viewer or authenticated Discord transport" });
+      return true;
+    }
+    json(res, 200, conversation.snapshot({ after: url.searchParams.get("after") ?? 0 }));
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/conversation/draft") {
+    if (!hasLoopbackConversationAccess(req)) {
+      json(res, 403, { error: "draft updates require the loopback viewer" });
+      return true;
+    }
     const settings = loadViewerSettings();
     if (!settings.promptEnabled) {
       json(res, 403, { error: "prompt is disabled in viewer settings" });
       return true;
     }
-    const args = await readJsonBody(req);
-    const prompt = boundedText(args.prompt, PROMPT_LIMIT);
-    if (!prompt) {
-      json(res, 400, { error: "prompt is required" });
-      return true;
-    }
-    const event = appendActivity({
-      type: "prompt_submitted",
-      source: "viewer",
-      moduleId: args.moduleId,
-      featureId: args.featureId,
-      summary: prompt.length <= 220 ? prompt : `${prompt.slice(0, 217)}...`
-    }, { source: "viewer" });
-    const orchestration = buildOrchestrationPlan({
-      query: prompt,
-      moduleId: boundedText(args.moduleId, 128),
-      featureId: boundedText(args.featureId, 160),
-      knowledge: loadKnowledge()
-    });
-    const orchestrationId = `orchestration:${event.sequence}`;
-    const orchestrationSummary = orchestrationPlanSummary(orchestration);
-    appendActivity({
-      type: "orchestration_planned",
-      source: "bridge",
-      moduleId: args.moduleId,
-      featureId: args.featureId,
-      orchestrationId,
-      orchestrationMode: orchestration.mode,
-      status: String(orchestration.score),
-      summary: `${orchestration.mode} · score ${orchestration.score} · ${orchestrationSummary.subagents} subagents · ${orchestrationSummary.roles.join(", ") || "primary"}`
-    }, { source: "bridge" });
-
-    const adapterStatus = agentAdapter?.status?.();
-    if (!agentAdapter || !adapterStatus?.available) {
-      json(res, 202, {
-        status: "accepted",
-        execution: "agent-adapter-unavailable",
-        event,
-        task: null,
-        adapter: adapterStatus ?? null,
-        orchestration
-      });
-      return true;
-    }
-
     try {
-      const task = agentAdapter.dispatch({
-        prompt,
-        moduleId: args.moduleId,
-        featureId: args.featureId,
-        summary: event.summary,
-        orchestrationPlan: orchestration
-      });
-      json(res, 202, {
-        status: "accepted",
-        execution: "codex",
-        event,
-        task,
-        adapter: agentAdapter.status(),
-        orchestration
-      });
+      const args = await readJsonBody(req);
+      const draft = conversation.setDraft({ clientId: args.clientId, text: args.text });
+      json(res, 202, { status: "accepted", draft, latestRevision: conversation.snapshot().latestRevision });
     } catch (error) {
-      const code = error?.code;
-      const status = code === "AGENT_BUSY" ? 409 : code === "INVALID_PROMPT" ? 400 : 503;
-      json(res, status, {
-        error: error instanceof Error ? error.message : String(error),
-        execution: "not-started",
-        event,
-        adapter: agentAdapter.status(),
-        orchestration
-      });
+      json(res, 400, { error: error instanceof Error ? error.message : String(error) });
     }
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/conversation/prompt") {
+    if (!conversationToken) {
+      json(res, 503, { error: "Discord conversation transport is not configured" });
+      return true;
+    }
+    if (!conversationTokenAccepted) {
+      json(res, 401, { error: "Discord conversation transport is unauthorized" });
+      return true;
+    }
+    const args = await readJsonBody(req);
+    const result = await submitPrompt(args, {
+      source: "discord",
+      clientMessageId: boundedText(args.clientMessageId, 160)
+    });
+    json(res, result.status, result.payload);
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/conversation/cancel") {
+    if (!conversationToken) {
+      json(res, 503, { error: "Discord conversation transport is not configured" });
+      return true;
+    }
+    if (!conversationTokenAccepted) {
+      json(res, 401, { error: "Discord conversation transport is unauthorized" });
+      return true;
+    }
+    const activeTask = agentAdapter?.status?.().currentTask ?? null;
+    if (!activeTask) {
+      json(res, 200, { status: "idle", task: null });
+      return true;
+    }
+    agentAdapter.close("Cancelled from the allow-listed CodexDiscord interface");
+    conversation.append({
+      source: "workspace",
+      kind: "status",
+      text: "Codex task cancellation was requested from Discord",
+      taskId: activeTask.id,
+      status: "cancelled"
+    });
+    json(res, 202, { status: "cancelling", taskId: activeTask.id });
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/conversation/status") {
+    if (!conversationToken) {
+      json(res, 503, { error: "Discord conversation transport is not configured" });
+      return true;
+    }
+    if (!conversationTokenAccepted) {
+      json(res, 401, { error: "Discord conversation transport is unauthorized" });
+      return true;
+    }
+    const status = agentAdapter?.status?.() ?? { available: false, busy: false, currentTask: null, lastTask: null };
+    json(res, 200, {
+      available: status.available === true,
+      busy: status.busy === true,
+      currentTask: status.currentTask ?? null,
+      lastTask: status.lastTask ?? null
+    });
+    return true;
+  }
+
+  if (req.method === "POST" && pathname === "/api/prompt") {
+    const args = await readJsonBody(req);
+    const result = await submitPrompt(args, { source: "viewer" });
+    json(res, result.status, result.payload);
     return true;
   }
 
@@ -753,10 +935,13 @@ async function handleApi(req, res, url, { agentAdapter } = {}) {
 export function createLocalViewerServer({
   flutterRoot = FLUTTER_WEB_ROOT,
   agentAdapter: providedAgentAdapter = null,
-  agentEnv = process.env
+  agentEnv = process.env,
+  conversation: providedConversation = null
 } = {}) {
   const knowledge = loadKnowledge();
   const reposRoot = defaultReposRoot(knowledge.root);
+  const conversation = providedConversation ?? createConversationSync();
+  const conversationToken = boundedText(agentEnv.TOTEM_CONVERSATION_SYNC_TOKEN, 512);
   const liveRefreshModules = new Set();
   let liveRefreshTaskId = null;
   let liveRefreshTimer = null;
@@ -816,6 +1001,16 @@ export function createLocalViewerServer({
     onActivity: (event) => {
       const enriched = enrichSemanticEdit(event);
       const recorded = appendActivity(enriched, { source: "codex-adapter" });
+      const progress = safeConversationProgress(recorded);
+      if (progress) {
+        conversation.append({
+          source: "workspace",
+          kind: "progress",
+          text: progress.text,
+          taskId: progress.taskId,
+          status: progress.status
+        });
+      }
       if ((recorded.type === "file_edit" || recorded.type === "symbol_edit") && recorded.moduleId) {
         scheduleLiveRefresh(recorded.moduleId, recorded.taskId);
       }
@@ -856,7 +1051,7 @@ export function createLocalViewerServer({
           res.end();
           return;
         }
-        if (await handleApi(req, res, url, { agentAdapter })) return;
+        if (await handleApi(req, res, url, { agentAdapter, conversation, conversationToken })) return;
         json(res, 404, { error: "unknown api route" });
         return;
       }

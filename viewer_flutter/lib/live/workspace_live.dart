@@ -281,6 +281,90 @@ class AgentActivityBatch {
   }
 }
 
+class DeveloperConversationDraft {
+  const DeveloperConversationDraft({
+    required this.revision,
+    required this.timestamp,
+    required this.clientId,
+    required this.text,
+  });
+
+  final int revision;
+  final String timestamp;
+  final String clientId;
+  final String text;
+
+  factory DeveloperConversationDraft.fromJson(Map<String, dynamic> json) => DeveloperConversationDraft(
+        revision: (json['revision'] as num?)?.toInt() ?? 0,
+        timestamp: json['timestamp'] as String? ?? '',
+        clientId: json['clientId'] as String? ?? '',
+        text: json['text'] as String? ?? '',
+      );
+}
+
+class DeveloperConversationEntry {
+  const DeveloperConversationEntry({
+    required this.revision,
+    required this.timestamp,
+    required this.source,
+    required this.kind,
+    required this.text,
+    this.taskId,
+    this.status,
+    this.conversationId,
+  });
+
+  final int revision;
+  final String timestamp;
+  final String source;
+  final String kind;
+  final String text;
+  final String? taskId;
+  final String? status;
+  final String? conversationId;
+
+  factory DeveloperConversationEntry.fromJson(Map<String, dynamic> json) => DeveloperConversationEntry(
+        revision: (json['revision'] as num?)?.toInt() ?? 0,
+        timestamp: json['timestamp'] as String? ?? '',
+        source: json['source'] as String? ?? 'workspace',
+        kind: json['kind'] as String? ?? 'status',
+        text: json['text'] as String? ?? '',
+        taskId: json['taskId'] as String?,
+        status: json['status'] as String?,
+        conversationId: json['conversationId'] as String?,
+      );
+}
+
+class DeveloperConversationBatch {
+  const DeveloperConversationBatch({
+    required this.schemaVersion,
+    required this.latestRevision,
+    required this.draft,
+    required this.entries,
+  });
+
+  final int schemaVersion;
+  final int latestRevision;
+  final DeveloperConversationDraft? draft;
+  final List<DeveloperConversationEntry> entries;
+
+  factory DeveloperConversationBatch.fromJson(Map<String, dynamic> json) {
+    final rawEntries = json['entries'] as List? ?? const <Object>[];
+    final rawDraft = json['draft'];
+    return DeveloperConversationBatch(
+      schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 1,
+      latestRevision: (json['latestRevision'] as num?)?.toInt() ?? 0,
+      draft: rawDraft is Map
+          ? DeveloperConversationDraft.fromJson(Map<String, dynamic>.from(rawDraft))
+          : null,
+      entries: rawEntries
+          .whereType<Map>()
+          .map((entry) => DeveloperConversationEntry.fromJson(Map<String, dynamic>.from(entry)))
+          .toList(growable: false),
+    );
+  }
+}
+
 class ChangeEntity {
   const ChangeEntity({
     required this.id,
@@ -1058,6 +1142,24 @@ class LocalWorkspaceClient {
     return AgentActivityBatch.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
+  Future<DeveloperConversationBatch> conversation({int after = 0}) async {
+    final uri = _uri('/api/conversation').replace(queryParameters: {'after': '$after'});
+    final response = await _client.get(uri).timeout(const Duration(seconds: 4));
+    _requireSuccess(response, 'developer conversation');
+    return DeveloperConversationBatch.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<void> updateConversationDraft(String clientId, String text) async {
+    final response = await _client
+        .post(
+          _uri('/api/conversation/draft'),
+          headers: const {'content-type': 'application/json'},
+          body: jsonEncode({'clientId': clientId, 'text': text}),
+        )
+        .timeout(const Duration(seconds: 4));
+    _requireSuccess(response, 'developer conversation draft');
+  }
+
   Future<AgentAdapterStatus> agentAdapterStatus() async {
     final response = await _client.get(_uri('/api/agent-adapter')).timeout(const Duration(seconds: 4));
     _requireSuccess(response, 'agent adapter status');
@@ -1115,6 +1217,7 @@ class LocalWorkspaceClient {
     String prompt, {
     String? moduleId,
     String? featureId,
+    String? clientId,
   }) async {
     final response = await _client
         .post(
@@ -1124,6 +1227,7 @@ class LocalWorkspaceClient {
             'prompt': prompt,
             if (moduleId != null) 'moduleId': moduleId,
             if (featureId != null) 'featureId': featureId,
+            if (clientId != null) 'clientId': clientId,
           }),
         )
         .timeout(const Duration(seconds: 8));

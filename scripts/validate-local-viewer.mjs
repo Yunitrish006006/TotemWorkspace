@@ -25,6 +25,10 @@ assert.ok(serverSource.includes('pathname === "/api/replay"'), "Phase 6 replay t
 assert.ok(serverSource.includes('pathname === "/api/replay/frame"'), "Phase 6 replay frame endpoint is required");
 assert.ok(serverSource.includes('pathname === "/api/verification-state"'), "Phase 4 verification-state endpoint is required");
 assert.ok(serverSource.includes('pathname === "/api/prompt"'), "prompt intake endpoint is required");
+assert.ok(serverSource.includes('pathname === "/api/conversation"'), "developer conversation endpoint is required");
+assert.ok(serverSource.includes('pathname === "/api/conversation/draft"'), "developer draft endpoint is required");
+assert.ok(serverSource.includes('pathname === "/api/conversation/prompt"'), "Discord conversation prompt endpoint is required");
+assert.ok(serverSource.includes("safeConversationProgress"), "Discord progress must use a whitelist projection");
 assert.ok(serverSource.includes('"https://yunitrish006006.github.io"'), "official TotemWorkspace Pages origin must be explicitly allowlisted");
 assert.ok(serverSource.includes('"agent-adapter-required"'), "prompt intake must not claim direct agent execution");
 assert.ok(serverSource.includes("activity file paths must be repository-relative"), "activity ingestion must reject absolute local file paths");
@@ -116,7 +120,12 @@ const fakeAgentAdapter = {
   },
   close() {}
 };
-const server = createLocalViewerServer({ flutterRoot: flutterFixture, agentAdapter: fakeAgentAdapter });
+const syncToken = "conversation-sync-fixture-token";
+const server = createLocalViewerServer({
+  flutterRoot: flutterFixture,
+  agentAdapter: fakeAgentAdapter,
+  agentEnv: { ...process.env, TOTEM_CONVERSATION_SYNC_TOKEN: syncToken }
+});
 await new Promise((resolve, reject) => {
   server.once("error", reject);
   server.listen(0, "127.0.0.1", resolve);
@@ -215,6 +224,24 @@ try {
   assert.equal(enablePrompt.status, 200);
   assert.equal((await enablePrompt.json()).promptEnabled, true);
 
+  const pagesConversation = await fetch(`${base}/api/conversation`, {
+    headers: { Origin: "https://yunitrish006006.github.io" }
+  });
+  assert.equal(pagesConversation.status, 403, "published Pages must not receive private prompt transcript data");
+
+  const draft = await fetch(`${base}/api/conversation/draft`, {
+    method: "POST",
+    headers: { Origin: "http://127.0.0.1:54321", "content-type": "application/json" },
+    body: JSON.stringify({ clientId: "viewer:fixture", text: "draft stays in loopback conversation memory" })
+  });
+  assert.equal(draft.status, 202);
+
+  const localConversation = await fetch(`${base}/api/conversation`, {
+    headers: { Origin: "http://127.0.0.1:54321" }
+  });
+  assert.equal(localConversation.status, 200);
+  assert.equal((await localConversation.json()).draft.text, "draft stays in loopback conversation memory");
+
   const prompt = await fetch(`${base}/api/prompt`, {
     method: "POST",
     headers: {
@@ -233,6 +260,53 @@ try {
   assert.equal(dispatchedPrompts.length, 1);
   assert.equal(dispatchedPrompts[0].prompt, "inspect TotemAutomata gathering outline");
   assert.equal(dispatchedPrompts[0].orchestrationPlan.schemaVersion, 1);
+
+  const transcript = await fetch(`${base}/api/conversation`, {
+    headers: { Origin: "http://127.0.0.1:54321" }
+  });
+  const transcriptPayload = await transcript.json();
+  assert.ok(transcriptPayload.entries.some((entry) =>
+    entry.source === "viewer" && entry.kind === "prompt" && entry.text === "inspect TotemAutomata gathering outline"
+  ), "full viewer prompt must stay in the private conversation transcript");
+
+  const syncedPrompt = await fetch(`${base}/api/conversation/prompt`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${syncToken}`, "content-type": "application/json" },
+    body: JSON.stringify({ prompt: "inspect the shared developer tools", clientMessageId: "discord-fixture:1" })
+  });
+  assert.equal(syncedPrompt.status, 202);
+  assert.equal((await syncedPrompt.json()).execution, "codex");
+  assert.equal(dispatchedPrompts.length, 2, "Discord must reuse the same Workspace adapter");
+
+  const duplicateSyncedPrompt = await fetch(`${base}/api/conversation/prompt`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${syncToken}`, "content-type": "application/json" },
+    body: JSON.stringify({ prompt: "inspect the shared developer tools", clientMessageId: "discord-fixture:1" })
+  });
+  assert.equal(duplicateSyncedPrompt.status, 202);
+  assert.equal((await duplicateSyncedPrompt.json()).execution, "duplicate");
+  assert.equal(dispatchedPrompts.length, 2, "retrying a Discord message must not dispatch a second task");
+
+  const unauthorizedSyncedPrompt = await fetch(`${base}/api/conversation/prompt`, {
+    method: "POST",
+    headers: { authorization: "Bearer incorrect", "content-type": "application/json" },
+    body: JSON.stringify({ prompt: "must not run", clientMessageId: "discord-fixture:2" })
+  });
+  assert.equal(unauthorizedSyncedPrompt.status, 401);
+
+  const syncedStatus = await fetch(`${base}/api/conversation/status`, {
+    headers: { authorization: `Bearer ${syncToken}` }
+  });
+  assert.equal(syncedStatus.status, 200);
+  assert.equal((await syncedStatus.json()).available, true);
+
+  const idleCancel = await fetch(`${base}/api/conversation/cancel`, {
+    method: "POST",
+    headers: { authorization: `Bearer ${syncToken}`, "content-type": "application/json" },
+    body: "{}"
+  });
+  assert.equal(idleCancel.status, 200);
+  assert.equal((await idleCancel.json()).status, "idle");
 
   const activityPost = await fetch(`${base}/api/activity`, {
     method: "POST",

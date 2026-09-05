@@ -154,6 +154,18 @@ node scripts/totem-activity.mjs status
 
 `TOTEM_CODEX_MODEL` 可選；未設定時沿用 Codex 本身的 model 設定。Bridge 不會自動加入 `--full-auto` 或 dangerous approval/sandbox bypass。
 
+### Discord 與網頁共用開發工作階段
+
+啟用 CodexDiscord 的本機同步後，Flutter Viewer 和 Discord 是同一個 TotemWorkspace Codex 佇列的兩個操作介面：網頁草稿會鏡像到 Discord、兩端送出的 Prompt 與經過白名單投影的處理狀態都會雙向顯示。完整 Prompt 只保留在 Bridge 記憶體中，不寫入 development replay；同步 API 只接受 loopback Viewer 或持有私有 token 的 CodexDiscord。
+
+在啟動 Bridge 的環境檔設定一組至少 16 字元、僅供這兩個本機服務共用的 token：
+
+```sh
+export TOTEM_CONVERSATION_SYNC_TOKEN='replace-with-a-long-random-secret'
+```
+
+同一 token 與 Discord channel 設定在 CodexDiscord 的 `.env`。Discord 無法讓 Bot 讀取使用者尚未送出的輸入文字，因此 Discord → 網頁會在訊息送出後同步；網頁 → Discord 的未送出草稿則以 Bot 管理的預覽訊息節流鏡像。
+
 `start` 會對 `viewer_flutter/` 做內容指紋；build 缺失或過期時自動執行 `flutter build web --wasm --base-href /`。因此直接開 `http://127.0.0.1:18765/` 就是 Flutter，舊 JS 位於 `/legacy/`。
 
 VS Code Remote-SSH 連線可在 Mac 的 `~/.ssh/config` 使用：

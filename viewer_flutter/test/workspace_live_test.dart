@@ -709,4 +709,57 @@ void main() {
     );
     client.close();
   });
+
+  test('local client reads the private conversation transcript and publishes a debounced draft', () async {
+    final requests = <http.Request>[];
+    final mock = MockClient((request) async {
+      requests.add(request);
+      if (request.url.path == '/api/conversation') {
+        return http.Response.bytes(
+          utf8.encode(jsonEncode(<String, Object?>{
+            'schemaVersion': 1,
+            'latestRevision': 8,
+            'draft': <String, Object>{
+              'revision': 7,
+              'timestamp': 'now',
+              'clientId': 'viewer:other',
+              'text': 'Discord 已送出的工作',
+            },
+            'entries': <Object>[
+              <String, Object?>{
+                'revision': 8,
+                'timestamp': 'now',
+                'source': 'discord',
+                'kind': 'prompt',
+                'text': '請同步處理工具',
+                'conversationId': 'discord:123',
+              },
+            ],
+          })),
+          200,
+          headers: const <String, String>{'content-type': 'application/json; charset=utf-8'},
+        );
+      }
+      if (request.url.path == '/api/conversation/draft') {
+        return http.Response(jsonEncode(<String, Object>{'status': 'accepted'}), 202);
+      }
+      return http.Response('not found', 404);
+    });
+    final client = LocalWorkspaceClient('http://127.0.0.1:18765', client: mock);
+
+    final conversation = await client.conversation(after: 4);
+    expect(conversation.latestRevision, 8);
+    expect(conversation.draft?.clientId, 'viewer:other');
+    expect(conversation.entries.single.source, 'discord');
+    expect(conversation.entries.single.text, '請同步處理工具');
+
+    await client.updateConversationDraft('viewer:this', '網頁未送出草稿');
+    final draftRequest = requests.singleWhere((request) => request.url.path == '/api/conversation/draft');
+    expect(draftRequest.method, 'POST');
+    expect(
+      jsonDecode(draftRequest.body),
+      const <String, Object>{'clientId': 'viewer:this', 'text': '網頁未送出草稿'},
+    );
+    client.close();
+  });
 }
