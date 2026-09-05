@@ -5,7 +5,7 @@ import { createWorkspaceSync, isWorkspaceSyncEnabled, workspaceConversationCard 
 const config = Object.freeze({
   workspaceSync: Object.freeze({
     url: "http://127.0.0.1:18765/",
-    token: "a-long-private-sync-token",
+    token: "test-private-sync-token",
     channelId: "423456789012345678",
     workspaceName: "workspace"
   })
@@ -72,7 +72,7 @@ test("workspace sync mirrors the explicit conversation contract and submits thro
   const result = await sync.submitPrompt({ prompt: "從 Discord 送出", clientMessageId: "discord:1" });
   assert.equal(result.execution, "codex");
   const post = requests.at(-1);
-  assert.equal(post.options.headers.authorization, "Bearer a-long-private-sync-token");
+  assert.equal(post.options.headers.authorization, "Bearer test-private-sync-token");
   assert.match(post.url, /\/api\/conversation\/prompt$/);
   assert.deepEqual(JSON.parse(post.options.body), { prompt: "從 Discord 送出", clientMessageId: "discord:1" });
   assert.deepEqual(await sync.status(), { available: true, busy: true, currentTask: { id: "task:1" } });

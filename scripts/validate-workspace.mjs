@@ -247,21 +247,85 @@ if (fs.existsSync(indexPath)) {
   check(!/id="feature-branches-toggle"/.test(html), "index.html 不得保留一次展開全部分支的工具列按鈕");
 }
 
-function walk(directory, relative = "") {
+function globRegex(pattern) {
+  let expression = "";
+  for (let index = 0; index < pattern.length; index += 1) {
+    const character = pattern[index];
+    if (character === "*") {
+      if (pattern[index + 1] === "*") {
+        expression += ".*";
+        index += 1;
+      } else {
+        expression += "[^/]*";
+      }
+    } else if (character === "?") {
+      expression += "[^/]";
+    } else {
+      expression += character.replace(/[|\\{}()[\]^$+?.]/g, "\\$&");
+    }
+  }
+  return new RegExp(`^${expression}$`);
+}
+
+function ignoreRules(directory, relative) {
+  const file = path.join(directory, ".gitignore");
+  if (!fs.existsSync(file)) return [];
+  return fs.readFileSync(file, "utf8")
+    .split(/\r?\n/)
+    .map((raw) => raw.trim())
+    .filter((raw) => raw && !raw.startsWith("#"))
+    .map((raw) => {
+      const negated = raw.startsWith("!");
+      const source = negated ? raw.slice(1) : raw;
+      const directoryOnly = source.endsWith("/");
+      const anchored = source.startsWith("/");
+      const pattern = source.replace(/^\//, "").replace(/\/$/, "");
+      return {
+        negated,
+        directoryOnly,
+        base: relative.split(path.sep).join("/"),
+        pattern,
+        regex: globRegex(pattern)
+      };
+    })
+    .filter((rule) => rule.pattern);
+}
+
+function ignoredByRules(relative, directory, rules) {
+  const normalized = relative.split(path.sep).join("/");
+  let ignored = false;
+  for (const rule of rules) {
+    if (rule.directoryOnly && !directory) continue;
+    const fromBase = rule.base && normalized.startsWith(`${rule.base}/`)
+      ? normalized.slice(rule.base.length + 1)
+      : normalized;
+    const target = rule.pattern.includes("/") ? fromBase : path.posix.basename(fromBase);
+    if (rule.regex.test(target)) ignored = !rule.negated;
+  }
+  return ignored;
+}
+
+function walk(directory, relative = "", inheritedRules = []) {
+  const rules = [...inheritedRules, ...ignoreRules(directory, relative)];
   const entries = [];
   for (const item of fs.readdirSync(directory, { withFileTypes: true })) {
     if (item.name === ".git") continue;
     const childRelative = path.join(relative, item.name);
+    if (ignoredByRules(childRelative, item.isDirectory(), rules)) continue;
     const childAbsolute = path.join(directory, item.name);
     entries.push({ relative: childRelative, absolute: childAbsolute, directory: item.isDirectory() });
-    if (item.isDirectory()) entries.push(...walk(childAbsolute, childRelative));
+    if (item.isDirectory()) entries.push(...walk(childAbsolute, childRelative, rules));
   }
   return entries;
 }
 
+// Security and publication checks cover tracked files plus unignored local files.
+// Runtime state (for example .env, node_modules, .totem-index, and Flutter build
+// caches) is intentionally excluded by .gitignore and must not make validation
+// fail merely because the local developer service is running.
 const entries = walk(root);
 const forbiddenDirectories = new Set(["build", "dist", "out", "node_modules"]);
-check(!entries.some((entry) => entry.directory && forbiddenDirectories.has(path.basename(entry.relative))), "Repository 不得包含 build／dist／out／node_modules 目錄");
+check(!entries.some((entry) => entry.relative.split(path.sep).some((segment) => forbiddenDirectories.has(segment))), "Repository 不得包含未忽略的 build／dist／out／node_modules 檔案");
 check(!entries.some((entry) => !entry.directory && /\.jar$/i.test(entry.relative)), "Repository 不得包含 JAR");
 
 const markdownFiles = entries.filter((entry) => !entry.directory
@@ -286,9 +350,18 @@ const secretPatterns = [
   /\bsk-[A-Za-z0-9]{20,}\b/,
   /\bAKIA[0-9A-Z]{16}\b/,
   /https:\/\/(?:canary\.|ptb\.)?discord(?:app)?\.com\/api\/webhooks\/\d+\/[A-Za-z0-9._-]+/,
-  /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/,
-  /(?:api[_-]?key|token|password|secret)\s*[:=]\s*["']?(?!example|placeholder|redacted|none|null|false|true|\*{4})[A-Za-z0-9_./+:-]{16,}/i
+  /\beyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\b/
 ];
+
+function hasConcreteSecretAssignment(content) {
+  const assignments = /(?:api[_-]?key|token|password|secret)\s*[:=]\s*(?:(["'])([A-Za-z0-9_./+:-]{16,})\1|([A-Za-z0-9_+/-]*\d[A-Za-z0-9_+/-]{19,}))/gi;
+  for (const match of content.matchAll(assignments)) {
+    const candidate = match[2] ?? match[3];
+    if (/^(?:example|placeholder|redacted|none|null|false|true|replace|test)(?:[-_]|$)/i.test(candidate)) continue;
+    return true;
+  }
+  return false;
+}
 
 for (const entry of entries) {
   if (entry.directory || entry.relative === "LICENSE") continue;
@@ -299,6 +372,7 @@ for (const entry of entries) {
   for (const pattern of secretPatterns) {
     check(!pattern.test(content), `${entry.relative} 疑似包含高可信度 secret`);
   }
+  check(!hasConcreteSecretAssignment(content), `${entry.relative} 疑似包含高可信度 secret`);
 }
 
 if (failures.length > 0) {

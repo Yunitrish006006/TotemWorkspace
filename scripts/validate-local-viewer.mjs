@@ -120,7 +120,7 @@ const fakeAgentAdapter = {
   },
   close() {}
 };
-const syncToken = "conversation-sync-fixture-token";
+const syncToken = "test-conversation-sync-token";
 const server = createLocalViewerServer({
   flutterRoot: flutterFixture,
   agentAdapter: fakeAgentAdapter,

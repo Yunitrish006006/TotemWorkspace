@@ -9,26 +9,26 @@ const env = {
   DISCORD_GUILD_ID: "223456789012345678",
   DISCORD_ALLOWED_USER_IDS: "323456789012345678",
   DISCORD_ALLOWED_CHANNEL_IDS: "423456789012345678",
-  CODEX_WORKSPACES_JSON: '{"nexus":"/home/thomas/workspace/TotemNexus"}',
-  CODEX_WORKSPACE_ROOT: "/home/thomas/workspace"
+  CODEX_WORKSPACES_JSON: '{"nexus":"/workspace/TotemNexus"}',
+  CODEX_WORKSPACE_ROOT: "/workspace"
 };
 
 test("configuration requires explicit user, channel and workspace allowlists", () => {
   const config = loadConfig(env);
-  assert.deepEqual(config.workspaces.get("nexus"), { path: "/home/thomas/workspace/TotemNexus", allowNonGit: false });
-  assert.deepEqual(config.workspaces.get("workspace"), { path: "/home/thomas/workspace", allowNonGit: true });
+  assert.deepEqual(config.workspaces.get("nexus"), { path: "/workspace/TotemNexus", allowNonGit: false });
+  assert.deepEqual(config.workspaces.get("workspace"), { path: "/workspace", allowNonGit: true });
   assert.equal(config.maxRuntimeMs, 0);
   assert.equal(loadConfig({ ...env, CODEX_MAX_RUNTIME_SECONDS: "0" }).maxRuntimeMs, 0);
   assert.equal(loadConfig({ ...env, CODEX_MAX_RUNTIME_SECONDS: "6000" }).maxRuntimeMs, 6_000_000);
   const sync = loadConfig({
     ...env,
     TOTEM_WORKSPACE_SYNC_URL: "http://127.0.0.1:18765/",
-    TOTEM_WORKSPACE_SYNC_TOKEN: "a-long-private-sync-token",
+    TOTEM_WORKSPACE_SYNC_TOKEN: "test-private-sync-token",
     TOTEM_WORKSPACE_SYNC_CHANNEL_ID: "423456789012345678"
   }).workspaceSync;
   assert.deepEqual(sync, {
     url: "http://127.0.0.1:18765/",
-    token: "a-long-private-sync-token",
+    token: "test-private-sync-token",
     channelId: "423456789012345678",
     workspaceName: "workspace"
   });
@@ -45,7 +45,7 @@ test("configuration requires explicit user, channel and workspace allowlists", (
   assert.throws(() => loadConfig({
     ...env,
     TOTEM_WORKSPACE_SYNC_URL: "http://example.com",
-    TOTEM_WORKSPACE_SYNC_TOKEN: "a-long-private-sync-token",
+    TOTEM_WORKSPACE_SYNC_TOKEN: "test-private-sync-token",
     TOTEM_WORKSPACE_SYNC_CHANNEL_ID: "423456789012345678"
   }), /loopback host/);
 });
