@@ -23,6 +23,35 @@ the 11 active Totem repositories. It is not a Minecraft mod.
   `node scripts/validate-intelligence.mjs` before committing changes that affect
   workspace knowledge, graph data, aliases, retrieval behavior, or V2 rendering.
 
+## Java 25 and module release gate
+
+- **Java 25 is mandatory** for every Gradle, compile, test, GameTest, runtime
+  probe, remap, and release operation in an active Totem module. Before the
+  first Gradle command, select a JDK 25 through `JAVA_HOME` and verify both
+  `java -version` and `./gradlew -version` report JVM 25. Never silently fall
+  back to the system JDK or downgrade to Java 21/17 because a command happens
+  to start.
+- Treat a distributable active-module change as incomplete until its verified
+  release sequence is finished. The sequence is: choose and record a new
+  module version; run the module's real Java-25 build and applicable tests;
+  inspect the remapped artifact; commit and push the exact source/version
+  change to the module's default GitHub branch; confirm the required GitHub
+  Actions checks are green; then use that module's owned Modrinth publish
+  workflow and verify the published version by API read-back (including
+  project, version, loader/Minecraft compatibility, primary JAR and SHA-512).
+- Keep the source commit, remote CI result, Modrinth version and any
+  `modrinth-published-<version>.json` marker consistent. Pull any workflow
+  marker back to the local branch and push it when the owning workflow does
+  not already do so. Update the TotemWorkspace snapshot only from this
+  verified release evidence; never infer publication from a version number,
+  a successful build, or a workflow trigger.
+- Public release is an external action: do not infer it from an edit-only
+  request. Once the requester has authorized a module release, do not report
+  the update as complete while GitHub push, CI, Modrinth publication or
+  read-back verification is still pending. If access, credentials, a required
+  version decision, or the owned release workflow is unavailable, report that
+  exact blocker instead of claiming a release.
+
 ## Workspace intelligence rules
 
 - The Codex intelligence graph must be derived from the existing validated

@@ -3,6 +3,7 @@
 ## 平台與模組邊界
 
 - 基線為 Minecraft 26.2、Java 25、Fabric Loader 0.19.3+ 與對應 Fabric API。
+- 每次開始 active module 的 Gradle／測試／發佈工作前，指定 JDK 25 的 `JAVA_HOME`，並以 `java -version` 與 `./gradlew -version` 驗證 JVM 皆為 25；不得靜默改用系統預設 JDK。
 - 共用契約放 TotemCore；玩法資料、Screen、資源、權限與生命週期由功能擁有模組維護。
 - 不為方便而複製另一個模組的實作類別或遊戲資料。跨模組協作使用版本化 Core 契約、穩定公開 API 或明確的 runtime adapter。
 - 軟依賴未安裝時必須安全降級。安全與權限 API 若已宣告存在卻無法載入，採 fail closed，避免繞過保護。
@@ -51,3 +52,4 @@
 - 發布前確認工作樹乾淨、本機 branch 與 upstream 同步、版本與 Core 範圍一致、artifact 可重現。
 - 不以「已 push」推論 GitHub Actions 全綠，也不以「Actions 全綠」推論 Modrinth 已發布；三者分別查證。
 - CI 不持續輪詢；只在狀態改變或需要處理失敗時查看。紅燈要讀 log、修正、push、重跑，不能停在失敗狀態。
+- 已獲授權的模組版本發佈依 `docs/release-checklist.md` 的必經順序完成：JDK 25 驗證與測試、artifact 檢查、GitHub push／CI 綠燈、Modrinth publish、API 回讀與 SHA-512 驗證。任何一段缺少權限或證據時，報告 blocker，不可說「已發布」。

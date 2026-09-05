@@ -65,6 +65,19 @@ try {
   data = null;
 }
 
+const agentInstructions = read("AGENTS.md");
+const releaseChecklist = read("docs/release-checklist.md");
+check(agentInstructions.includes("**Java 25 is mandatory**"), "AGENTS.md 必須將 Java 25 設為 active module 的強制 JDK");
+check(agentInstructions.includes("**Java 25 is mandatory** for every Gradle, compile, test, GameTest, runtime"), "AGENTS.md 必須要求 Java 25 覆蓋建置、測試與發佈");
+check(agentInstructions.includes("`java -version` and `./gradlew -version` report JVM 25"), "AGENTS.md 必須要求在 Gradle 前實際驗證 JVM 25");
+check(agentInstructions.includes("use that module's owned Modrinth publish"), "AGENTS.md 必須要求完成驗證後使用模組擁有的 Modrinth workflow");
+check(agentInstructions.includes("verify the published version by API read-back"), "AGENTS.md 必須要求 Modrinth API 回讀驗證");
+check(agentInstructions.includes("Public release is an external action"), "AGENTS.md 必須保留發佈授權與 blocker 邊界");
+check(releaseChecklist.includes("## 必經發布順序"), "發布檢查表必須明確列出必經發布順序");
+check(releaseChecklist.includes("`java -version` 與 `./gradlew -version` 都回報 JVM 25"), "發布檢查表必須要求 Java 25 實際驗證");
+check(releaseChecklist.includes("GitHub branch，等待必要 CI 全綠"), "發布檢查表必須在 Modrinth 前要求 GitHub push 與 CI 驗證");
+check(releaseChecklist.includes("Modrinth API 回讀"), "發布檢查表必須要求 Modrinth 回讀驗證");
+
 if (data) {
   check(data.schemaVersion === 1, "modules.json schemaVersion 必須是 1");
   check(data.snapshot?.date === "2026-09-02", "快照日期必須是 2026-09-02");
