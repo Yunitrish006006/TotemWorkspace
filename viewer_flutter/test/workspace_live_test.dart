@@ -56,6 +56,13 @@ void main() {
           'branch': 'main',
           'dirty': true,
           'snapshotMatch': false,
+          'recentChanges': <String, Object>{
+            'summary': 'feat(i18n): add Japanese translations',
+            'timestamp': '2026-09-05T00:00:00Z',
+            'files': <Object>[
+              <String, Object>{'status': 'A', 'path': 'src/main/resources/assets/totem/lang/ja_jp.json'},
+            ],
+          },
           'locales': <String, Object>{
             'ja_jp': <String, Object>{
               'applicable': true,
@@ -106,6 +113,7 @@ void main() {
     expect(status.japaneseRequiredCount, 2);
     expect(status.japaneseCompleteCount, 1);
     expect(status.module('totem-a')?.japanese?.missingKeys, 3);
+    expect(status.module('totem-a')?.recentChanges?.files.single.path, 'src/main/resources/assets/totem/lang/ja_jp.json');
     expect(status.module('totem-a')?.branch, 'main');
   });
 

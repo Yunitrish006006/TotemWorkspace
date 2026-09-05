@@ -201,6 +201,7 @@ function publicStatus(entry) {
     branch: entry.branch ?? null,
     dirty: entry.dirty ?? false,
     snapshotMatch: entry.snapshotMatch ?? false,
+    recentChanges: entry.recentChanges ?? { summary: "", timestamp: "", files: [] },
     expectedCommit: entry.expectedCommit ?? null,
     expectedBranch: entry.expectedBranch ?? null,
     locales: entry.locales ?? {}

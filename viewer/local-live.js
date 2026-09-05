@@ -78,7 +78,11 @@
       : japanese.complete === true
         ? "JA complete"
         : "JA " + (japanese.translatedKeys || 0) + "/" + (japanese.sourceKeys || 0);
-    return entry.repoName + "｜" + (entry.branch || "detached") + "｜" + shortSha(entry.head) + "｜" + flags.join(", ") + "｜" + japaneseState;
+    var files = entry.recentChanges && Array.isArray(entry.recentChanges.files) ? entry.recentChanges.files : [];
+    var fileState = files.length
+      ? "FILES: " + files.map(function (file) { return (file.status || "M") + " " + file.path; }).join(", ")
+      : "FILES: none";
+    return entry.repoName + "｜" + (entry.branch || "detached") + "｜" + shortSha(entry.head) + "｜" + flags.join(", ") + "｜" + japaneseState + "｜" + fileState;
   }
 
   function summary(payload) {

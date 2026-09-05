@@ -704,6 +704,22 @@ function localeCoverage(repoPath, locale) {
   });
 }
 
+function recentChanges(repoPath) {
+  const metadata = gitOutput(repoPath, ["log", "-1", "--format=%s%x00%cI"]);
+  const [summary = "", timestamp = ""] = metadata?.split("\0") ?? [];
+  const changed = gitOutput(repoPath, ["diff-tree", "--no-commit-id", "--name-status", "-r", "HEAD"]);
+  const files = (changed ?? "")
+    .split("\n")
+    .filter(Boolean)
+    .slice(0, 20)
+    .map((line) => {
+      const columns = line.split("\t");
+      return Object.freeze({ status: columns[0] ?? "M", path: columns.at(-1) ?? "" });
+    })
+    .filter((entry) => entry.path && !path.isAbsolute(entry.path));
+  return Object.freeze({ summary, timestamp, files: Object.freeze(files) });
+}
+
 export function workspaceStatus({ knowledge = loadKnowledge(), reposRoot = defaultReposRoot(knowledge.root) } = {}) {
   return Object.freeze(knowledge.modules.map((module) => {
     const repoPath = path.join(reposRoot, module.repoName);
@@ -730,6 +746,7 @@ export function workspaceStatus({ knowledge = loadKnowledge(), reposRoot = defau
       branch,
       dirty: Boolean(status),
       snapshotMatch: head === module.commit,
+      recentChanges: recentChanges(repoPath),
       expectedCommit: module.commit,
       expectedBranch: module.defaultBranch
     });

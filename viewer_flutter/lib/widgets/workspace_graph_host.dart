@@ -484,6 +484,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
                         : japanese.complete
                             ? 'JA complete'
                             : 'JA ${japanese.translatedKeys}/${japanese.sourceKeys}';
+                    final recentFiles = module.recentChanges?.files ?? const <WorkspaceChangedFile>[];
                     return Container(
                       padding: const EdgeInsets.all(11),
                       decoration: BoxDecoration(
@@ -517,6 +518,15 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
                                   '${module.branch ?? 'no branch'} · $head${module.snapshotMatch ? ' · snapshot match' : ' · snapshot drift'} · $japaneseState',
                                   style: const TextStyle(color: Color(0xFF9FB4CA), fontSize: 12),
                                 ),
+                                if (recentFiles.isNotEmpty) ...[
+                                  const SizedBox(height: 5),
+                                  Text(
+                                    'FILES · ${recentFiles.map((file) => '${file.status} ${file.path}').join(' · ')}',
+                                    maxLines: 2,
+                                    overflow: TextOverflow.ellipsis,
+                                    style: const TextStyle(color: Color(0xFF67E8F9), fontSize: 11, fontWeight: FontWeight.w700),
+                                  ),
+                                ],
                               ],
                             ),
                           ),

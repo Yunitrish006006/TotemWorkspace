@@ -474,6 +474,8 @@ try {
   assert.ok(payload.modules.every((entry) => !Object.hasOwn(entry, "path")), "browser API must not expose absolute local repo paths");
   assert.ok(payload.modules.every((entry) => entry.locales?.ja_jp), "workspace status must report Japanese localization coverage");
   assert.ok(payload.modules.every((entry) => typeof entry.locales.ja_jp.complete === "boolean"), "Japanese localization coverage must report completion state");
+  assert.ok(payload.modules.every((entry) => Array.isArray(entry.recentChanges?.files)), "workspace status must expose recent changed files for the web UI");
+  assert.ok(payload.modules.every((entry) => entry.recentChanges.files.every((file) => typeof file.path === "string" && !file.path.startsWith("/"))), "recent change files must remain repository-relative");
   const japaneseModules = payload.modules.filter((entry) => entry.present && entry.locales.ja_jp.applicable);
   assert.equal(japaneseModules.length, 10, "all localized Totem modules except the language-free Discord bridge must report Japanese coverage");
   assert.ok(japaneseModules.every((entry) => entry.locales.ja_jp.complete), "Japanese locale coverage must be complete for every localized module");

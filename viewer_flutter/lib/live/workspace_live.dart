@@ -55,6 +55,39 @@ class WorkspaceLocaleStatus {
       );
 }
 
+class WorkspaceRecentChanges {
+  const WorkspaceRecentChanges({
+    required this.summary,
+    required this.timestamp,
+    required this.files,
+  });
+
+  final String summary;
+  final String timestamp;
+  final List<WorkspaceChangedFile> files;
+
+  factory WorkspaceRecentChanges.fromJson(Map<String, dynamic> json) => WorkspaceRecentChanges(
+        summary: json['summary'] as String? ?? '',
+        timestamp: json['timestamp'] as String? ?? '',
+        files: (json['files'] as List? ?? const <Object>[])
+            .whereType<Map>()
+            .map((entry) => WorkspaceChangedFile.fromJson(Map<String, dynamic>.from(entry)))
+            .toList(growable: false),
+      );
+}
+
+class WorkspaceChangedFile {
+  const WorkspaceChangedFile({required this.status, required this.path});
+
+  final String status;
+  final String path;
+
+  factory WorkspaceChangedFile.fromJson(Map<String, dynamic> json) => WorkspaceChangedFile(
+        status: json['status'] as String? ?? 'M',
+        path: json['path'] as String? ?? '',
+      );
+}
+
 class WorkspaceModuleStatus {
   const WorkspaceModuleStatus({
     required this.id,
@@ -67,6 +100,7 @@ class WorkspaceModuleStatus {
     required this.expectedCommit,
     required this.expectedBranch,
     required this.locales,
+    required this.recentChanges,
   });
 
   final String id;
@@ -79,6 +113,7 @@ class WorkspaceModuleStatus {
   final String? expectedCommit;
   final String? expectedBranch;
   final Map<String, WorkspaceLocaleStatus> locales;
+  final WorkspaceRecentChanges? recentChanges;
 
   bool get drift => present && !snapshotMatch;
   WorkspaceLocaleStatus? get japanese => locales['ja_jp'];
@@ -95,6 +130,9 @@ class WorkspaceModuleStatus {
       snapshotMatch: json['snapshotMatch'] as bool? ?? false,
       expectedCommit: json['expectedCommit'] as String?,
       expectedBranch: json['expectedBranch'] as String?,
+      recentChanges: json['recentChanges'] is Map
+          ? WorkspaceRecentChanges.fromJson(Map<String, dynamic>.from(json['recentChanges'] as Map))
+          : null,
       locales: rawLocales.map(
         (key, value) => MapEntry(
           key.toString(),
