@@ -5,6 +5,9 @@ import 'package:flutter/material.dart';
 
 import '../live/workspace_live.dart';
 import '../model/graph_data.dart';
+import 'activity_location.dart';
+import 'collapsible_message.dart';
+import 'floating_panel.dart';
 import 'graph_view.dart';
 
 class WorkspaceGraphHost extends StatefulWidget {
@@ -38,16 +41,26 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
   bool _replayLoading = false;
   final List<AgentActivityEvent> _activity = <AgentActivityEvent>[];
   int _activitySequence = 0;
-  final List<DeveloperConversationEntry> _conversation = <DeveloperConversationEntry>[];
+  final List<DeveloperConversationEntry> _conversation =
+      <DeveloperConversationEntry>[];
   final Set<String> _activePolls = <String>{};
   int _conversationRevision = 0;
   int _conversationPollFailures = 0;
   DeveloperConversationDraft? _conversationDraft;
-  final String _conversationClientId = 'viewer:${DateTime.now().microsecondsSinceEpoch}';
+  final String _conversationClientId =
+      'viewer:${DateTime.now().microsecondsSinceEpoch}';
   bool _probing = true;
   bool _refreshing = false;
   bool _savingSettings = false;
   bool _submittingPrompt = false;
+  FloatingPanelDock _workspaceDock = FloatingPanelDock.topLeft;
+  FloatingPanelDock _activityDock = FloatingPanelDock.topCenter;
+  FloatingPanelDock _promptDock = FloatingPanelDock.bottomLeft;
+  bool _workspaceCollapsed = false;
+  bool _activityCollapsed = true;
+  bool _promptCollapsed = false;
+  ActivitySourceLocation? _hoveredActivityLocation;
+  ActivitySourceLocation? _keptOpenActivityLocation;
   String? _liveError;
   String? _liveErrorSource;
 
@@ -115,23 +128,41 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
         _change = change;
         _verification = verification;
         _adapter = adapter;
-        _orchestration = adapter.currentTask?.orchestration ?? adapter.lastTask?.orchestration;
+        _orchestration =
+            adapter.currentTask?.orchestration ??
+            adapter.lastTask?.orchestration;
         _replayTimeline = replayTimeline;
         _replayDraftSequence = replayTimeline.latestSequence.toDouble();
         _mergeActivity(activity);
         _probing = false;
         _liveError = null;
       });
-      _poller = Timer.periodic(const Duration(seconds: 10), (_) => unawaited(_pollStatus()));
-      _activityPoller = Timer.periodic(const Duration(seconds: 2), (_) => unawaited(_pollActivity()));
-      _verificationPoller =
-          Timer.periodic(const Duration(seconds: 8), (_) => unawaited(_pollVerification()));
-      _adapterPoller =
-          Timer.periodic(const Duration(seconds: 3), (_) => unawaited(_pollAdapter()));
-      _replayPoller =
-          Timer.periodic(const Duration(seconds: 5), (_) => unawaited(_pollReplayTimeline()));
-      _conversationPoller =
-          _conversationAvailable ? Timer.periodic(const Duration(milliseconds: 1500), (_) => unawaited(_pollConversation())) : null;
+      _poller = Timer.periodic(
+        const Duration(seconds: 10),
+        (_) => unawaited(_pollStatus()),
+      );
+      _activityPoller = Timer.periodic(
+        const Duration(seconds: 2),
+        (_) => unawaited(_pollActivity()),
+      );
+      _verificationPoller = Timer.periodic(
+        const Duration(seconds: 8),
+        (_) => unawaited(_pollVerification()),
+      );
+      _adapterPoller = Timer.periodic(
+        const Duration(seconds: 3),
+        (_) => unawaited(_pollAdapter()),
+      );
+      _replayPoller = Timer.periodic(
+        const Duration(seconds: 5),
+        (_) => unawaited(_pollReplayTimeline()),
+      );
+      _conversationPoller = _conversationAvailable
+          ? Timer.periodic(
+              const Duration(milliseconds: 1500),
+              (_) => unawaited(_pollConversation()),
+            )
+          : null;
       if (_conversationAvailable) unawaited(_pollConversation());
     } catch (error) {
       client.close();
@@ -147,7 +178,8 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
 
   Future<void> _pollStatus() async {
     final client = _client;
-    if (client == null || _refreshing || !_activePolls.add('workspace-status')) return;
+    if (client == null || _refreshing || !_activePolls.add('workspace-status'))
+      return;
     try {
       final status = await client.workspaceStatus();
       if (!mounted) return;
@@ -157,7 +189,10 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() { _liveError = error.toString(); _liveErrorSource = 'workspace-status'; });
+      setState(() {
+        _liveError = error.toString();
+        _liveErrorSource = 'workspace-status';
+      });
     } finally {
       _activePolls.remove('workspace-status');
     }
@@ -166,7 +201,8 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
   void _mergeActivity(AgentActivityBatch batch) {
     _activitySequence = batch.latestSequence;
     for (final event in batch.events) {
-      if (_activity.any((existing) => existing.sequence == event.sequence)) continue;
+      if (_activity.any((existing) => existing.sequence == event.sequence))
+        continue;
       _activity.add(event);
     }
     if (_activity.length > 80) {
@@ -176,7 +212,10 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
 
   Future<void> _pollActivity() async {
     final client = _client;
-    if (client == null || !_settings.agentActivityEnabled || !_activePolls.add('activity')) return;
+    if (client == null ||
+        !_settings.agentActivityEnabled ||
+        !_activePolls.add('activity'))
+      return;
     try {
       final batch = await client.activity(after: _activitySequence);
       if (!mounted || batch.events.isEmpty) return;
@@ -203,7 +242,10 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() { _liveError = error.toString(); _liveErrorSource = 'activity'; });
+      setState(() {
+        _liveError = error.toString();
+        _liveErrorSource = 'activity';
+      });
     } finally {
       _activePolls.remove('activity');
     }
@@ -213,7 +255,8 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
     _conversationRevision = batch.latestRevision;
     _conversationDraft = batch.draft;
     for (final entry in batch.entries) {
-      if (_conversation.any((existing) => existing.revision == entry.revision)) continue;
+      if (_conversation.any((existing) => existing.revision == entry.revision))
+        continue;
       _conversation.add(entry);
     }
     if (_conversation.length > 80) {
@@ -223,7 +266,11 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
 
   Future<void> _pollConversation() async {
     final client = _client;
-    if (client == null || !_settings.promptEnabled || !_conversationAvailable || !_activePolls.add('conversation')) return;
+    if (client == null ||
+        !_settings.promptEnabled ||
+        !_conversationAvailable ||
+        !_activePolls.add('conversation'))
+      return;
     try {
       final batch = await client.conversation(after: _conversationRevision);
       if (!mounted) return;
@@ -251,7 +298,8 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
 
   void _updateConversationDraft(String text) {
     final client = _client;
-    if (client == null || !_settings.promptEnabled || !_conversationAvailable) return;
+    if (client == null || !_settings.promptEnabled || !_conversationAvailable)
+      return;
     _draftDebounce?.cancel();
     _draftDebounce = Timer(const Duration(milliseconds: 450), () async {
       try {
@@ -268,7 +316,8 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
 
   Future<void> _pollVerification() async {
     final client = _client;
-    if (client == null || _refreshing || !_activePolls.add('verification')) return;
+    if (client == null || _refreshing || !_activePolls.add('verification'))
+      return;
     try {
       final verification = await client.verificationState();
       if (!mounted) return;
@@ -278,7 +327,10 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() { _liveError = error.toString(); _liveErrorSource = 'verification'; });
+      setState(() {
+        _liveError = error.toString();
+        _liveErrorSource = 'verification';
+      });
     } finally {
       _activePolls.remove('verification');
     }
@@ -292,14 +344,18 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
       if (!mounted) return;
       setState(() {
         _adapter = adapter;
-        _orchestration = adapter.currentTask?.orchestration
-            ?? adapter.lastTask?.orchestration
-            ?? _orchestration;
+        _orchestration =
+            adapter.currentTask?.orchestration ??
+            adapter.lastTask?.orchestration ??
+            _orchestration;
         _liveError = null;
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() { _liveError = error.toString(); _liveErrorSource = 'agent-adapter'; });
+      setState(() {
+        _liveError = error.toString();
+        _liveErrorSource = 'agent-adapter';
+      });
     } finally {
       _activePolls.remove('agent-adapter');
     }
@@ -307,7 +363,10 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
 
   Future<void> _pollReplayTimeline() async {
     final client = _client;
-    if (client == null || !_settings.replayEnabled || !_activePolls.add('replay')) return;
+    if (client == null ||
+        !_settings.replayEnabled ||
+        !_activePolls.add('replay'))
+      return;
     try {
       final timeline = await client.replayTimeline();
       if (!mounted) return;
@@ -320,7 +379,10 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
       });
     } catch (error) {
       if (!mounted) return;
-      setState(() { _liveError = error.toString(); _liveErrorSource = 'replay'; });
+      setState(() {
+        _liveError = error.toString();
+        _liveErrorSource = 'replay';
+      });
     } finally {
       _activePolls.remove('replay');
     }
@@ -330,7 +392,10 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
     final client = _client;
     final timeline = _replayTimeline;
     if (client == null || timeline == null || _replayLoading) return;
-    final clamped = sequence.clamp(timeline.earliestSequence, timeline.latestSequence);
+    final clamped = sequence.clamp(
+      timeline.earliestSequence,
+      timeline.latestSequence,
+    );
     if (clamped >= timeline.latestSequence) {
       setState(() {
         _replayFrame = null;
@@ -348,7 +413,11 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
         _liveError = null;
       });
     } catch (error) {
-      if (mounted) setState(() { _liveError = error.toString(); _liveErrorSource = 'replay-frame'; });
+      if (mounted)
+        setState(() {
+          _liveError = error.toString();
+          _liveErrorSource = 'replay-frame';
+        });
     } finally {
       if (mounted) setState(() => _replayLoading = false);
     }
@@ -367,14 +436,20 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
     if (client == null || _savingSettings) return;
     setState(() => _savingSettings = true);
     try {
-      final next = await client.updateViewerSettings(_settings.copyWith(promptEnabled: enabled));
+      final next = await client.updateViewerSettings(
+        _settings.copyWith(promptEnabled: enabled),
+      );
       if (!mounted) return;
       setState(() {
         _settings = next;
         _liveError = null;
       });
     } catch (error) {
-      if (mounted) setState(() { _liveError = error.toString(); _liveErrorSource = 'viewer-settings'; });
+      if (mounted)
+        setState(() {
+          _liveError = error.toString();
+          _liveErrorSource = 'viewer-settings';
+        });
     } finally {
       if (mounted) setState(() => _savingSettings = false);
     }
@@ -383,10 +458,17 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
   Future<void> _submitPrompt(String prompt) async {
     final client = _client;
     final value = prompt.trim();
-    if (client == null || value.isEmpty || _submittingPrompt || !_settings.promptEnabled) return;
+    if (client == null ||
+        value.isEmpty ||
+        _submittingPrompt ||
+        !_settings.promptEnabled)
+      return;
     setState(() => _submittingPrompt = true);
     try {
-      final submission = await client.submitPrompt(value, clientId: _conversationClientId);
+      final submission = await client.submitPrompt(
+        value,
+        clientId: _conversationClientId,
+      );
       final event = submission.event;
       if (!mounted) return;
       setState(() {
@@ -395,14 +477,19 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
           _activitySequence = math.max(_activitySequence, event.sequence);
         }
         if (submission.adapter != null) _adapter = submission.adapter;
-        _orchestration = submission.orchestration?.summary
-            ?? submission.task?.orchestration
-            ?? _orchestration;
+        _orchestration =
+            submission.orchestration?.summary ??
+            submission.task?.orchestration ??
+            _orchestration;
         _liveError = null;
         _liveErrorSource = null;
       });
     } catch (error) {
-      if (mounted) setState(() { _liveError = error.toString(); _liveErrorSource = 'prompt'; });
+      if (mounted)
+        setState(() {
+          _liveError = error.toString();
+          _liveErrorSource = 'prompt';
+        });
     } finally {
       if (mounted) setState(() => _submittingPrompt = false);
     }
@@ -430,7 +517,11 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
         _change = change;
       });
     } catch (error) {
-      if (mounted) setState(() { _liveError = error.toString(); _liveErrorSource = 'refresh'; });
+      if (mounted)
+        setState(() {
+          _liveError = error.toString();
+          _liveErrorSource = 'refresh';
+        });
     } finally {
       if (mounted) setState(() => _refreshing = false);
     }
@@ -451,10 +542,18 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
                 child: Row(
                   children: [
                     const Expanded(
-                      child: Text('LIVE LOCAL · Workspace status',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                      child: Text(
+                        'LIVE LOCAL · Workspace status',
+                        style: TextStyle(
+                          fontSize: 18,
+                          fontWeight: FontWeight.w800,
+                        ),
+                      ),
                     ),
-                    IconButton(onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.close)),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close),
+                    ),
                   ],
                 ),
               ),
@@ -469,22 +568,25 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
                     final state = !module.present
                         ? 'MISSING'
                         : module.dirty
-                            ? 'DIRTY'
-                            : module.drift
-                                ? 'DRIFT'
-                                : 'CLEAN';
+                        ? 'DIRTY'
+                        : module.drift
+                        ? 'DRIFT'
+                        : 'CLEAN';
                     final head = module.head == null
                         ? '—'
                         : module.head!.length > 10
-                            ? module.head!.substring(0, 10)
-                            : module.head!;
+                        ? module.head!.substring(0, 10)
+                        : module.head!;
                     final japanese = module.japanese;
-                    final japaneseState = japanese == null || !japanese.applicable
+                    final japaneseState =
+                        japanese == null || !japanese.applicable
                         ? 'JA n/a'
                         : japanese.complete
-                            ? 'JA complete'
-                            : 'JA ${japanese.translatedKeys}/${japanese.sourceKeys}';
-                    final recentFiles = module.recentChanges?.files ?? const <WorkspaceChangedFile>[];
+                        ? 'JA complete'
+                        : 'JA ${japanese.translatedKeys}/${japanese.sourceKeys}';
+                    final recentFiles =
+                        module.recentChanges?.files ??
+                        const <WorkspaceChangedFile>[];
                     return Container(
                       padding: const EdgeInsets.all(11),
                       decoration: BoxDecoration(
@@ -497,26 +599,37 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
                         children: [
                           SizedBox(
                             width: 72,
-                            child: Text(state,
-                                style: TextStyle(
-                                  fontWeight: FontWeight.w800,
-                                  color: state == 'CLEAN'
-                                      ? const Color(0xFF86EFAC)
-                                      : state == 'DIRTY'
-                                          ? const Color(0xFFFBBF24)
-                                          : const Color(0xFFFCA5A5),
-                                )),
+                            child: Text(
+                              state,
+                              style: TextStyle(
+                                fontWeight: FontWeight.w800,
+                                color: state == 'CLEAN'
+                                    ? const Color(0xFF86EFAC)
+                                    : state == 'DIRTY'
+                                    ? const Color(0xFFFBBF24)
+                                    : const Color(0xFFFCA5A5),
+                              ),
+                            ),
                           ),
                           Expanded(
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(module.repoName.isEmpty ? module.id : module.repoName,
-                                    style: const TextStyle(fontWeight: FontWeight.w700)),
+                                Text(
+                                  module.repoName.isEmpty
+                                      ? module.id
+                                      : module.repoName,
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
                                 const SizedBox(height: 3),
                                 Text(
                                   '${module.branch ?? 'no branch'} · $head${module.snapshotMatch ? ' · snapshot match' : ' · snapshot drift'} · $japaneseState',
-                                  style: const TextStyle(color: Color(0xFF9FB4CA), fontSize: 12),
+                                  style: const TextStyle(
+                                    color: Color(0xFF9FB4CA),
+                                    fontSize: 12,
+                                  ),
                                 ),
                                 if (recentFiles.isNotEmpty) ...[
                                   const SizedBox(height: 5),
@@ -524,7 +637,11 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
                                     'FILES · ${recentFiles.map((file) => '${file.status} ${file.path}').join(' · ')}',
                                     maxLines: 2,
                                     overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(color: Color(0xFF67E8F9), fontSize: 11, fontWeight: FontWeight.w700),
+                                    style: const TextStyle(
+                                      color: Color(0xFF67E8F9),
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                    ),
                                   ),
                                 ],
                               ],
@@ -561,26 +678,43 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('CODE-FIRST · Production source inventory',
-                              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800)),
+                          Text(
+                            'CODE-FIRST · Production source inventory',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.w800,
+                            ),
+                          ),
                           SizedBox(height: 3),
-                          Text('程式碼區域與 surfaces 只採 production Java/Kotlin；data JSON 與 lang JSON 另列為 production resource evidence，不使用 README 或人工 feature 描述。',
-                              style: TextStyle(color: Color(0xFF9FB4CA), fontSize: 12)),
+                          Text(
+                            '程式碼區域與 surfaces 只採 production Java/Kotlin；data JSON 與 lang JSON 另列為 production resource evidence，不使用 README 或人工 feature 描述。',
+                            style: TextStyle(
+                              color: Color(0xFF9FB4CA),
+                              fontSize: 12,
+                            ),
+                          ),
                         ],
                       ),
                     ),
-                    IconButton(onPressed: () => Navigator.of(context).pop(), icon: const Icon(Icons.close)),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(Icons.close),
+                    ),
                   ],
                 ),
               ),
               const Divider(height: 1),
               Expanded(
                 child: inventory.modules.isEmpty
-                    ? const Center(child: Text('尚未建立 production code inventory'))
+                    ? const Center(
+                        child: Text('尚未建立 production code inventory'),
+                      )
                     : ListView.builder(
                         padding: const EdgeInsets.all(12),
                         itemCount: inventory.modules.length,
-                        itemBuilder: (context, index) => _InventoryModuleTile(module: inventory.modules[index]),
+                        itemBuilder: (context, index) => _InventoryModuleTile(
+                          module: inventory.modules[index],
+                        ),
                       ),
               ),
             ],
@@ -596,103 +730,357 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
     final isLocal = _client != null && live != null;
     final replaying = _replayFrame != null && !_replayFrame!.live;
     final liveActivity = _activity.isEmpty ? null : _activity.last;
-    AgentActivityEvent? liveSemanticActivity;
-    final activeTaskId = _adapter?.currentTask?.id;
-    if (activeTaskId != null) {
-      for (final event in _activity.reversed) {
-        if (event.taskId != activeTaskId) continue;
-        final semanticTarget = event.componentId != null || event.featureId != null || event.moduleId != null;
-        final semanticEdit = event.type == 'file_edit' || event.type == 'symbol_edit' || event.type == 'git_diff_updated';
-        if (semanticTarget && semanticEdit) {
-          liveSemanticActivity = event;
-          break;
-        }
-      }
-    }
+    final graphFocusLocation =
+        _keptOpenActivityLocation ?? _hoveredActivityLocation;
     final displayedActivity = replaying ? _replayFrame!.activity : liveActivity;
-    final displayedGraphActivity = replaying ? _replayFrame!.activity : liveSemanticActivity;
-    final displayedChange = replaying ? _replayFrame!.changeIntelligence : _change;
-    final displayedVerification = replaying ? _replayFrame!.verificationState : _verification;
-    final historicalEntityIds = replaying ? _replayFrame!.historicalEntityIds : const <String>{};
+    final displayedChange = replaying
+        ? _replayFrame!.changeIntelligence
+        : _change;
+    final displayedVerification = replaying
+        ? _replayFrame!.verificationState
+        : _verification;
+    final historicalEntityIds = replaying
+        ? _replayFrame!.historicalEntityIds
+        : const <String>{};
+    final taskId =
+        _adapter?.currentTask?.id ??
+        _adapter?.lastTask?.id ??
+        (_replayTimeline?.sessions.isNotEmpty == true
+            ? _replayTimeline!.sessions.last.taskId
+            : null);
+    final showActivityPanel =
+        (isLocal &&
+            _settings.replayEnabled &&
+            _replayTimeline?.hasEvents == true) ||
+        (isLocal && _orchestration != null) ||
+        (isLocal && _adapter != null) ||
+        (isLocal && displayedChange?.hasChanges == true) ||
+        (isLocal &&
+            displayedVerification != null &&
+            (displayedVerification.hasState ||
+                displayedVerification.activePlan.modules.isNotEmpty)) ||
+        (isLocal &&
+            _settings.agentActivityEnabled &&
+            displayedActivity != null);
+
     return Scaffold(
       backgroundColor: const Color(0xFF050B14),
-      body: Column(
-        children: [
-          _ModeBanner(
-            probing: _probing,
-            local: isLocal,
-            refreshing: _refreshing,
-            savingSettings: _savingSettings,
-            promptEnabled: _settings.promptEnabled,
-            live: live,
-            error: _liveError,
-            errorSource: _liveErrorSource,
-            onRefresh: isLocal ? _refreshWorkspace : null,
-            onStatus: isLocal ? _showWorkspaceStatus : null,
-            onInventory: _showCodeInventory,
-            onPromptChanged: isLocal ? _setPromptEnabled : null,
+      body: SafeArea(
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: GraphView(
+                data: _data,
+                activityFeatureId: graphFocusLocation?.featureId,
+                activityComponentId: graphFocusLocation?.componentId,
+                activityModuleId: graphFocusLocation?.moduleId,
+                activityType: graphFocusLocation == null ? null : 'file_edit',
+                autoExpandAgentFocus: graphFocusLocation != null,
+                changedEntityIds:
+                    displayedChange?.changedEntityIds ?? const <String>{},
+                impactedModuleIds:
+                    displayedChange?.impactedModuleIds ?? const <String>{},
+                showChangeNodeIndicators: false,
+                changeAnimationsEnabled: _settings.changeAnimationsEnabled,
+                runningVerificationTargetIds:
+                    displayedVerification?.runningTargetIds ?? const <String>{},
+                passedVerificationTargetIds:
+                    displayedVerification?.passedTargetIds ?? const <String>{},
+                failedVerificationTargetIds:
+                    displayedVerification?.failedTargetIds ?? const <String>{},
+                historicalEntityIds: historicalEntityIds,
+              ),
+            ),
+            FloatingPanel(
+              title: '工作區',
+              icon: Icons.hub_outlined,
+              dock: _workspaceDock,
+              collapsed: _workspaceCollapsed,
+              onCollapsedChanged: (value) =>
+                  setState(() => _workspaceCollapsed = value),
+              onDockChanged: (value) => setState(() => _workspaceDock = value),
+              width: 430,
+              child: _ModeBanner(
+                probing: _probing,
+                local: isLocal,
+                refreshing: _refreshing,
+                savingSettings: _savingSettings,
+                promptEnabled: _settings.promptEnabled,
+                live: live,
+                error: _liveError,
+                errorSource: _liveErrorSource,
+                onRefresh: isLocal ? _refreshWorkspace : null,
+                onStatus: isLocal ? _showWorkspaceStatus : null,
+                onInventory: _showCodeInventory,
+                onPromptChanged: isLocal ? _setPromptEnabled : null,
+              ),
+            ),
+            if (showActivityPanel)
+              FloatingPanel(
+                title: '開發活動',
+                icon: Icons.bolt_outlined,
+                dock: _activityDock,
+                collapsed: _activityCollapsed,
+                onCollapsedChanged: (value) =>
+                    setState(() => _activityCollapsed = value),
+                onDockChanged: (value) => setState(() => _activityDock = value),
+                width: 520,
+                expandedHeight: 272,
+                child: _LiveActivityPanel(
+                  replay:
+                      isLocal &&
+                          _settings.replayEnabled &&
+                          _replayTimeline?.hasEvents == true
+                      ? _ReplayScrubber(
+                          timeline: _replayTimeline!,
+                          sequence:
+                              _replayDraftSequence ??
+                              _replayTimeline!.latestSequence.toDouble(),
+                          replaying: replaying,
+                          loading: _replayLoading,
+                          onChanged: (value) =>
+                              setState(() => _replayDraftSequence = value),
+                          onChangeEnd: (value) =>
+                              unawaited(_selectReplaySequence(value.round())),
+                          onLive: _goReplayLive,
+                        )
+                      : null,
+                  orchestration: isLocal && _orchestration != null
+                      ? _OrchestrationStrip(summary: _orchestration!)
+                      : null,
+                  adapter: isLocal && _adapter != null
+                      ? _AgentAdapterStrip(
+                          status: _adapter!,
+                          replaySession:
+                              _replayTimeline?.sessions.isNotEmpty == true
+                              ? _replayTimeline!.sessions.last
+                              : null,
+                        )
+                      : null,
+                  change: isLocal && displayedChange?.hasChanges == true
+                      ? _ChangeStrip(change: displayedChange!)
+                      : null,
+                  verification:
+                      isLocal &&
+                          displayedVerification != null &&
+                          (displayedVerification.hasState ||
+                              displayedVerification
+                                  .activePlan
+                                  .modules
+                                  .isNotEmpty)
+                      ? _VerificationStrip(state: displayedVerification)
+                      : null,
+                  activity:
+                      isLocal &&
+                          _settings.agentActivityEnabled &&
+                          displayedActivity != null
+                      ? _ActivityStrip(event: displayedActivity)
+                      : null,
+                ),
+              ),
+            if (isLocal && _settings.promptEnabled)
+              FloatingPanel(
+                title: taskId == null ? 'Prompt' : 'Prompt · Codex Console',
+                icon: Icons.chat_outlined,
+                dock: _promptDock,
+                collapsed: _promptCollapsed,
+                onCollapsedChanged: (value) =>
+                    setState(() => _promptCollapsed = value),
+                onDockChanged: (value) => setState(() => _promptDock = value),
+                width: 560,
+                expandedHeight: taskId == null ? 210 : 448,
+                child: _PromptPanel(
+                  submitting: _submittingPrompt,
+                  onSubmit: _submitPrompt,
+                  onDraftChanged: _updateConversationDraft,
+                  locationForEvent: _activityLocationFor,
+                  onLocationSelected: _showActivitySourceLocation,
+                  onLocationHoverChanged: _setHoveredActivityLocation,
+                  keptOpenLocation: _keptOpenActivityLocation,
+                  onLocationKeepOpenChanged: _toggleKeptOpenActivityLocation,
+                  events: _activity,
+                  conversation: _conversation,
+                  draft: _conversationDraft,
+                  localDraftClientId: _conversationClientId,
+                  taskId: taskId,
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  ActivitySourceLocation? _activityLocationFor(AgentActivityEvent event) {
+    final moduleId = event.moduleId?.trim();
+    final moduleName = moduleId == null || moduleId.isEmpty
+        ? 'TotemWorkspace'
+        : _data.moduleById(moduleId)?.name ?? moduleId;
+    return ActivitySourceLocation.fromEvent(event, moduleName: moduleName);
+  }
+
+  void _setHoveredActivityLocation(
+    ActivitySourceLocation location,
+    bool hovering,
+  ) {
+    final current = _hoveredActivityLocation;
+    final sameLocation = location.matches(current);
+    if (hovering) {
+      if (sameLocation) return;
+      setState(() => _hoveredActivityLocation = location);
+    } else if (sameLocation) {
+      setState(() => _hoveredActivityLocation = null);
+    }
+  }
+
+  void _toggleKeptOpenActivityLocation(ActivitySourceLocation location) {
+    setState(() {
+      _keptOpenActivityLocation = location.matches(_keptOpenActivityLocation)
+          ? null
+          : location;
+    });
+  }
+
+  void _showActivitySourceLocation(
+    ActivitySourceLocation location,
+    Rect anchor,
+  ) {
+    final overlay = Overlay.of(
+      context,
+      rootOverlay: true,
+    ).context.findRenderObject();
+    if (overlay is! RenderBox) return;
+    unawaited(
+      showMenu<void>(
+        context: context,
+        position: RelativeRect.fromRect(anchor, Offset.zero & overlay.size),
+        color: const Color(0xFF0A1826),
+        elevation: 16,
+        constraints: const BoxConstraints(maxWidth: 460),
+        items: [
+          PopupMenuItem<void>(
+            enabled: false,
+            padding: EdgeInsets.zero,
+            child: _ActivitySourceLocationPopover(location: location),
           ),
-          if (isLocal && _settings.replayEnabled && _replayTimeline?.hasEvents == true)
-            _ReplayScrubber(
-              timeline: _replayTimeline!,
-              sequence: _replayDraftSequence ?? _replayTimeline!.latestSequence.toDouble(),
-              replaying: replaying,
-              loading: _replayLoading,
-              onChanged: (value) => setState(() => _replayDraftSequence = value),
-              onChangeEnd: (value) => unawaited(_selectReplaySequence(value.round())),
-              onLive: _goReplayLive,
+        ],
+      ),
+    );
+  }
+}
+
+class _ActivitySourceLocationPopover extends StatelessWidget {
+  const _ActivitySourceLocationPopover({required this.location});
+
+  final ActivitySourceLocation location;
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      width: 420,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: SelectionArea(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Row(
+                children: [
+                  Icon(Icons.edit_note_outlined, color: Color(0xFF67E8F9)),
+                  SizedBox(width: 8),
+                  Text('變更位置', style: TextStyle(fontWeight: FontWeight.w800)),
+                ],
+              ),
+              const SizedBox(height: 10),
+              const Text(
+                '這是目前 Prompt 執行事件的即時定位；不會另外建立已修改檔案清單。',
+                style: TextStyle(fontSize: 12, height: 1.4),
+              ),
+              const SizedBox(height: 14),
+              _SourceLocationField(label: '模組', value: location.moduleName),
+              if (location.moduleId != null)
+                _SourceLocationField(
+                  label: 'Module ID',
+                  value: location.moduleId!,
+                ),
+              _SourceLocationField(label: '相對路徑', value: location.file),
+              for (final target in location.semanticTargets)
+                _SourceLocationField(label: '語意位置', value: target),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SourceLocationField extends StatelessWidget {
+  const _SourceLocationField({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 10),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: const TextStyle(
+              color: Color(0xFF64748B),
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.2,
             ),
-          if (isLocal && _orchestration != null)
-            _OrchestrationStrip(summary: _orchestration!),
-          if (isLocal && _adapter != null)
-            _AgentAdapterStrip(
-              status: _adapter!,
-              replaySession: _replayTimeline?.sessions.isNotEmpty == true
-                  ? _replayTimeline!.sessions.last
-                  : null,
-            ),
-          if (isLocal && displayedChange?.hasChanges == true)
-            _ChangeStrip(change: displayedChange!),
-          if (isLocal && displayedVerification != null && (displayedVerification.hasState || displayedVerification.activePlan.modules.isNotEmpty))
-            _VerificationStrip(state: displayedVerification),
-          if (isLocal && _settings.agentActivityEnabled && displayedActivity != null)
-            _ActivityStrip(event: displayedActivity),
-          if (isLocal && _settings.promptEnabled)
-            _PromptPanel(
-              submitting: _submittingPrompt,
-              onSubmit: _submitPrompt,
-              onDraftChanged: _updateConversationDraft,
-              events: _activity,
-              conversation: _conversation,
-              draft: _conversationDraft,
-              localDraftClientId: _conversationClientId,
-              taskId: _adapter?.currentTask?.id ??
-                  _adapter?.lastTask?.id ??
-                  (_replayTimeline?.sessions.isNotEmpty == true
-                      ? _replayTimeline!.sessions.last.taskId
-                      : null),
-            ),
-          Expanded(
-            child: GraphView(
-              data: _data,
-              activityFeatureId: displayedGraphActivity?.featureId,
-              activityComponentId: displayedGraphActivity?.componentId,
-              activityModuleId: displayedGraphActivity?.moduleId,
-              activityType: displayedGraphActivity?.type,
-              autoExpandAgentFocus: _settings.autoExpandAgentFocus,
-              changedEntityIds: displayedChange?.changedEntityIds ?? const <String>{},
-              impactedModuleIds: displayedChange?.impactedModuleIds ?? const <String>{},
-              changeAnimationsEnabled: _settings.changeAnimationsEnabled,
-              runningVerificationTargetIds: displayedVerification?.runningTargetIds ?? const <String>{},
-              passedVerificationTargetIds: displayedVerification?.passedTargetIds ?? const <String>{},
-              failedVerificationTargetIds: displayedVerification?.failedTargetIds ?? const <String>{},
-              historicalEntityIds: historicalEntityIds,
+          ),
+          const SizedBox(height: 2),
+          SelectableText(
+            value,
+            style: const TextStyle(
+              fontFamily: 'monospace',
+              fontSize: 12,
+              height: 1.35,
             ),
           ),
         ],
       ),
     );
   }
+}
+
+class _LiveActivityPanel extends StatelessWidget {
+  const _LiveActivityPanel({
+    this.replay,
+    this.orchestration,
+    this.adapter,
+    this.change,
+    this.verification,
+    this.activity,
+  });
+
+  final Widget? replay;
+  final Widget? orchestration;
+  final Widget? adapter;
+  final Widget? change;
+  final Widget? verification;
+  final Widget? activity;
+
+  @override
+  Widget build(BuildContext context) => ListView(
+    padding: EdgeInsets.zero,
+    children: [
+      if (replay != null) replay!,
+      if (orchestration != null) orchestration!,
+      if (adapter != null) adapter!,
+      if (change != null) change!,
+      if (verification != null) verification!,
+      if (activity != null) activity!,
+    ],
+  );
 }
 
 class _ReplayScrubber extends StatelessWidget {
@@ -731,7 +1119,9 @@ class _ReplayScrubber extends StatelessWidget {
           Text(
             replaying ? 'REPLAY · #${value.round()}' : 'REPLAY · LIVE',
             style: TextStyle(
-              color: replaying ? const Color(0xFFC4B5FD) : const Color(0xFF86EFAC),
+              color: replaying
+                  ? const Color(0xFFC4B5FD)
+                  : const Color(0xFF86EFAC),
               fontSize: 11,
               fontWeight: FontWeight.w800,
             ),
@@ -772,7 +1162,9 @@ class _OrchestrationStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final roles = summary.roles.isEmpty ? 'Primary only' : summary.roles.join(', ');
+    final roles = summary.roles.isEmpty
+        ? 'Primary only'
+        : summary.roles.join(', ');
     final color = switch (summary.mode) {
       'guarded-parallel' => const Color(0xFFF0ABFC),
       'bounded-parallel' => const Color(0xFFC4B5FD),
@@ -802,10 +1194,7 @@ class _OrchestrationStrip extends StatelessWidget {
 }
 
 class _AgentAdapterStrip extends StatelessWidget {
-  const _AgentAdapterStrip({
-    required this.status,
-    required this.replaySession,
-  });
+  const _AgentAdapterStrip({required this.status, required this.replaySession});
 
   final AgentAdapterStatus status;
   final ReplaySession? replaySession;
@@ -818,16 +1207,16 @@ class _AgentAdapterStrip extends StatelessWidget {
     final state = status.busy && current != null
         ? 'RUNNING'
         : last != null
-            ? last.state.toUpperCase()
-            : replay != null
-                ? replay.state == 'running'
-                    ? 'INTERRUPTED'
-                    : replay.state.toUpperCase()
-                : status.available
-                    ? 'READY'
-                    : status.configured
-                        ? 'UNAVAILABLE'
-                        : 'OFF';
+        ? last.state.toUpperCase()
+        : replay != null
+        ? replay.state == 'running'
+              ? 'INTERRUPTED'
+              : replay.state.toUpperCase()
+        : status.available
+        ? 'READY'
+        : status.configured
+        ? 'UNAVAILABLE'
+        : 'OFF';
     final taskId = current?.id ?? last?.id ?? replay?.taskId;
     final summary = current?.summary ?? last?.summary ?? replay?.summary;
     final endedAt = last?.completedAt ?? replay?.endedAt;
@@ -844,7 +1233,8 @@ class _AgentAdapterStrip extends StatelessWidget {
       if (summary != null && summary.isNotEmpty) summary,
       if (endedAt != null && endedAt.isNotEmpty) 'ended $endedAt',
       if (error != null && error.isNotEmpty) error,
-      if (state == 'INTERRUPTED') 'Replay still shows a running task, but this Bridge no longer owns an active Codex process.',
+      if (state == 'INTERRUPTED')
+        'Replay still shows a running task, but this Bridge no longer owns an active Codex process.',
     ].join('\n');
     return Container(
       width: double.infinity,
@@ -914,15 +1304,15 @@ class _VerificationStrip extends StatelessWidget {
     final status = state.failedCount > 0
         ? 'FAIL ${state.failedCount}'
         : state.runningCount > 0
-            ? 'RUN ${state.runningCount}'
-            : state.passedCount > 0
-                ? 'PASS ${state.passedCount}'
-                : 'READY';
+        ? 'RUN ${state.runningCount}'
+        : state.passedCount > 0
+        ? 'PASS ${state.passedCount}'
+        : 'READY';
     final color = state.failedCount > 0
         ? const Color(0xFFF87171)
         : state.runningCount > 0
-            ? const Color(0xFF67E8F9)
-            : const Color(0xFF86EFAC);
+        ? const Color(0xFF67E8F9)
+        : const Color(0xFF86EFAC);
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
@@ -981,6 +1371,11 @@ class _PromptPanel extends StatefulWidget {
     required this.submitting,
     required this.onSubmit,
     required this.onDraftChanged,
+    required this.locationForEvent,
+    required this.onLocationSelected,
+    required this.onLocationHoverChanged,
+    required this.keptOpenLocation,
+    required this.onLocationKeepOpenChanged,
     required this.events,
     required this.conversation,
     required this.draft,
@@ -991,6 +1386,14 @@ class _PromptPanel extends StatefulWidget {
   final bool submitting;
   final ValueChanged<String> onSubmit;
   final ValueChanged<String> onDraftChanged;
+  final ActivitySourceLocation? Function(AgentActivityEvent event)
+  locationForEvent;
+  final void Function(ActivitySourceLocation location, Rect anchor)
+  onLocationSelected;
+  final void Function(ActivitySourceLocation location, bool hovering)
+  onLocationHoverChanged;
+  final ActivitySourceLocation? keptOpenLocation;
+  final ValueChanged<ActivitySourceLocation> onLocationKeepOpenChanged;
   final List<AgentActivityEvent> events;
   final List<DeveloperConversationEntry> conversation;
   final DeveloperConversationDraft? draft;
@@ -1008,7 +1411,9 @@ class _PromptPanelState extends State<_PromptPanel> {
   @override
   void didUpdateWidget(covariant _PromptPanel oldWidget) {
     super.didUpdateWidget(oldWidget);
-    final oldSequence = oldWidget.events.isEmpty ? 0 : oldWidget.events.last.sequence;
+    final oldSequence = oldWidget.events.isEmpty
+        ? 0
+        : oldWidget.events.last.sequence;
     final newSequence = widget.events.isEmpty ? 0 : widget.events.last.sequence;
     if (oldSequence != newSequence) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1071,9 +1476,11 @@ class _PromptPanelState extends State<_PromptPanel> {
   }
 
   String _eventHeadline(AgentActivityEvent event) {
-    if (event.command != null && event.command!.isNotEmpty) return event.command!;
+    if (event.command != null && event.command!.isNotEmpty)
+      return event.command!;
     if (event.tool != null && event.tool!.isNotEmpty) return event.tool!;
-    if (event.file != null && event.file!.isNotEmpty && event.summary == null) return event.file!;
+    if (event.file != null && event.file!.isNotEmpty && event.summary == null)
+      return event.file!;
     return event.summary ?? event.targetLabel;
   }
 
@@ -1081,157 +1488,243 @@ class _PromptPanelState extends State<_PromptPanel> {
   Widget build(BuildContext context) {
     final taskEvents = widget.taskId == null
         ? const <AgentActivityEvent>[]
-        : widget.events.where((event) => event.taskId == widget.taskId).toList(growable: false);
+        : widget.events
+              .where((event) => event.taskId == widget.taskId)
+              .toList(growable: false);
     final visibleEvents = taskEvents.length > 80
         ? taskEvents.sublist(taskEvents.length - 80)
         : taskEvents;
 
-    return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF07111D),
-        border: Border(bottom: BorderSide(color: Color(0xFF2B4058))),
-      ),
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.end,
-              children: [
-                Expanded(
-                  child: TextField(
-                    controller: _controller,
-                    enabled: !widget.submitting,
-                    minLines: 1,
-                    maxLines: 6,
-                    keyboardType: TextInputType.multiline,
-                    onChanged: widget.onDraftChanged,
-                    decoration: const InputDecoration(
-                      isDense: true,
-                      hintText: '輸入 Prompt（支援多行；送出後下方會顯示 Codex CLI 等級的執行紀錄）',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                FilledButton.icon(
-                  onPressed: widget.submitting ? null : _submit,
-                  icon: widget.submitting
-                      ? const SizedBox.square(
-                          dimension: 14,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.send, size: 16),
-                  label: Text(widget.submitting ? '送出中' : '送出'),
-                ),
-              ],
-            ),
+    final remoteDraft =
+        widget.draft != null &&
+        widget.draft!.clientId != widget.localDraftClientId;
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxHeight < 360;
+        final tiny = constraints.maxHeight < 300;
+        final showRemoteDraft = remoteDraft && !tiny;
+        final showConversation = widget.conversation.isNotEmpty && !tiny;
+        final conversationHeight = !showConversation
+            ? 0.0
+            : (compact ? 72.0 : 112.0);
+        final draftHeight = !showRemoteDraft ? 0.0 : (compact ? 46.0 : 64.0);
+        return Container(
+          decoration: const BoxDecoration(
+            color: Color(0xFF07111D),
+            border: Border(bottom: BorderSide(color: Color(0xFF2B4058))),
           ),
-          if (widget.draft != null && widget.draft!.clientId != widget.localDraftClientId)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
-              color: const Color(0xFF102033),
-              child: SelectableText(
-                'DISCORD 草稿（送出前）\n${widget.draft!.text}',
-                style: const TextStyle(color: Color(0xFFBFDBFE), fontSize: 11, height: 1.35),
-              ),
-            ),
-          if (widget.conversation.isNotEmpty)
-            Container(
-              height: 118,
-              width: double.infinity,
-              decoration: const BoxDecoration(
-                color: Color(0xFF08131F),
-                border: Border(top: BorderSide(color: Color(0xFF1E3144))),
-              ),
-              child: ListView.builder(
-                padding: const EdgeInsets.fromLTRB(12, 7, 12, 7),
-                itemCount: widget.conversation.length,
-                itemBuilder: (context, index) {
-                  final entry = widget.conversation[index];
-                  final label = entry.source == 'discord'
-                      ? 'DISCORD'
-                      : entry.source == 'viewer'
-                          ? 'WEB'
-                          : 'WORKSPACE';
-                  final color = entry.kind == 'prompt'
-                      ? const Color(0xFFFDE68A)
-                      : entry.status == 'failed'
-                          ? const Color(0xFFFCA5A5)
-                          : const Color(0xFFCBD5E1);
-                  return Padding(
-                    padding: const EdgeInsets.only(bottom: 5),
-                    child: SelectableText(
-                      '[$label] ${entry.text}',
-                      style: TextStyle(fontFamily: 'monospace', fontSize: 11, height: 1.3, color: color),
-                    ),
-                  );
-                },
-              ),
-            ),
-          if (widget.taskId != null)
-            Container(
-              height: 220,
-              width: double.infinity,
-              decoration: const BoxDecoration(
-                color: Color(0xFF050A10),
-                border: Border(top: BorderSide(color: Color(0xFF1E3144))),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(12, 7, 12, 5),
-                    child: Text(
-                      'CODEX CONSOLE · ${widget.taskId} · ${taskEvents.length} events',
-                      style: const TextStyle(
-                        color: Color(0xFF9FB4CA),
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0.3,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Expanded(
+                      child: TextField(
+                        controller: _controller,
+                        enabled: !widget.submitting,
+                        minLines: 1,
+                        maxLines: compact ? 3 : 6,
+                        keyboardType: TextInputType.multiline,
+                        onChanged: widget.onDraftChanged,
+                        decoration: const InputDecoration(
+                          isDense: true,
+                          hintText:
+                              '輸入 Prompt（支援多行；送出後下方會顯示 Codex CLI 等級的執行紀錄）',
+                          border: OutlineInputBorder(),
+                        ),
                       ),
                     ),
-                  ),
-                  Expanded(
-                    child: ListView.builder(
-                      controller: _consoleScroll,
-                      padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
-                      itemCount: visibleEvents.length,
-                      itemBuilder: (context, index) {
-                        final event = visibleEvents[index];
-                        final headline = _eventHeadline(event);
-                        final detail = event.detail;
-                        final usage = event.usage;
-                        return Padding(
-                          padding: const EdgeInsets.only(bottom: 7),
-                          child: SelectableText(
-                            [
-                              '${_eventLabel(event)} ${headline.isEmpty ? event.type : headline}',
-                              if (detail != null && detail.isNotEmpty) detail,
-                              if (usage != null)
-                                'input ${usage.inputTokens} · cached ${usage.cachedInputTokens} · output ${usage.outputTokens} · total ${usage.totalTokens}',
-                            ].join('\n'),
-                            style: TextStyle(
-                              fontFamily: 'monospace',
-                              fontSize: 11,
-                              height: 1.35,
-                              color: event.type == 'task_failed' || event.status == 'failed'
-                                  ? const Color(0xFFFCA5A5)
-                                  : event.type == 'agent_message'
-                                      ? const Color(0xFFD1FAE5)
-                                      : const Color(0xFFCBD5E1),
-                            ),
+                    const SizedBox(width: 8),
+                    FilledButton.icon(
+                      onPressed: widget.submitting ? null : _submit,
+                      icon: widget.submitting
+                          ? const SizedBox.square(
+                              dimension: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.send, size: 16),
+                      label: Text(widget.submitting ? '送出中' : '送出'),
+                    ),
+                  ],
+                ),
+              ),
+              if (showRemoteDraft)
+                SizedBox(
+                  height: draftHeight,
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.fromLTRB(12, 6, 12, 6),
+                    color: const Color(0xFF102033),
+                    child: ListView(
+                      children: [
+                        SelectableText(
+                          'DISCORD 草稿（送出前）\n${widget.draft!.text}',
+                          style: const TextStyle(
+                            color: Color(0xFFBFDBFE),
+                            fontSize: 11,
+                            height: 1.35,
                           ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              if (showConversation)
+                SizedBox(
+                  height: conversationHeight,
+                  child: Container(
+                    width: double.infinity,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF08131F),
+                      border: Border(top: BorderSide(color: Color(0xFF1E3144))),
+                    ),
+                    child: ListView.builder(
+                      padding: const EdgeInsets.fromLTRB(12, 7, 12, 7),
+                      itemCount: widget.conversation.length,
+                      itemBuilder: (context, index) {
+                        final entry = widget.conversation[index];
+                        final label = entry.source == 'discord'
+                            ? 'DISCORD'
+                            : entry.source == 'viewer'
+                            ? 'WEB'
+                            : 'WORKSPACE';
+                        final color = entry.kind == 'prompt'
+                            ? const Color(0xFFFDE68A)
+                            : entry.status == 'failed'
+                            ? const Color(0xFFFCA5A5)
+                            : const Color(0xFFCBD5E1);
+                        return Padding(
+                          padding: const EdgeInsets.only(bottom: 5),
+                          child: entry.kind == 'prompt'
+                              ? SelectableText(
+                                  '[$label] ${entry.text}',
+                                  style: TextStyle(
+                                    fontFamily: 'monospace',
+                                    fontSize: 11,
+                                    height: 1.3,
+                                    color: color,
+                                  ),
+                                )
+                              : CollapsibleMessage(
+                                  key: ValueKey(
+                                    'conversation-output:${entry.revision}',
+                                  ),
+                                  text: '[$label] ${entry.text}',
+                                  style: TextStyle(
+                                    fontFamily: 'monospace',
+                                    fontSize: 11,
+                                    height: 1.3,
+                                    color: color,
+                                  ),
+                                ),
                         );
                       },
                     ),
                   ),
-                ],
-              ),
-            ),
-        ],
-      ),
+                ),
+              if (widget.taskId != null)
+                Expanded(
+                  child: Container(
+                    width: double.infinity,
+                    decoration: const BoxDecoration(
+                      color: Color(0xFF050A10),
+                      border: Border(top: BorderSide(color: Color(0xFF1E3144))),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Padding(
+                          padding: const EdgeInsets.fromLTRB(12, 7, 12, 5),
+                          child: Text(
+                            'CODEX CONSOLE · ${widget.taskId} · ${taskEvents.length} events',
+                            style: const TextStyle(
+                              color: Color(0xFF9FB4CA),
+                              fontSize: 10,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.3,
+                            ),
+                          ),
+                        ),
+                        Expanded(
+                          child: ListView.builder(
+                            controller: _consoleScroll,
+                            padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+                            itemCount: visibleEvents.length,
+                            itemBuilder: (context, index) {
+                              final event = visibleEvents[index];
+                              final headline = _eventHeadline(event);
+                              final detail = event.detail;
+                              final usage = event.usage;
+                              final location = widget.locationForEvent(event);
+                              return Padding(
+                                padding: const EdgeInsets.only(bottom: 7),
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    if (location != null) ...[
+                                      ActivitySourceLocationCard(
+                                        location: location,
+                                        onTap: (anchor) =>
+                                            widget.onLocationSelected(
+                                              location,
+                                              anchor,
+                                            ),
+                                        onHoverChanged: (hovering) =>
+                                            widget.onLocationHoverChanged(
+                                              location,
+                                              hovering,
+                                            ),
+                                        keptOpen: location.matches(
+                                          widget.keptOpenLocation,
+                                        ),
+                                        onKeepOpenChanged: () =>
+                                            widget.onLocationKeepOpenChanged(
+                                              location,
+                                            ),
+                                      ),
+                                      const SizedBox(height: 5),
+                                    ],
+                                    CollapsibleMessage(
+                                      key: ValueKey(
+                                        'console-event:${event.sequence}',
+                                      ),
+                                      text: [
+                                        '${_eventLabel(event)} ${headline.isEmpty ? event.type : headline}',
+                                        if (detail != null && detail.isNotEmpty)
+                                          detail,
+                                        if (usage != null)
+                                          'input ${usage.inputTokens} · cached ${usage.cachedInputTokens} · output ${usage.outputTokens} · total ${usage.totalTokens}',
+                                      ].join('\n'),
+                                      style: TextStyle(
+                                        fontFamily: 'monospace',
+                                        fontSize: 11,
+                                        height: 1.35,
+                                        color:
+                                            event.type == 'task_failed' ||
+                                                event.status == 'failed'
+                                            ? const Color(0xFFFCA5A5)
+                                            : event.type == 'agent_message'
+                                            ? const Color(0xFFD1FAE5)
+                                            : const Color(0xFFCBD5E1),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+            ],
+          ),
+        );
+      },
     );
   }
 }
@@ -1263,28 +1756,37 @@ class _InventoryModuleTile extends StatelessWidget {
     return Card(
       margin: const EdgeInsets.only(bottom: 8),
       child: ExpansionTile(
-        title: Text(module.repoName.isEmpty ? module.moduleId : module.repoName,
-            style: const TextStyle(fontWeight: FontWeight.w700)),
+        title: Text(
+          module.repoName.isEmpty ? module.moduleId : module.repoName,
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
         subtitle: Text(
           '${module.productionFileCount} production code files · ${module.components.length} components · ${module.resourceEvidence.fileCount} resource files\n${_surfaceSummary()}',
           style: const TextStyle(fontSize: 11, color: Color(0xFF9FB4CA)),
         ),
         childrenPadding: const EdgeInsets.fromLTRB(16, 0, 16, 14),
         children: [
-          if (module.packageRoot != null) _InventoryLine('Package root', module.packageRoot!),
+          if (module.packageRoot != null)
+            _InventoryLine('Package root', module.packageRoot!),
           const _InventoryTitle('L3 Components inferred from production code'),
-          if (module.components.isEmpty) const _InventoryLine('Components', 'No production source indexed'),
+          if (module.components.isEmpty)
+            const _InventoryLine('Components', 'No production source indexed'),
           for (final component in module.components.take(16))
             _InventoryLine(
               '${component.label} · ${component.fileCount} files · ${component.mappingConfidence}',
               [
-                if (component.featureIds.isNotEmpty) 'Feature: ${component.featureIds.join(', ')}',
-                if (component.surfaceKinds.isNotEmpty) 'Surfaces: ${component.surfaceKinds.join(', ')}',
-                if (component.symbols.isNotEmpty) component.symbols.take(8).join(', '),
-                if (component.representativePaths.isNotEmpty) component.representativePaths.first,
+                if (component.featureIds.isNotEmpty)
+                  'Feature: ${component.featureIds.join(', ')}',
+                if (component.surfaceKinds.isNotEmpty)
+                  'Surfaces: ${component.surfaceKinds.join(', ')}',
+                if (component.symbols.isNotEmpty)
+                  component.symbols.take(8).join(', '),
+                if (component.representativePaths.isNotEmpty)
+                  component.representativePaths.first,
               ].join('\n'),
             ),
-          if (module.resourceEvidence.families.isNotEmpty) const _InventoryTitle('Production resource evidence'),
+          if (module.resourceEvidence.families.isNotEmpty)
+            const _InventoryTitle('Production resource evidence'),
           for (final family in module.resourceEvidence.families.take(16))
             _InventoryLine(
               '${family.label} · ${family.fileCount} files',
@@ -1301,16 +1803,28 @@ class _InventoryModuleTile extends StatelessWidget {
             'mixins': 'Mixins',
             'integrations': 'Integration-signalling code',
           }.entries) ...[
-            if (module.surface(entry.key).isNotEmpty) _InventoryTitle(entry.value),
+            if (module.surface(entry.key).isNotEmpty)
+              _InventoryTitle(entry.value),
             for (final item in module.surface(entry.key).take(6))
-              _InventoryLine(item.label, '${item.path}${item.symbols.isEmpty ? '' : '\n${item.symbols.take(8).join(', ')}'}'),
+              _InventoryLine(
+                item.label,
+                '${item.path}${item.symbols.isEmpty ? '' : '\n${item.symbols.take(8).join(', ')}'}',
+              ),
           ],
-          if (module.crossModuleImports.isNotEmpty) const _InventoryTitle('Cross-module imports'),
+          if (module.crossModuleImports.isNotEmpty)
+            const _InventoryTitle('Cross-module imports'),
           for (final link in module.crossModuleImports)
-            _InventoryLine(link.targetModuleId, link.evidencePaths.take(5).join('\n')),
-          if (module.integrations.isNotEmpty) const _InventoryTitle('External package evidence'),
+            _InventoryLine(
+              link.targetModuleId,
+              link.evidencePaths.take(5).join('\n'),
+            ),
+          if (module.integrations.isNotEmpty)
+            const _InventoryTitle('External package evidence'),
           for (final integration in module.integrations.take(10))
-            _InventoryLine(integration.packageRoot, integration.evidencePaths.take(4).join('\n')),
+            _InventoryLine(
+              integration.packageRoot,
+              integration.evidencePaths.take(4).join('\n'),
+            ),
         ],
       ),
     );
@@ -1323,13 +1837,19 @@ class _InventoryTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(top: 12, bottom: 5),
-        child: Align(
-          alignment: Alignment.centerLeft,
-          child: Text(text.toUpperCase(),
-              style: const TextStyle(color: Color(0xFF93C5FD), fontSize: 10, fontWeight: FontWeight.w800)),
+    padding: const EdgeInsets.only(top: 12, bottom: 5),
+    child: Align(
+      alignment: Alignment.centerLeft,
+      child: Text(
+        text.toUpperCase(),
+        style: const TextStyle(
+          color: Color(0xFF93C5FD),
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
         ),
-      );
+      ),
+    ),
+  );
 }
 
 class _InventoryLine extends StatelessWidget {
@@ -1339,25 +1859,35 @@ class _InventoryLine extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: double.infinity,
-        margin: const EdgeInsets.only(bottom: 5),
-        padding: const EdgeInsets.all(9),
-        decoration: BoxDecoration(
-          color: const Color(0xFF0E1B2A),
-          border: Border.all(color: const Color(0xFF334B63)),
-          borderRadius: BorderRadius.circular(8),
+    width: double.infinity,
+    margin: const EdgeInsets.only(bottom: 5),
+    padding: const EdgeInsets.all(9),
+    decoration: BoxDecoration(
+      color: const Color(0xFF0E1B2A),
+      border: Border.all(color: const Color(0xFF334B63)),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          title,
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 12)),
-            if (body.isNotEmpty) ...[
-              const SizedBox(height: 3),
-              Text(body, style: const TextStyle(color: Color(0xFF9FB4CA), fontSize: 11, height: 1.35)),
-            ],
-          ],
-        ),
-      );
+        if (body.isNotEmpty) ...[
+          const SizedBox(height: 3),
+          Text(
+            body,
+            style: const TextStyle(
+              color: Color(0xFF9FB4CA),
+              fontSize: 11,
+              height: 1.35,
+            ),
+          ),
+        ],
+      ],
+    ),
+  );
 }
 
 class _ModeBanner extends StatelessWidget {
@@ -1394,71 +1924,76 @@ class _ModeBanner extends StatelessWidget {
     final label = probing
         ? 'CHECKING LOCAL WORKSPACE'
         : local
-            ? 'LIVE LOCAL · ${live!.dirtyCount} dirty · ${live!.driftCount} drift · ${live!.missingCount} missing · JA ${live!.japaneseCompleteCount}/${live!.japaneseRequiredCount}'
-            : 'PUBLISHED SNAPSHOT · FLUTTER ROOT';
-    return SafeArea(
-      bottom: false,
-      child: Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-        decoration: const BoxDecoration(
-          color: Color(0xFF07111D),
-          border: Border(bottom: BorderSide(color: Color(0xFF2B4058))),
-        ),
-        child: Wrap(
-          spacing: 8,
-          runSpacing: 6,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            Text(
-              label,
-              style: TextStyle(
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 0.7,
-                color: local ? const Color(0xFF67E8F9) : const Color(0xFF9FB4CA),
+        ? 'LIVE LOCAL · ${live!.dirtyCount} dirty · ${live!.driftCount} drift · ${live!.missingCount} missing · JA ${live!.japaneseCompleteCount}/${live!.japaneseRequiredCount}'
+        : 'PUBLISHED SNAPSHOT · FLUTTER ROOT';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+      decoration: const BoxDecoration(
+        color: Color(0xFF07111D),
+        border: Border(bottom: BorderSide(color: Color(0xFF2B4058))),
+      ),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 6,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.7,
+              color: local ? const Color(0xFF67E8F9) : const Color(0xFF9FB4CA),
+            ),
+          ),
+          if (error != null)
+            Tooltip(
+              message:
+                  'Local API issue · ${errorSource ?? 'unknown'}\n$error\nThe last graph remains usable.',
+              child: const Icon(
+                Icons.warning_amber_rounded,
+                size: 16,
+                color: Color(0xFFFBBF24),
               ),
             ),
-            if (error != null)
-              Tooltip(
-                message: 'Local API issue · ${errorSource ?? 'unknown'}\n$error\nThe last graph remains usable.',
-                child: const Icon(Icons.warning_amber_rounded, size: 16, color: Color(0xFFFBBF24)),
-              ),
+          TextButton.icon(
+            onPressed: onInventory,
+            icon: const Icon(Icons.account_tree_outlined, size: 16),
+            label: const Text('程式碼盤點'),
+          ),
+          if (onPromptChanged != null)
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Prompt',
+                  style: TextStyle(fontSize: 11, color: Color(0xFF9FB4CA)),
+                ),
+                Switch.adaptive(
+                  value: promptEnabled,
+                  onChanged: savingSettings ? null : onPromptChanged,
+                ),
+              ],
+            ),
+          if (onStatus != null)
             TextButton.icon(
-              onPressed: onInventory,
-              icon: const Icon(Icons.account_tree_outlined, size: 16),
-              label: const Text('程式碼盤點'),
+              onPressed: onStatus,
+              icon: const Icon(Icons.storage, size: 16),
+              label: const Text('本機狀態'),
             ),
-            if (onPromptChanged != null)
-              Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text('Prompt', style: TextStyle(fontSize: 11, color: Color(0xFF9FB4CA))),
-                  Switch.adaptive(
-                    value: promptEnabled,
-                    onChanged: savingSettings ? null : onPromptChanged,
-                  ),
-                ],
-              ),
-            if (onStatus != null)
-              TextButton.icon(
-                onPressed: onStatus,
-                icon: const Icon(Icons.storage, size: 16),
-                label: const Text('本機狀態'),
-              ),
-            if (onRefresh != null)
-              OutlinedButton.icon(
-                onPressed: refreshing ? null : onRefresh,
-                icon: refreshing
-                    ? const SizedBox.square(
-                        dimension: 14,
-                        child: CircularProgressIndicator(strokeWidth: 2),
-                      )
-                    : const Icon(Icons.refresh, size: 16),
-                label: Text(refreshing ? '重新索引中' : '重新整理本機'),
-              ),
-          ],
-        ),
+          if (onRefresh != null)
+            OutlinedButton.icon(
+              onPressed: refreshing ? null : onRefresh,
+              icon: refreshing
+                  ? const SizedBox.square(
+                      dimension: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.refresh, size: 16),
+              label: Text(refreshing ? '重新索引中' : '重新整理本機'),
+            ),
+        ],
       ),
     );
   }

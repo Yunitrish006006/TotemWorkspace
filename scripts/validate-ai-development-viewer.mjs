@@ -13,6 +13,9 @@ const legacyRenderer = read("viewer/graph-v2-cluster-v2.js");
 const flutterLive = read("viewer_flutter/lib/live/workspace_live.dart");
 const flutterHost = read("viewer_flutter/lib/widgets/workspace_graph_host.dart");
 const flutterGraph = read("viewer_flutter/lib/widgets/graph_view.dart");
+const flutterFloatingPanel = read("viewer_flutter/lib/widgets/floating_panel.dart");
+const flutterActivityLocation = read("viewer_flutter/lib/widgets/activity_location.dart");
+const flutterCollapsibleMessage = read("viewer_flutter/lib/widgets/collapsible_message.dart");
 const pages = read(".github/workflows/pages.yml");
 const workspaceValidation = read("scripts/validate-workspace.mjs");
 const agents = read("AGENTS.md");
@@ -123,7 +126,7 @@ for (const behavior of [
   "ViewerSettings _settings = ViewerSettings.defaults",
   "_ActivityStrip(event: displayedActivity)",
   "_AgentAdapterStrip(",
-  "replaySession: _replayTimeline?.sessions.isNotEmpty == true",
+  "_replayTimeline?.sessions.isNotEmpty == true",
   "'INTERRUPTED'",
   "_OrchestrationStrip(summary: _orchestration!)",
   "_liveErrorSource",
@@ -134,18 +137,58 @@ for (const behavior of [
   "events: _activity",
   "'CODEX CONSOLE · ${widget.taskId} · ${taskEvents.length} events'",
   "minLines: 1",
-  "maxLines: 6",
+  "maxLines: compact ? 3 : 6",
   "SelectableText(",
-  "if (isLocal && _settings.agentActivityEnabled && displayedActivity != null)",
+  "CollapsibleMessage(",
   "Switch.adaptive",
   "onPromptChanged"
 ]) {
   assert.ok(flutterHost.includes(behavior), `Flutter maintained surface is missing: ${behavior}`);
 }
+for (const behavior of [
+  "class CollapsibleMessage",
+  "maxLines: 2",
+  "TextOverflow.ellipsis",
+  "textPainter.didExceedMaxLines",
+  "展開完整訊息",
+  "收起訊息",
+]) {
+  assert.ok(flutterCollapsibleMessage.includes(behavior), `Flutter prompt output collapse behavior is missing: ${behavior}`);
+}
+for (const behavior of [
+  "class ActivitySourceLocation",
+  "event.type == 'file_edit' || event.type == 'symbol_edit'",
+  "second modified-files list",
+  "class ActivitySourceLocationCard",
+  "ValueChanged<Rect> onTap",
+  "MouseRegion",
+  "onHoverChanged?.call(true)",
+  "bool keptOpen",
+  "onKeepOpenChanged",
+  "繼續開著",
+  "查看變更位置",
+]) {
+  assert.ok(flutterActivityLocation.includes(behavior), `Flutter interactive source location is missing: ${behavior}`);
+}
+for (const behavior of [
+  "locationForEvent: _activityLocationFor",
+  "onLocationSelected: _showActivitySourceLocation",
+  "onLocationHoverChanged: _setHoveredActivityLocation",
+  "onLocationKeepOpenChanged: _toggleKeptOpenActivityLocation",
+  "keptOpenLocation: _keptOpenActivityLocation",
+  "showMenu<void>(",
+  "activityFeatureId: graphFocusLocation?.featureId",
+  "showChangeNodeIndicators: false",
+  "ActivitySourceLocationCard(",
+]) {
+  assert.ok(flutterHost.includes(behavior), `Flutter console must expose clickable source locations: ${behavior}`);
+}
 assert.ok(
-  flutterHost.includes('final displayedGraphActivity = replaying ? _replayFrame!.activity : liveSemanticActivity') &&
-    !flutterHost.includes('liveSemanticActivity ??= liveActivity'),
-  'Flutter graph activity focus must clear after a task completes rather than pulse the last historical edit'
+  !flutterHost.includes('liveSemanticActivity') &&
+    !flutterHost.includes('displayedGraphActivity') &&
+    flutterHost.includes('activityModuleId: graphFocusLocation?.moduleId') &&
+    flutterHost.includes('_keptOpenActivityLocation ?? _hoveredActivityLocation'),
+  'Flutter graph changes must only focus a node while its source-location card is hovered or explicitly kept open'
 );
 
 for (const behavior of [
@@ -156,6 +199,11 @@ for (const behavior of [
   "activityPulse: _activityPulse",
   "if (agentActive)",
   "Color _activityColor",
+  "_transientActivityExpanded",
+  "Set<String> get _visibleExpanded",
+  "showChangeNodeIndicators && changedEntityIds.contains(node.id)",
+  "BrowserContextMenu.disableContextMenu()",
+  "BrowserContextMenu.enableContextMenu()",
   "orchestration_planned",
   "historicalEntityIds"
 ]) {
@@ -165,9 +213,31 @@ assert.ok(!flutterHost.includes("Local API temporarily unavailable"), "Flutter w
 assert.ok(!flutterHost.includes("_liveError = submission.execution == 'agent-adapter-unavailable'"), "agent-adapter unavailable must remain an adapter status, not masquerade as Local API failure");
 
 assert.ok(
-  flutterHost.includes("if (isLocal && _settings.agentActivityEnabled && displayedActivity != null)") &&
+  /isLocal\s*&&\s*_settings\.agentActivityEnabled\s*&&\s*displayedActivity != null/.test(flutterHost) &&
     flutterHost.includes("if (isLocal && _settings.promptEnabled)"),
   "Prompt visibility and Agent Activity visibility must remain independent"
+);
+for (const behavior of [
+  "enum FloatingPanelDock",
+  "showModalBottomSheet<FloatingPanelDock>",
+  "選擇一個固定位置；面板會保持在畫面內。",
+  "FloatingPanelDock.bottomRight",
+]) {
+  assert.ok(flutterFloatingPanel.includes(behavior), `Flutter floating panel behavior is missing: ${behavior}`);
+}
+for (const behavior of [
+  "FloatingPanel(",
+  "title: '工作區'",
+  "title: '開發活動'",
+  "title: taskId == null ? 'Prompt' : 'Prompt · Codex Console'",
+]) {
+  assert.ok(flutterHost.includes(behavior), `Flutter host must keep ${behavior} as a floating panel`);
+}
+assert.ok(
+  flutterGraph.includes("title: '圖表控制'") &&
+    flutterGraph.includes("icon: Icons.info_outline") &&
+    !flutterGraph.includes("SizedBox(width: 360, child: infoPanel)"),
+  "Graph controls and node details must float above the canvas instead of reserving a fixed column"
 );
 
 assert.ok(pages.includes("cp -R viewer_flutter/build/web/. _site/"), "Flutter production surface must stay packaged");

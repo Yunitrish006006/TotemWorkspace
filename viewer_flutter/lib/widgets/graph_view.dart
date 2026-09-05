@@ -1,11 +1,14 @@
+import 'dart:async';
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../model/graph_data.dart';
 import '../model/graph_scene.dart';
+import 'floating_panel.dart';
 
 class GraphView extends StatefulWidget {
   const GraphView({
@@ -18,6 +21,7 @@ class GraphView extends StatefulWidget {
     this.autoExpandAgentFocus = true,
     this.changedEntityIds = const <String>{},
     this.impactedModuleIds = const <String>{},
+    this.showChangeNodeIndicators = true,
     this.changeAnimationsEnabled = true,
     this.runningVerificationTargetIds = const <String>{},
     this.passedVerificationTargetIds = const <String>{},
@@ -33,6 +37,7 @@ class GraphView extends StatefulWidget {
   final bool autoExpandAgentFocus;
   final Set<String> changedEntityIds;
   final Set<String> impactedModuleIds;
+  final bool showChangeNodeIndicators;
   final bool changeAnimationsEnabled;
   final Set<String> runningVerificationTargetIds;
   final Set<String> passedVerificationTargetIds;
@@ -43,18 +48,29 @@ class GraphView extends StatefulWidget {
   State<GraphView> createState() => _GraphViewState();
 }
 
-class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMixin {
+class _GraphViewState extends State<GraphView>
+    with SingleTickerProviderStateMixin {
   Camera3d _camera = const Camera3d();
   String? _selectedId = 'totem-core';
   final Set<String> _expanded = <String>{};
+  final Set<String> _transientActivityExpanded = <String>{};
   final Set<String> _enabledFilters = edgeFilterKeys.toSet();
+  FloatingPanelDock _controlsDock = FloatingPanelDock.topRight;
+  FloatingPanelDock _detailsDock = FloatingPanelDock.bottomRight;
+  bool _controlsCollapsed = false;
+  bool _detailsCollapsed = true;
   double _gestureStartZoom = 1;
   Offset? _lastFocalPoint;
   late final AnimationController _activityPulse;
+  bool _restoreBrowserContextMenu = false;
 
   @override
   void initState() {
     super.initState();
+    if (kIsWeb && BrowserContextMenu.enabled) {
+      _restoreBrowserContextMenu = true;
+      unawaited(BrowserContextMenu.disableContextMenu());
+    }
     _activityPulse = AnimationController(
       vsync: this,
       duration: const Duration(milliseconds: 1200),
@@ -64,36 +80,54 @@ class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMix
   @override
   void didUpdateWidget(covariant GraphView oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (!widget.autoExpandAgentFocus) return;
-    if (widget.activityComponentId == oldWidget.activityComponentId &&
-        widget.activityFeatureId == oldWidget.activityFeatureId &&
-        widget.activityModuleId == oldWidget.activityModuleId) {
+    final targetChanged =
+        widget.activityComponentId != oldWidget.activityComponentId ||
+        widget.activityFeatureId != oldWidget.activityFeatureId ||
+        widget.activityModuleId != oldWidget.activityModuleId;
+    if (!targetChanged &&
+        widget.autoExpandAgentFocus == oldWidget.autoExpandAgentFocus) {
       return;
     }
-    final componentId = widget.activityComponentId;
-    final component = componentId == null ? null : widget.data.componentById(componentId);
     setState(() {
+      _transientActivityExpanded.clear();
+      if (!widget.autoExpandAgentFocus) return;
+      final componentId = widget.activityComponentId;
+      final component = componentId == null
+          ? null
+          : widget.data.componentById(componentId);
       final moduleId = component?.moduleId ?? widget.activityModuleId;
-      if (moduleId != null && widget.data.moduleById(moduleId) != null) _expanded.add(moduleId);
+      if (moduleId != null && widget.data.moduleById(moduleId) != null) {
+        _transientActivityExpanded.add(moduleId);
+      }
       final featureId = component != null && component.featureIds.isNotEmpty
           ? component.featureIds.first
           : widget.activityFeatureId;
-      if (featureId != null && widget.data.featureById(featureId) != null) _expanded.add(featureId);
-      if (component != null) _expanded.add(component.id);
+      if (featureId != null && widget.data.featureById(featureId) != null) {
+        _transientActivityExpanded.add(featureId);
+      }
+      if (component != null) _transientActivityExpanded.add(component.id);
     });
   }
 
   @override
   void dispose() {
+    if (kIsWeb && _restoreBrowserContextMenu) {
+      unawaited(BrowserContextMenu.enableContextMenu());
+    }
     _activityPulse.dispose();
     super.dispose();
   }
 
+  Set<String> get _visibleExpanded => {
+    ..._expanded,
+    ..._transientActivityExpanded,
+  };
+
   GraphScene get _scene => buildGraphScene(
-        widget.data,
-        expanded: _expanded,
-        enabledFilters: _enabledFilters,
-      );
+    widget.data,
+    expanded: _visibleExpanded,
+    enabledFilters: _enabledFilters,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -102,8 +136,10 @@ class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMix
     final relationships = selected == null
         ? const <VisualEdge>[]
         : scene.edges
-            .where((edge) => edge.from == selected.id || edge.to == selected.id)
-            .toList(growable: false);
+              .where(
+                (edge) => edge.from == selected.id || edge.to == selected.id,
+              )
+              .toList(growable: false);
     final infoPanel = selected == null
         ? null
         : _InfoPanel(
@@ -112,154 +148,166 @@ class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMix
             expanded: _expanded.contains(selected.id),
           );
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF050B14),
-      body: SafeArea(
-        child: Column(
-          children: [
-            _Toolbar(
+    return ColoredBox(
+      color: const Color(0xFF050B14),
+      child: Stack(
+        children: [
+          Positioned.fill(child: _buildCanvas(scene)),
+          FloatingPanel(
+            title: '圖表控制',
+            icon: Icons.tune,
+            dock: _controlsDock,
+            collapsed: _controlsCollapsed,
+            onCollapsedChanged: (value) =>
+                setState(() => _controlsCollapsed = value),
+            onDockChanged: (value) => setState(() => _controlsDock = value),
+            width: 430,
+            child: _Toolbar(
               data: widget.data,
-              expandedCount: widget.data.modules.where((module) => _expanded.contains(module.id)).length,
+              expandedCount: widget.data.modules
+                  .where((module) => _visibleExpanded.contains(module.id))
+                  .length,
               enabledFilters: _enabledFilters,
               onReset: _resetView,
               onToggleAll: _toggleAll,
               onFilterSelected: _handleFilterSelection,
             ),
-            Expanded(
-              child: LayoutBuilder(
-                builder: (context, constraints) {
-                  final desktop = constraints.maxWidth >= 900;
-                  if (desktop) {
-                    return Row(
-                      children: [
-                        Expanded(child: _buildCanvas(scene)),
-                        if (infoPanel != null) SizedBox(width: 360, child: infoPanel),
-                      ],
-                    );
-                  }
-                  return Stack(
-                    children: [
-                      Positioned.fill(child: _buildCanvas(scene)),
-                      if (infoPanel != null)
-                        Align(
-                          alignment: Alignment.bottomCenter,
-                          child: ConstrainedBox(
-                            constraints: const BoxConstraints(maxHeight: 260),
-                            child: infoPanel,
-                          ),
-                        ),
-                    ],
-                  );
-                },
-              ),
+          ),
+          if (infoPanel != null)
+            FloatingPanel(
+              title: selected!.label,
+              icon: Icons.info_outline,
+              dock: _detailsDock,
+              collapsed: _detailsCollapsed,
+              onCollapsedChanged: (value) =>
+                  setState(() => _detailsCollapsed = value),
+              onDockChanged: (value) => setState(() => _detailsDock = value),
+              onClose: () => setState(() {
+                _selectedId = null;
+                _detailsCollapsed = true;
+              }),
+              width: 380,
+              expandedHeight: 430,
+              child: infoPanel,
             ),
-          ],
-        ),
+        ],
       ),
     );
   }
 
   Widget _buildCanvas(GraphScene scene) => LayoutBuilder(
-        builder: (context, constraints) {
-          final size = Size(constraints.maxWidth, constraints.maxHeight);
-          return Focus(
-            autofocus: true,
-            onKeyEvent: (_, event) => _handleKey(scene, event),
-            child: Listener(
-              onPointerSignal: (event) {
-                if (event is PointerScrollEvent) {
-                  final factor = math.exp(-event.scrollDelta.dy * 0.001);
-                  setState(() {
-                    _camera = _camera.copyWith(
-                      zoom: (_camera.zoom * factor).clamp(0.32, 3.2).toDouble(),
-                    );
-                  });
-                }
-              },
-              onPointerMove: (event) {
-                if ((event.buttons & kSecondaryMouseButton) == 0) return;
+    builder: (context, constraints) {
+      final size = Size(constraints.maxWidth, constraints.maxHeight);
+      return Focus(
+        autofocus: true,
+        onKeyEvent: (_, event) => _handleKey(scene, event),
+        child: Listener(
+          onPointerSignal: (event) {
+            if (event is PointerScrollEvent) {
+              final factor = math.exp(-event.scrollDelta.dy * 0.001);
+              setState(() {
+                _camera = _camera.copyWith(
+                  zoom: (_camera.zoom * factor).clamp(0.32, 3.2).toDouble(),
+                );
+              });
+            }
+          },
+          onPointerMove: (event) {
+            if ((event.buttons & kSecondaryMouseButton) == 0) return;
+            setState(() {
+              _camera = _camera.copyWith(
+                panX: _camera.panX + event.delta.dx,
+                panY: _camera.panY + event.delta.dy,
+              );
+            });
+          },
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onScaleStart: (details) {
+              _gestureStartZoom = _camera.zoom;
+              _lastFocalPoint = details.localFocalPoint;
+            },
+            onScaleUpdate: (details) {
+              final previous = _lastFocalPoint ?? details.localFocalPoint;
+              final delta = details.localFocalPoint - previous;
+              _lastFocalPoint = details.localFocalPoint;
+              if (details.pointerCount >= 2) {
                 setState(() {
                   _camera = _camera.copyWith(
-                    panX: _camera.panX + event.delta.dx,
-                    panY: _camera.panY + event.delta.dy,
+                    zoom: (_gestureStartZoom * details.scale)
+                        .clamp(0.32, 3.2)
+                        .toDouble(),
+                    panX: _camera.panX + delta.dx,
+                    panY: _camera.panY + delta.dy,
                   );
                 });
-              },
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onScaleStart: (details) {
-                  _gestureStartZoom = _camera.zoom;
-                  _lastFocalPoint = details.localFocalPoint;
-                },
-                onScaleUpdate: (details) {
-                  final previous = _lastFocalPoint ?? details.localFocalPoint;
-                  final delta = details.localFocalPoint - previous;
-                  _lastFocalPoint = details.localFocalPoint;
-                  if (details.pointerCount >= 2) {
-                    setState(() {
-                      _camera = _camera.copyWith(
-                        zoom: (_gestureStartZoom * details.scale).clamp(0.32, 3.2).toDouble(),
-                        panX: _camera.panX + delta.dx,
-                        panY: _camera.panY + delta.dy,
-                      );
-                    });
-                  } else {
-                    setState(() {
-                      _camera = _camera.copyWith(
-                        yaw: _camera.yaw + delta.dx * 0.008,
-                        pitch: (_camera.pitch + delta.dy * 0.006).clamp(-1.2, 1.2).toDouble(),
-                      );
-                    });
-                  }
-                },
-                onScaleEnd: (_) => _lastFocalPoint = null,
-                onTapUp: (details) {
-                  final id = _hitTest(scene, details.localPosition, size);
-                  if (id == null) {
-                    setState(() => _selectedId = null);
-                    return;
-                  }
-                  _activate(scene, id, toggleModule: true);
-                },
-                child: CustomPaint(
-                  size: Size.infinite,
-                  painter: _GraphPainter(
-                    data: widget.data,
-                    scene: scene,
-                    camera: _camera,
-                    selectedId: _selectedId,
-                    activityNodeId: widget.activityComponentId != null && scene.byId.containsKey(widget.activityComponentId)
-                        ? widget.activityComponentId
-                        : widget.activityFeatureId != null && scene.byId.containsKey(widget.activityFeatureId)
-                            ? widget.activityFeatureId
-                            : widget.activityModuleId,
-                    activityType: widget.activityType,
-                    activityPulse: _activityPulse,
-                    changedEntityIds: widget.changedEntityIds,
-                    impactedModuleIds: widget.impactedModuleIds,
-                    changeAnimationsEnabled: widget.changeAnimationsEnabled,
-                    runningVerificationTargetIds: widget.runningVerificationTargetIds,
-                    passedVerificationTargetIds: widget.passedVerificationTargetIds,
-                    failedVerificationTargetIds: widget.failedVerificationTargetIds,
-                    historicalEntityIds: widget.historicalEntityIds,
-                  ),
-                ),
+              } else {
+                setState(() {
+                  _camera = _camera.copyWith(
+                    yaw: _camera.yaw + delta.dx * 0.008,
+                    pitch: (_camera.pitch + delta.dy * 0.006)
+                        .clamp(-1.2, 1.2)
+                        .toDouble(),
+                  );
+                });
+              }
+            },
+            onScaleEnd: (_) => _lastFocalPoint = null,
+            onTapUp: (details) {
+              final id = _hitTest(scene, details.localPosition, size);
+              if (id == null) {
+                setState(() => _selectedId = null);
+                return;
+              }
+              _activate(scene, id, toggleModule: true);
+            },
+            child: CustomPaint(
+              size: Size.infinite,
+              painter: _GraphPainter(
+                data: widget.data,
+                scene: scene,
+                camera: _camera,
+                selectedId: _selectedId,
+                activityNodeId:
+                    widget.activityComponentId != null &&
+                        scene.byId.containsKey(widget.activityComponentId)
+                    ? widget.activityComponentId
+                    : widget.activityFeatureId != null &&
+                          scene.byId.containsKey(widget.activityFeatureId)
+                    ? widget.activityFeatureId
+                    : widget.activityModuleId,
+                activityType: widget.activityType,
+                activityPulse: _activityPulse,
+                changedEntityIds: widget.changedEntityIds,
+                impactedModuleIds: widget.impactedModuleIds,
+                showChangeNodeIndicators: widget.showChangeNodeIndicators,
+                changeAnimationsEnabled: widget.changeAnimationsEnabled,
+                runningVerificationTargetIds:
+                    widget.runningVerificationTargetIds,
+                passedVerificationTargetIds: widget.passedVerificationTargetIds,
+                failedVerificationTargetIds: widget.failedVerificationTargetIds,
+                historicalEntityIds: widget.historicalEntityIds,
               ),
             ),
-          );
-        },
+          ),
+        ),
       );
+    },
+  );
 
   void _resetView() {
     setState(() {
       _camera = const Camera3d();
       _selectedId = 'totem-core';
+      _detailsCollapsed = true;
     });
   }
 
   void _toggleAll() {
     setState(() {
-      final expandedModules = widget.data.modules.where((module) => _expanded.contains(module.id)).length;
+      final expandedModules = widget.data.modules
+          .where((module) => _expanded.contains(module.id))
+          .length;
       if (expandedModules == widget.data.modules.length) {
         _expanded.clear();
       } else {
@@ -303,7 +351,8 @@ class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMix
       setState(() => _selectedId = null);
       return KeyEventResult.handled;
     }
-    if (event.logicalKey == LogicalKeyboardKey.enter || event.logicalKey == LogicalKeyboardKey.space) {
+    if (event.logicalKey == LogicalKeyboardKey.enter ||
+        event.logicalKey == LogicalKeyboardKey.space) {
       final id = _selectedId;
       if (id != null) _activate(scene, id, toggleModule: true);
       return KeyEventResult.handled;
@@ -313,7 +362,8 @@ class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMix
         event.logicalKey == LogicalKeyboardKey.arrowLeft ||
         event.logicalKey == LogicalKeyboardKey.arrowUp) {
       final currentIndex = nodes.indexWhere((node) => node.id == _selectedId);
-      final forward = event.logicalKey == LogicalKeyboardKey.arrowRight ||
+      final forward =
+          event.logicalKey == LogicalKeyboardKey.arrowRight ||
           event.logicalKey == LogicalKeyboardKey.arrowDown;
       final next = currentIndex < 0
           ? 0
@@ -329,15 +379,24 @@ class _GraphViewState extends State<GraphView> with SingleTickerProviderStateMix
     if (node == null) return;
     setState(() {
       _selectedId = id;
-      if (toggleModule && (node.kind == 'module' || node.kind == 'feature' || node.kind == 'component')) {
+      _detailsCollapsed = false;
+      if (toggleModule &&
+          (node.kind == 'module' ||
+              node.kind == 'feature' ||
+              node.kind == 'component')) {
         if (_expanded.contains(id)) {
           _expanded.remove(id);
           if (node.kind == 'module') {
-            _expanded.removeWhere((entry) =>
-                widget.data.featureById(entry)?.ownerId == id ||
-                widget.data.componentById(entry)?.moduleId == id);
+            _expanded.removeWhere(
+              (entry) =>
+                  widget.data.featureById(entry)?.ownerId == id ||
+                  widget.data.componentById(entry)?.moduleId == id,
+            );
           } else if (node.kind == 'feature') {
-            final componentIds = widget.data.componentsForFeature(id).map((component) => component.id).toSet();
+            final componentIds = widget.data
+                .componentsForFeature(id)
+                .map((component) => component.id)
+                .toSet();
             _expanded.removeAll(componentIds);
           }
         } else {
@@ -381,59 +440,58 @@ class _Toolbar extends StatelessWidget {
   final ValueChanged<String> onFilterSelected;
 
   @override
-  Widget build(BuildContext context) => Container(
-        width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        decoration: const BoxDecoration(
-          color: Color(0xEE06101B),
-          border: Border(bottom: BorderSide(color: Color(0xFF26394F))),
-        ),
-        child: Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          crossAxisAlignment: WrapCrossAlignment.center,
-          children: [
-            const SizedBox(
-              width: 300,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text('TOTEM Architecture · Semantic LOD',
-                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17)),
-                  Text('Module → Feature → Component → Implementation',
-                      style: TextStyle(color: Color(0xFF8FA5BD), fontSize: 11)),
-                ],
+  Widget build(BuildContext context) => Padding(
+    padding: const EdgeInsets.fromLTRB(12, 4, 12, 12),
+    child: Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      crossAxisAlignment: WrapCrossAlignment.center,
+      children: [
+        const SizedBox(
+          width: 300,
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                'TOTEM Architecture · Semantic LOD',
+                style: TextStyle(fontWeight: FontWeight.w800, fontSize: 17),
               ),
-            ),
-            _Pill('${data.modules.length} modules'),
-            _Pill('${data.features.length} features'),
-            _Pill('${data.components.length} components'),
-            _Pill('${data.contracts.length} contracts'),
-            _Pill('${data.sharedCapabilities.length} shared'),
-            PopupMenuButton<String>(
-              tooltip: '線條種類',
-              onSelected: onFilterSelected,
-              itemBuilder: (context) => [
-                const PopupMenuItem(value: '__all', child: Text('全部線條')),
-                const PopupMenuItem(value: '__none', child: Text('清除線條')),
-                const PopupMenuDivider(),
-                for (final key in edgeFilterKeys)
-                  CheckedPopupMenuItem(
-                    value: key,
-                    checked: enabledFilters.contains(key),
-                    child: Text(edgeFilterLabels[key] ?? key),
-                  ),
-              ],
-              child: _Pill('線條 ${enabledFilters.length}/${edgeFilterKeys.length}'),
-            ),
-            OutlinedButton(
-              onPressed: onToggleAll,
-              child: Text(expandedCount == data.modules.length ? '全部收合' : '全展開'),
-            ),
-            OutlinedButton(onPressed: onReset, child: const Text('總覽 / 重設視角')),
-          ],
+              Text(
+                'Module → Feature → Component → Implementation',
+                style: TextStyle(color: Color(0xFF8FA5BD), fontSize: 11),
+              ),
+            ],
+          ),
         ),
-      );
+        _Pill('${data.modules.length} modules'),
+        _Pill('${data.features.length} features'),
+        _Pill('${data.components.length} components'),
+        _Pill('${data.contracts.length} contracts'),
+        _Pill('${data.sharedCapabilities.length} shared'),
+        PopupMenuButton<String>(
+          tooltip: '線條種類',
+          onSelected: onFilterSelected,
+          itemBuilder: (context) => [
+            const PopupMenuItem(value: '__all', child: Text('全部線條')),
+            const PopupMenuItem(value: '__none', child: Text('清除線條')),
+            const PopupMenuDivider(),
+            for (final key in edgeFilterKeys)
+              CheckedPopupMenuItem(
+                value: key,
+                checked: enabledFilters.contains(key),
+                child: Text(edgeFilterLabels[key] ?? key),
+              ),
+          ],
+          child: _Pill('線條 ${enabledFilters.length}/${edgeFilterKeys.length}'),
+        ),
+        OutlinedButton(
+          onPressed: onToggleAll,
+          child: Text(expandedCount == data.modules.length ? '全部收合' : '全展開'),
+        ),
+        OutlinedButton(onPressed: onReset, child: const Text('總覽 / 重設視角')),
+      ],
+    ),
+  );
 }
 
 class _Pill extends StatelessWidget {
@@ -442,18 +500,25 @@ class _Pill extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
-        decoration: BoxDecoration(
-          color: const Color(0xFF0C1D2D),
-          border: Border.all(color: const Color(0xFF38506A)),
-          borderRadius: BorderRadius.circular(999),
-        ),
-        child: Text(text, style: const TextStyle(color: Color(0xFFBDD0E5), fontSize: 11)),
-      );
+    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
+    decoration: BoxDecoration(
+      color: const Color(0xFF0C1D2D),
+      border: Border.all(color: const Color(0xFF38506A)),
+      borderRadius: BorderRadius.circular(999),
+    ),
+    child: Text(
+      text,
+      style: const TextStyle(color: Color(0xFFBDD0E5), fontSize: 11),
+    ),
+  );
 }
 
 class _InfoPanel extends StatelessWidget {
-  const _InfoPanel({required this.node, required this.relationships, required this.expanded});
+  const _InfoPanel({
+    required this.node,
+    required this.relationships,
+    required this.expanded,
+  });
 
   final VisualNode node;
   final List<VisualEdge> relationships;
@@ -461,71 +526,100 @@ class _InfoPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      decoration: const BoxDecoration(
-        color: Color(0xF2071522),
-        border: Border(left: BorderSide(color: Color(0xFF2D435C)), top: BorderSide(color: Color(0xFF2D435C))),
-      ),
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          Text(node.label, style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18)),
-          if (node.module case final module?) ...[
-            const SizedBox(height: 6),
-            Text(module.role, style: const TextStyle(color: Color(0xFFB8C9DA), height: 1.5)),
-            const SizedBox(height: 8),
-            _Item(expanded ? 'Expanded cluster' : 'Collapsed module'),
-            const SizedBox(height: 8),
-            const _SectionTitle('Feature groups'),
-            for (final group in module.featureGroups) _Item(group),
-          ],
-          if (node.feature case final feature?) ...[
-            const SizedBox(height: 8),
-            Text(feature.summary, style: const TextStyle(color: Color(0xFFB8C9DA), height: 1.5)),
-            const SizedBox(height: 8),
-            _Item('Owner: ${feature.ownerId}'),
-            _Item(expanded ? 'L3 Components expanded' : 'Activate to reveal mapped Components'),
-          ],
-          if (node.component case final component?) ...[
-            const SizedBox(height: 8),
-            Text(component.responsibility, style: const TextStyle(color: Color(0xFFB8C9DA), height: 1.5)),
-            const SizedBox(height: 8),
-            _Item('Mapping: ${component.mappingConfidence} · score ${component.mappingScore}'),
-            _Item('Implementation files: ${component.fileCount}'),
-            if (component.surfaceKinds.isNotEmpty) _Item('Surfaces: ${component.surfaceKinds.join(', ')}'),
-            if (component.featureIds.isEmpty) const _Item('Module-level component · no strong Feature mapping'),
-            _Item(expanded ? 'L4 Implementation expanded' : 'Activate to reveal implementation files'),
-          ],
-          if (node.test case final test?) ...[
-            const SizedBox(height: 8),
-            _Item('${test.kind} · ${test.path}'),
-            if (test.categories.isNotEmpty) _Item('Categories: ${test.categories.join(', ')}'),
-            if (test.featureIds.isNotEmpty) _Item('Validates Feature: ${test.featureIds.join(', ')}'),
-            if (test.contractIds.isNotEmpty) _Item('Validates contract/API: ${test.contractIds.join(', ')}'),
-            if (test.capabilityIds.isNotEmpty) _Item('Validates capability: ${test.capabilityIds.join(', ')}'),
-          ],
-          if (node.implementationPath case final implementationPath?) ...[
-            const SizedBox(height: 8),
-            _Item(implementationPath),
-            const _Item('L4 production implementation evidence'),
-          ],
-          if (node.capability case final capability?) ...[
-            const SizedBox(height: 8),
-            _Item(capability.label),
-            _Item('${capability.consumerModuleId} → ${capability.providerModuleId}'),
-          ],
-          const SizedBox(height: 14),
-          const _SectionTitle('Visible relationships'),
-          if (relationships.isEmpty) const _Item('No visible relationship under current filters'),
-          for (final edge in relationships) _Item('${edge.type} · ${edge.from} → ${edge.to}\n${edge.label}'),
-          const SizedBox(height: 20),
-          const Text(
-            '點 Module → Feature → Component/Test 逐層展開；Component 再展開 L4 implementation · 左鍵/一指旋轉 · 右鍵拖曳平移 · 兩指縮放＋平移 · 滾輪縮放 · 方向鍵選節點 · Enter/Space 啟動',
-            style: TextStyle(color: Color(0xFF8FA5BD), fontSize: 11, height: 1.45),
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text(
+          node.label,
+          style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18),
+        ),
+        if (node.module case final module?) ...[
+          const SizedBox(height: 6),
+          Text(
+            module.role,
+            style: const TextStyle(color: Color(0xFFB8C9DA), height: 1.5),
+          ),
+          const SizedBox(height: 8),
+          _Item(expanded ? 'Expanded cluster' : 'Collapsed module'),
+          const SizedBox(height: 8),
+          const _SectionTitle('Feature groups'),
+          for (final group in module.featureGroups) _Item(group),
+        ],
+        if (node.feature case final feature?) ...[
+          const SizedBox(height: 8),
+          Text(
+            feature.summary,
+            style: const TextStyle(color: Color(0xFFB8C9DA), height: 1.5),
+          ),
+          const SizedBox(height: 8),
+          _Item('Owner: ${feature.ownerId}'),
+          _Item(
+            expanded
+                ? 'L3 Components expanded'
+                : 'Activate to reveal mapped Components',
           ),
         ],
-      ),
+        if (node.component case final component?) ...[
+          const SizedBox(height: 8),
+          Text(
+            component.responsibility,
+            style: const TextStyle(color: Color(0xFFB8C9DA), height: 1.5),
+          ),
+          const SizedBox(height: 8),
+          _Item(
+            'Mapping: ${component.mappingConfidence} · score ${component.mappingScore}',
+          ),
+          _Item('Implementation files: ${component.fileCount}'),
+          if (component.surfaceKinds.isNotEmpty)
+            _Item('Surfaces: ${component.surfaceKinds.join(', ')}'),
+          if (component.featureIds.isEmpty)
+            const _Item('Module-level component · no strong Feature mapping'),
+          _Item(
+            expanded
+                ? 'L4 Implementation expanded'
+                : 'Activate to reveal implementation files',
+          ),
+        ],
+        if (node.test case final test?) ...[
+          const SizedBox(height: 8),
+          _Item('${test.kind} · ${test.path}'),
+          if (test.categories.isNotEmpty)
+            _Item('Categories: ${test.categories.join(', ')}'),
+          if (test.featureIds.isNotEmpty)
+            _Item('Validates Feature: ${test.featureIds.join(', ')}'),
+          if (test.contractIds.isNotEmpty)
+            _Item('Validates contract/API: ${test.contractIds.join(', ')}'),
+          if (test.capabilityIds.isNotEmpty)
+            _Item('Validates capability: ${test.capabilityIds.join(', ')}'),
+        ],
+        if (node.implementationPath case final implementationPath?) ...[
+          const SizedBox(height: 8),
+          _Item(implementationPath),
+          const _Item('L4 production implementation evidence'),
+        ],
+        if (node.capability case final capability?) ...[
+          const SizedBox(height: 8),
+          _Item(capability.label),
+          _Item(
+            '${capability.consumerModuleId} → ${capability.providerModuleId}',
+          ),
+        ],
+        const SizedBox(height: 14),
+        const _SectionTitle('Visible relationships'),
+        if (relationships.isEmpty)
+          const _Item('No visible relationship under current filters'),
+        for (final edge in relationships)
+          _Item('${edge.type} · ${edge.from} → ${edge.to}\n${edge.label}'),
+        const SizedBox(height: 20),
+        const Text(
+          '點 Module → Feature → Component/Test 逐層展開；Component 再展開 L4 implementation · 左鍵/一指旋轉 · 右鍵拖曳平移 · 兩指縮放＋平移 · 滾輪縮放 · 方向鍵選節點 · Enter/Space 啟動',
+          style: TextStyle(
+            color: Color(0xFF8FA5BD),
+            fontSize: 11,
+            height: 1.45,
+          ),
+        ),
+      ],
     );
   }
 }
@@ -536,15 +630,17 @@ class _SectionTitle extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.only(bottom: 6),
-        child: Text(text.toUpperCase(),
-            style: const TextStyle(
-              color: Color(0xFF93C5FD),
-              fontSize: 11,
-              letterSpacing: 1.1,
-              fontWeight: FontWeight.w700,
-            )),
-      );
+    padding: const EdgeInsets.only(bottom: 6),
+    child: Text(
+      text.toUpperCase(),
+      style: const TextStyle(
+        color: Color(0xFF93C5FD),
+        fontSize: 11,
+        letterSpacing: 1.1,
+        fontWeight: FontWeight.w700,
+      ),
+    ),
+  );
 }
 
 class _Item extends StatelessWidget {
@@ -553,15 +649,22 @@ class _Item extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        margin: const EdgeInsets.only(bottom: 7),
-        padding: const EdgeInsets.all(9),
-        decoration: BoxDecoration(
-          color: const Color(0xFF102033),
-          border: Border.all(color: const Color(0xFF334B63)),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(text, style: const TextStyle(color: Color(0xFFD7E5F4), fontSize: 12, height: 1.4)),
-      );
+    margin: const EdgeInsets.only(bottom: 7),
+    padding: const EdgeInsets.all(9),
+    decoration: BoxDecoration(
+      color: const Color(0xFF102033),
+      border: Border.all(color: const Color(0xFF334B63)),
+      borderRadius: BorderRadius.circular(8),
+    ),
+    child: Text(
+      text,
+      style: const TextStyle(
+        color: Color(0xFFD7E5F4),
+        fontSize: 12,
+        height: 1.4,
+      ),
+    ),
+  );
 }
 
 class _GraphPainter extends CustomPainter {
@@ -575,6 +678,7 @@ class _GraphPainter extends CustomPainter {
     required this.activityPulse,
     required this.changedEntityIds,
     required this.impactedModuleIds,
+    required this.showChangeNodeIndicators,
     required this.changeAnimationsEnabled,
     required this.runningVerificationTargetIds,
     required this.passedVerificationTargetIds,
@@ -591,6 +695,7 @@ class _GraphPainter extends CustomPainter {
   final Animation<double> activityPulse;
   final Set<String> changedEntityIds;
   final Set<String> impactedModuleIds;
+  final bool showChangeNodeIndicators;
   final bool changeAnimationsEnabled;
   final Set<String> runningVerificationTargetIds;
   final Set<String> passedVerificationTargetIds;
@@ -608,7 +713,10 @@ class _GraphPainter extends CustomPainter {
     canvas.drawRect(Offset.zero & size, background);
 
     final byId = scene.byId;
-    final projected = {for (final node in scene.nodes) node.id: camera.project(node.position, size)};
+    final projected = {
+      for (final node in scene.nodes)
+        node.id: camera.project(node.position, size),
+    };
     final selected = byId[selectedId];
     final spotlightId = selected?.isChild == true ? selectedId : null;
     final connected = <String>{};
@@ -625,86 +733,115 @@ class _GraphPainter extends CustomPainter {
     }
 
     for (final cluster in scene.clusters) {
-      if (historicalEntityIds.isNotEmpty && !historicalEntityIds.contains(cluster.ownerId)) continue;
+      if (historicalEntityIds.isNotEmpty &&
+          !historicalEntityIds.contains(cluster.ownerId))
+        continue;
       final parent = projected[cluster.ownerId];
       if (parent == null) continue;
       final active = scene.ownerOf(spotlightId ?? '') == cluster.ownerId;
       final related = relatedOwners.contains(cluster.ownerId);
-      _drawCluster(canvas, cluster, parent, active: active, related: related, dim: spotlightId != null && !active && !related);
+      _drawCluster(
+        canvas,
+        cluster,
+        parent,
+        active: active,
+        related: related,
+        dim: spotlightId != null && !active && !related,
+      );
     }
 
     for (final edge in scene.edges) {
       if (historicalEntityIds.isNotEmpty &&
-          (!historicalEntityIds.contains(edge.from) || !historicalEntityIds.contains(edge.to))) {
+          (!historicalEntityIds.contains(edge.from) ||
+              !historicalEntityIds.contains(edge.to))) {
         continue;
       }
       final from = projected[edge.from];
       final to = projected[edge.to];
       if (from == null || to == null) continue;
-      final incident = spotlightId == null || edge.from == spotlightId || edge.to == spotlightId;
+      final incident =
+          spotlightId == null ||
+          edge.from == spotlightId ||
+          edge.to == spotlightId;
       final changedRelation = changedEntityIds.any(
         (id) => edge.id == id || edge.id.startsWith('$id:'),
       );
       final changePulse = changeAnimationsEnabled
           ? (math.sin(activityPulse.value * math.pi * 2) + 1) / 2
           : 0.5;
-      final verificationStatus = failedVerificationTargetIds.contains(edge.from) ||
+      final verificationStatus =
+          failedVerificationTargetIds.contains(edge.from) ||
               failedVerificationTargetIds.contains(edge.to)
           ? 'failed'
-          : runningVerificationTargetIds.contains(edge.from) || runningVerificationTargetIds.contains(edge.to)
-              ? 'running'
-              : passedVerificationTargetIds.contains(edge.from) || passedVerificationTargetIds.contains(edge.to)
-                  ? 'passed'
-                  : null;
+          : runningVerificationTargetIds.contains(edge.from) ||
+                runningVerificationTargetIds.contains(edge.to)
+          ? 'running'
+          : passedVerificationTargetIds.contains(edge.from) ||
+                passedVerificationTargetIds.contains(edge.to)
+          ? 'passed'
+          : null;
       final baseColor = _edgeColor(edge.type);
       final verificationColor = _verificationColor(verificationStatus);
       final color = changedRelation
           ? const Color(0xFFFBBF24)
           : verificationStatus != null && edge.type == 'validated-by'
-              ? verificationColor
-              : baseColor;
+          ? verificationColor
+          : baseColor;
       final paint = Paint()
         ..color = color.withValues(
           alpha: changedRelation
               ? 0.72 + changePulse * 0.25
               : verificationStatus != null && edge.type == 'validated-by'
-                  ? 0.92
-                  : spotlightId == null
-                      ? 0.58
-                      : (incident ? 0.95 : 0.07),
+              ? 0.92
+              : spotlightId == null
+              ? 0.58
+              : (incident ? 0.95 : 0.07),
         )
         ..strokeWidth = changedRelation
             ? 2.6 + changePulse * 1.8
             : verificationStatus != null && edge.type == 'validated-by'
-                ? 2.8
-                : incident && spotlightId != null
-                    ? 2.4
-                    : 1.45;
+            ? 2.8
+            : incident && spotlightId != null
+            ? 2.4
+            : 1.45;
       canvas.drawLine(from.offset, to.offset, paint);
       _drawArrow(
         canvas,
         from.offset,
         to.offset,
-        color.withValues(alpha: changedRelation ? 0.96 : (incident ? 0.9 : 0.07)),
+        color.withValues(
+          alpha: changedRelation ? 0.96 : (incident ? 0.9 : 0.07),
+        ),
       );
     }
 
-    final ordered = [...scene.nodes]..sort((a, b) => projected[a.id]!.depth.compareTo(projected[b.id]!.depth));
+    final ordered = [
+      ...scene.nodes,
+    ]..sort((a, b) => projected[a.id]!.depth.compareTo(projected[b.id]!.depth));
     for (final node in ordered) {
-      if (historicalEntityIds.isNotEmpty && !historicalEntityIds.contains(node.id)) continue;
+      if (historicalEntityIds.isNotEmpty &&
+          !historicalEntityIds.contains(node.id))
+        continue;
       final point = projected[node.id]!;
       final nodeSelected = node.id == selectedId;
-      final nodeConnected = spotlightId == null || connected.contains(node.id) || node.ownerId == scene.ownerOf(spotlightId);
+      final nodeConnected =
+          spotlightId == null ||
+          connected.contains(node.id) ||
+          node.ownerId == scene.ownerOf(spotlightId);
       final agentActive = node.id == activityNodeId;
-      final changed = changedEntityIds.contains(node.id);
-      final impacted = node.kind == 'module' && impactedModuleIds.contains(node.id);
+      final changed =
+          showChangeNodeIndicators && changedEntityIds.contains(node.id);
+      final impacted =
+          showChangeNodeIndicators &&
+          node.kind == 'module' &&
+          impactedModuleIds.contains(node.id);
       final verificationStatus = failedVerificationTargetIds.contains(node.id)
           ? 'failed'
           : runningVerificationTargetIds.contains(node.id)
-              ? 'running'
-              : passedVerificationTargetIds.contains(node.id)
-                  ? 'passed'
-                  : null;
+          ? 'running'
+          : passedVerificationTargetIds.contains(node.id)
+          ? 'passed'
+          : null;
       _drawNode(
         canvas,
         node,
@@ -730,8 +867,18 @@ class _GraphPainter extends CustomPainter {
     final radius = math.max(42.0, cluster.radius * projected.scale);
     final core = cluster.ownerId == 'totem-core';
     final color = core ? const Color(0xFF22D3EE) : const Color(0xFF60A5FA);
-    final alpha = active ? 0.75 : related ? 0.4 : dim ? 0.08 : 0.25;
-    canvas.drawCircle(projected.offset, radius, Paint()..color = color.withValues(alpha: alpha * 0.08));
+    final alpha = active
+        ? 0.75
+        : related
+        ? 0.4
+        : dim
+        ? 0.08
+        : 0.25;
+    canvas.drawCircle(
+      projected.offset,
+      radius,
+      Paint()..color = color.withValues(alpha: alpha * 0.08),
+    );
     canvas.drawCircle(
       projected.offset,
       radius,
@@ -741,7 +888,11 @@ class _GraphPainter extends CustomPainter {
         ..strokeWidth = active ? 2.4 : 1.2,
     );
     canvas.drawOval(
-      Rect.fromCenter(center: projected.offset, width: radius * 1.55, height: radius * 0.4),
+      Rect.fromCenter(
+        center: projected.offset,
+        width: radius * 1.55,
+        height: radius * 0.4,
+      ),
       Paint()
         ..color = color.withValues(alpha: alpha * 0.35)
         ..style = PaintingStyle.stroke,
@@ -779,7 +930,9 @@ class _GraphPainter extends CustomPainter {
       _ when node.rank == 3 => const Color(0xFF22D3EE),
       _ => const Color(0xFF60A5FA),
     };
-    final stroke = node.feature?.hasCrossModuleRelations == true ? const Color(0xFFFBBF24) : fill;
+    final stroke = node.feature?.hasCrossModuleRelations == true
+        ? const Color(0xFFFBBF24)
+        : fill;
     final alpha = connected ? 1.0 : 0.18;
     final changePulse = changeAnimationsEnabled
         ? (math.sin(activityPulse.value * math.pi * 2) + 1) / 2
@@ -806,7 +959,9 @@ class _GraphPainter extends CustomPainter {
         projected.offset,
         radius + 9 + changePulse * 5,
         Paint()
-          ..color = const Color(0xFFFBBF24).withValues(alpha: 0.7 + changePulse * 0.25)
+          ..color = const Color(
+            0xFFFBBF24,
+          ).withValues(alpha: 0.7 + changePulse * 0.25)
           ..style = PaintingStyle.stroke
           ..strokeWidth = 2.0 + changePulse * 1.4,
       );
@@ -821,9 +976,13 @@ class _GraphPainter extends CustomPainter {
         projected.offset,
         radius + 10 + pulse * 5,
         Paint()
-          ..color = color.withValues(alpha: verificationStatus == 'passed' ? 0.72 : 0.72 + pulse * 0.24)
+          ..color = color.withValues(
+            alpha: verificationStatus == 'passed' ? 0.72 : 0.72 + pulse * 0.24,
+          )
           ..style = PaintingStyle.stroke
-          ..strokeWidth = verificationStatus == 'failed' ? 3.0 + pulse * 1.5 : 2.2 + pulse,
+          ..strokeWidth = verificationStatus == 'failed'
+              ? 3.0 + pulse * 1.5
+              : 2.2 + pulse,
       );
       if (verificationStatus == 'failed') {
         canvas.drawCircle(
@@ -862,7 +1021,11 @@ class _GraphPainter extends CustomPainter {
           ..strokeWidth = 2.5,
       );
     }
-    canvas.drawCircle(projected.offset, radius, Paint()..color = fill.withValues(alpha: alpha));
+    canvas.drawCircle(
+      projected.offset,
+      radius,
+      Paint()..color = fill.withValues(alpha: alpha),
+    );
     canvas.drawCircle(
       projected.offset,
       radius,
@@ -876,7 +1039,9 @@ class _GraphPainter extends CustomPainter {
       text: TextSpan(
         text: node.label,
         style: TextStyle(
-          color: const Color(0xFFDBEAFE).withValues(alpha: connected ? 1 : 0.22),
+          color: const Color(
+            0xFFDBEAFE,
+          ).withValues(alpha: connected ? 1 : 0.22),
           fontSize: child ? 10.5 : 12,
           fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
         ),
@@ -885,7 +1050,10 @@ class _GraphPainter extends CustomPainter {
       maxLines: 1,
       ellipsis: '…',
     )..layout(maxWidth: child ? 230 : 190);
-    textPainter.paint(canvas, projected.offset + Offset(radius + 6, -textPainter.height / 2));
+    textPainter.paint(
+      canvas,
+      projected.offset + Offset(radius + 6, -textPainter.height / 2),
+    );
   }
 
   void _drawArrow(Canvas canvas, Offset from, Offset to, Color color) {
@@ -896,19 +1064,32 @@ class _GraphPainter extends CustomPainter {
     final normal = Offset(-direction.dy, direction.dx);
     final path = Path()
       ..moveTo(tip.dx, tip.dy)
-      ..lineTo((tip - direction * 8 + normal * 4).dx, (tip - direction * 8 + normal * 4).dy)
-      ..lineTo((tip - direction * 8 - normal * 4).dx, (tip - direction * 8 - normal * 4).dy)
+      ..lineTo(
+        (tip - direction * 8 + normal * 4).dx,
+        (tip - direction * 8 + normal * 4).dy,
+      )
+      ..lineTo(
+        (tip - direction * 8 - normal * 4).dx,
+        (tip - direction * 8 - normal * 4).dy,
+      )
       ..close();
     canvas.drawPath(path, Paint()..color = color);
   }
 
   Color _activityColor(String? type) {
     final value = type ?? '';
-    if (value == 'task_failed' || value == 'test_failed' || value == 'deployment_failed') return const Color(0xFFF87171);
-    if (value == 'test_passed' || value == 'task_completed' || value == 'deployment_completed') {
+    if (value == 'task_failed' ||
+        value == 'test_failed' ||
+        value == 'deployment_failed')
+      return const Color(0xFFF87171);
+    if (value == 'test_passed' ||
+        value == 'task_completed' ||
+        value == 'deployment_completed') {
       return const Color(0xFF86EFAC);
     }
-    if (value == 'file_edit' || value == 'symbol_edit' || value == 'git_diff_updated') {
+    if (value == 'file_edit' ||
+        value == 'symbol_edit' ||
+        value == 'git_diff_updated') {
       return const Color(0xFFFBBF24);
     }
     if (value == 'orchestration_planned') return const Color(0xFFC4B5FD);
@@ -916,21 +1097,21 @@ class _GraphPainter extends CustomPainter {
   }
 
   Color _edgeColor(String type) => switch (type) {
-        'hard-core' => const Color(0xFF60A5FA),
-        'fabric-suggests' => const Color(0xFFFBBF24),
-        'external-service' => const Color(0xFF22D3EE),
-        'shared-capability' => const Color(0xFFF472B6),
-        'validated-by' => const Color(0xFF4ADE80),
-        'detail' => const Color(0xFF34D399),
-        _ => const Color(0xFFA78BFA),
-      };
+    'hard-core' => const Color(0xFF60A5FA),
+    'fabric-suggests' => const Color(0xFFFBBF24),
+    'external-service' => const Color(0xFF22D3EE),
+    'shared-capability' => const Color(0xFFF472B6),
+    'validated-by' => const Color(0xFF4ADE80),
+    'detail' => const Color(0xFF34D399),
+    _ => const Color(0xFFA78BFA),
+  };
 
   Color _verificationColor(String? status) => switch (status) {
-        'failed' => const Color(0xFFF87171),
-        'running' => const Color(0xFF67E8F9),
-        'passed' => const Color(0xFF86EFAC),
-        _ => const Color(0xFF94A3B8),
-      };
+    'failed' => const Color(0xFFF87171),
+    'running' => const Color(0xFF67E8F9),
+    'passed' => const Color(0xFF86EFAC),
+    _ => const Color(0xFF94A3B8),
+  };
 
   @override
   bool shouldRepaint(covariant _GraphPainter oldDelegate) => true;
