@@ -79,7 +79,7 @@ for (const behavior of [
   'settings.agentActivityEnabled === false',
   'settings.promptEnabled === true',
   'host === "yunitrish006006.github.io"',
-  'window.__TOTEM_AGENT_ACTIVITY__ = hasSemanticTarget(semanticFocus) ? semanticFocus : event',
+  'window.__TOTEM_AGENT_ACTIVITY__ = semanticFocus && hasSemanticTarget(semanticFocus) ? semanticFocus : null',
   'latestLiveSemanticActivity',
   'appendCodexTranscript(events)',
   'codexEventLabel(event)',
@@ -142,6 +142,11 @@ for (const behavior of [
 ]) {
   assert.ok(flutterHost.includes(behavior), `Flutter maintained surface is missing: ${behavior}`);
 }
+assert.ok(
+  flutterHost.includes('final displayedGraphActivity = replaying ? _replayFrame!.activity : liveSemanticActivity') &&
+    !flutterHost.includes('liveSemanticActivity ??= liveActivity'),
+  'Flutter graph activity focus must clear after a task completes rather than pulse the last historical edit'
+);
 
 for (const behavior of [
   "with SingleTickerProviderStateMixin",
