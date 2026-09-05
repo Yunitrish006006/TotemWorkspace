@@ -322,15 +322,53 @@ function activityPayload(after = 0) {
   });
 }
 
-function statusPayload() {
-  const knowledge = loadKnowledge();
-  const reposRoot = defaultReposRoot(knowledge.root);
+function statusPayload({ knowledge = loadKnowledge(), reposRoot = defaultReposRoot(knowledge.root) } = {}) {
   const modules = workspaceStatus({ knowledge, reposRoot }).map(publicStatus);
   return Object.freeze({
     mode: "local",
     generatedAt: new Date().toISOString(),
     snapshot: knowledge.snapshot,
     modules
+  });
+}
+
+function createApiSnapshotCache({ knowledge, reposRoot }) {
+  const now = () => Date.now();
+  let status = null;
+  let graph = null;
+  let verification = null;
+
+  function cached(entry, ttlMs, build) {
+    if (entry && now() - entry.createdAt < ttlMs) return entry;
+    return Object.freeze({ createdAt: now(), value: build() });
+  }
+
+  return Object.freeze({
+    workspaceStatus() {
+      status = cached(status, 12_000, () => statusPayload({ knowledge, reposRoot }));
+      return status.value;
+    },
+    graphData() {
+      graph ??= Object.freeze(buildGraphViewModel({ knowledge, index: loadCodeIndex({ knowledge }) }));
+      return graph;
+    },
+    verificationState() {
+      verification = cached(verification, 6_000, () => verificationStatePayload({
+        workspaceRoot: knowledge.root,
+        knowledge,
+        verification: this.graphData().verification,
+        changeIntelligence: loadChangeIntelligence(knowledge.root)
+      }));
+      return verification.value;
+    },
+    invalidateVerification() {
+      verification = null;
+    },
+    invalidate() {
+      status = null;
+      graph = null;
+      verification = null;
+    }
   });
 }
 
@@ -543,7 +581,7 @@ function serveStatic(req, res, pathname, { flutterRoot = FLUTTER_WEB_ROOT } = {}
   }
 }
 
-async function handleApi(req, res, url, { agentAdapter, conversation, conversationToken } = {}) {
+async function handleApi(req, res, url, { agentAdapter, conversation, conversationToken, apiCache } = {}) {
   const pathname = url.pathname;
   const conversationTokenAccepted = sameSecret(conversationToken, bearerToken(req));
 
@@ -728,14 +766,12 @@ async function handleApi(req, res, url, { agentAdapter, conversation, conversati
   }
 
   if (req.method === "GET" && pathname === "/api/workspace-status") {
-    json(res, 200, statusPayload());
+    json(res, 200, apiCache.workspaceStatus());
     return true;
   }
 
   if (req.method === "GET" && pathname === "/api/graph-data") {
-    const knowledge = loadKnowledge();
-    const index = loadCodeIndex({ knowledge });
-    json(res, 200, buildGraphViewModel({ knowledge, index }));
+    json(res, 200, apiCache.graphData());
     return true;
   }
 
@@ -760,8 +796,7 @@ async function handleApi(req, res, url, { agentAdapter, conversation, conversati
       json(res, 200, saved);
       return true;
     }
-    const index = loadCodeIndex({ knowledge });
-    const graph = buildGraphViewModel({ knowledge, index });
+    const graph = apiCache.graphData();
     const gitChanges = collectGitChanges({ knowledge, reposRoot });
     json(res, 200, buildChangeIntelligence({
       knowledge,
@@ -785,16 +820,7 @@ async function handleApi(req, res, url, { agentAdapter, conversation, conversati
   }
 
   if (req.method === "GET" && pathname === "/api/verification-state") {
-    const knowledge = loadKnowledge();
-    const index = loadCodeIndex({ knowledge });
-    const graph = buildGraphViewModel({ knowledge, index });
-    const changeIntelligence = loadChangeIntelligence(knowledge.root);
-    json(res, 200, verificationStatePayload({
-      workspaceRoot: knowledge.root,
-      knowledge,
-      verification: graph.verification,
-      changeIntelligence
-    }));
+    json(res, 200, apiCache.verificationState());
     return true;
   }
 
@@ -808,6 +834,7 @@ async function handleApi(req, res, url, { agentAdapter, conversation, conversati
     try {
       const args = await readJsonBody(req);
       const event = appendActivity(args, { source: "agent-adapter" });
+      apiCache.invalidateVerification();
       json(res, 202, { status: "accepted", event });
     } catch (error) {
       json(res, 400, { error: error instanceof Error ? error.message : String(error) });
@@ -918,13 +945,14 @@ async function handleApi(req, res, url, { agentAdapter, conversation, conversati
     const args = await readJsonBody(req);
     const requested = Array.isArray(args.modules) ? args.modules : [];
     const result = refreshWorkspaceChanges(requested);
+    apiCache.invalidate();
     json(res, 200, {
       status: "ok",
       generatedAt: result.rendered.generatedAt,
       freshness: result.refreshed.freshness,
       graph: result.rendered,
       changeIntelligence: result.changeIntelligence,
-      workspace: statusPayload()
+      workspace: apiCache.workspaceStatus()
     });
     return true;
   }
@@ -942,6 +970,7 @@ export function createLocalViewerServer({
   const reposRoot = defaultReposRoot(knowledge.root);
   const conversation = providedConversation ?? createConversationSync();
   const conversationToken = boundedText(agentEnv.TOTEM_CONVERSATION_SYNC_TOKEN, 512);
+  const apiCache = createApiSnapshotCache({ knowledge, reposRoot });
   const liveRefreshModules = new Set();
   let liveRefreshTaskId = null;
   let liveRefreshTimer = null;
@@ -1001,6 +1030,7 @@ export function createLocalViewerServer({
     onActivity: (event) => {
       const enriched = enrichSemanticEdit(event);
       const recorded = appendActivity(enriched, { source: "codex-adapter" });
+      apiCache.invalidateVerification();
       const progress = safeConversationProgress(recorded);
       if (progress) {
         conversation.append({
@@ -1012,6 +1042,7 @@ export function createLocalViewerServer({
         });
       }
       if ((recorded.type === "file_edit" || recorded.type === "symbol_edit") && recorded.moduleId) {
+        apiCache.invalidate();
         scheduleLiveRefresh(recorded.moduleId, recorded.taskId);
       }
       return recorded;
@@ -1022,12 +1053,10 @@ export function createLocalViewerServer({
       liveRefreshModules.clear();
       liveRefreshTaskId = null;
       refreshWorkspaceChanges([], { taskId: task?.id ?? null });
+      apiCache.invalidate();
     }
   });
-  const currentGraph = buildGraphViewModel({
-    knowledge,
-    index: loadCodeIndex({ knowledge })
-  });
+  const currentGraph = apiCache.graphData();
   const replayState = loadDevelopmentReplay(knowledge.root);
   if (!replayState.checkpoints.length) {
     recordReplayCheckpoint(knowledge.root, {
@@ -1051,7 +1080,7 @@ export function createLocalViewerServer({
           res.end();
           return;
         }
-        if (await handleApi(req, res, url, { agentAdapter, conversation, conversationToken })) return;
+        if (await handleApi(req, res, url, { agentAdapter, conversation, conversationToken, apiCache })) return;
         json(res, 404, { error: "unknown api route" });
         return;
       }

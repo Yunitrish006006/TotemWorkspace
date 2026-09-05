@@ -39,7 +39,9 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
   final List<AgentActivityEvent> _activity = <AgentActivityEvent>[];
   int _activitySequence = 0;
   final List<DeveloperConversationEntry> _conversation = <DeveloperConversationEntry>[];
+  final Set<String> _activePolls = <String>{};
   int _conversationRevision = 0;
+  int _conversationPollFailures = 0;
   DeveloperConversationDraft? _conversationDraft;
   final String _conversationClientId = 'viewer:${DateTime.now().microsecondsSinceEpoch}';
   bool _probing = true;
@@ -88,9 +90,9 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
         if (mounted) setState(() => _probing = false);
         return;
       }
+      final status = await client.workspaceStatus();
+      final settings = await client.viewerSettings();
       final results = await Future.wait<Object>([
-        client.workspaceStatus(),
-        client.viewerSettings(),
         client.activity(),
         client.changeIntelligence(),
         client.verificationState(),
@@ -101,13 +103,11 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
         client.close();
         return;
       }
-      final status = results[0] as WorkspaceLiveStatus;
-      final settings = results[1] as ViewerSettings;
-      final activity = results[2] as AgentActivityBatch;
-      final change = results[3] as ChangeIntelligence;
-      final verification = results[4] as VerificationState;
-      final adapter = results[5] as AgentAdapterStatus;
-      final replayTimeline = results[6] as DevelopmentReplayTimeline;
+      final activity = results[0] as AgentActivityBatch;
+      final change = results[1] as ChangeIntelligence;
+      final verification = results[2] as VerificationState;
+      final adapter = results[3] as AgentAdapterStatus;
+      final replayTimeline = results[4] as DevelopmentReplayTimeline;
       setState(() {
         _client = client;
         _live = status;
@@ -122,16 +122,16 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
         _probing = false;
         _liveError = null;
       });
-      _poller = Timer.periodic(const Duration(seconds: 5), (_) => unawaited(_pollStatus()));
-      _activityPoller = Timer.periodic(const Duration(seconds: 1), (_) => unawaited(_pollActivity()));
+      _poller = Timer.periodic(const Duration(seconds: 10), (_) => unawaited(_pollStatus()));
+      _activityPoller = Timer.periodic(const Duration(seconds: 2), (_) => unawaited(_pollActivity()));
       _verificationPoller =
-          Timer.periodic(const Duration(seconds: 2), (_) => unawaited(_pollVerification()));
+          Timer.periodic(const Duration(seconds: 8), (_) => unawaited(_pollVerification()));
       _adapterPoller =
-          Timer.periodic(const Duration(seconds: 2), (_) => unawaited(_pollAdapter()));
+          Timer.periodic(const Duration(seconds: 3), (_) => unawaited(_pollAdapter()));
       _replayPoller =
-          Timer.periodic(const Duration(seconds: 3), (_) => unawaited(_pollReplayTimeline()));
+          Timer.periodic(const Duration(seconds: 5), (_) => unawaited(_pollReplayTimeline()));
       _conversationPoller =
-          _conversationAvailable ? Timer.periodic(const Duration(seconds: 1), (_) => unawaited(_pollConversation())) : null;
+          _conversationAvailable ? Timer.periodic(const Duration(milliseconds: 1500), (_) => unawaited(_pollConversation())) : null;
       if (_conversationAvailable) unawaited(_pollConversation());
     } catch (error) {
       client.close();
@@ -147,7 +147,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
 
   Future<void> _pollStatus() async {
     final client = _client;
-    if (client == null || _refreshing) return;
+    if (client == null || _refreshing || !_activePolls.add('workspace-status')) return;
     try {
       final status = await client.workspaceStatus();
       if (!mounted) return;
@@ -158,6 +158,8 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
     } catch (error) {
       if (!mounted) return;
       setState(() { _liveError = error.toString(); _liveErrorSource = 'workspace-status'; });
+    } finally {
+      _activePolls.remove('workspace-status');
     }
   }
 
@@ -174,7 +176,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
 
   Future<void> _pollActivity() async {
     final client = _client;
-    if (client == null || !_settings.agentActivityEnabled) return;
+    if (client == null || !_settings.agentActivityEnabled || !_activePolls.add('activity')) return;
     try {
       final batch = await client.activity(after: _activitySequence);
       if (!mounted || batch.events.isEmpty) return;
@@ -202,6 +204,8 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
     } catch (error) {
       if (!mounted) return;
       setState(() { _liveError = error.toString(); _liveErrorSource = 'activity'; });
+    } finally {
+      _activePolls.remove('activity');
     }
   }
 
@@ -219,17 +223,29 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
 
   Future<void> _pollConversation() async {
     final client = _client;
-    if (client == null || !_settings.promptEnabled || !_conversationAvailable) return;
+    if (client == null || !_settings.promptEnabled || !_conversationAvailable || !_activePolls.add('conversation')) return;
     try {
       final batch = await client.conversation(after: _conversationRevision);
       if (!mounted) return;
-      setState(() => _mergeConversation(batch));
+      setState(() {
+        _conversationPollFailures = 0;
+        _mergeConversation(batch);
+        if (_liveErrorSource == 'conversation') {
+          _liveError = null;
+          _liveErrorSource = null;
+        }
+      });
     } catch (error) {
       if (!mounted) return;
-      setState(() {
-        _liveError = error.toString();
-        _liveErrorSource = 'conversation';
-      });
+      _conversationPollFailures += 1;
+      if (_conversationPollFailures >= 3) {
+        setState(() {
+          _liveError = error.toString();
+          _liveErrorSource = 'conversation';
+        });
+      }
+    } finally {
+      _activePolls.remove('conversation');
     }
   }
 
@@ -252,7 +268,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
 
   Future<void> _pollVerification() async {
     final client = _client;
-    if (client == null || _refreshing) return;
+    if (client == null || _refreshing || !_activePolls.add('verification')) return;
     try {
       final verification = await client.verificationState();
       if (!mounted) return;
@@ -263,12 +279,14 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
     } catch (error) {
       if (!mounted) return;
       setState(() { _liveError = error.toString(); _liveErrorSource = 'verification'; });
+    } finally {
+      _activePolls.remove('verification');
     }
   }
 
   Future<void> _pollAdapter() async {
     final client = _client;
-    if (client == null) return;
+    if (client == null || !_activePolls.add('agent-adapter')) return;
     try {
       final adapter = await client.agentAdapterStatus();
       if (!mounted) return;
@@ -282,12 +300,14 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
     } catch (error) {
       if (!mounted) return;
       setState(() { _liveError = error.toString(); _liveErrorSource = 'agent-adapter'; });
+    } finally {
+      _activePolls.remove('agent-adapter');
     }
   }
 
   Future<void> _pollReplayTimeline() async {
     final client = _client;
-    if (client == null || !_settings.replayEnabled) return;
+    if (client == null || !_settings.replayEnabled || !_activePolls.add('replay')) return;
     try {
       final timeline = await client.replayTimeline();
       if (!mounted) return;
@@ -301,6 +321,8 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
     } catch (error) {
       if (!mounted) return;
       setState(() { _liveError = error.toString(); _liveErrorSource = 'replay'; });
+    } finally {
+      _activePolls.remove('replay');
     }
   }
 

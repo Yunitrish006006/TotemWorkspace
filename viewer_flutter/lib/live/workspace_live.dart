@@ -1099,14 +1099,14 @@ class LocalWorkspaceClient {
   Uri _uri(String path) => Uri.parse('$baseUrl$path');
 
   Future<bool> health() async {
-    final response = await _client.get(_uri('/api/health')).timeout(const Duration(seconds: 2));
+    final response = await _client.get(_uri('/api/health')).timeout(const Duration(seconds: 8));
     if (response.statusCode != 200) return false;
     final payload = jsonDecode(response.body) as Map<String, dynamic>;
     return payload['status'] == 'ok' && payload['mode'] == 'local';
   }
 
   Future<WorkspaceLiveStatus> workspaceStatus() async {
-    final response = await _client.get(_uri('/api/workspace-status')).timeout(const Duration(seconds: 4));
+    final response = await _client.get(_uri('/api/workspace-status')).timeout(const Duration(seconds: 12));
     _requireSuccess(response, 'workspace status');
     return WorkspaceLiveStatus.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
@@ -1137,14 +1137,14 @@ class LocalWorkspaceClient {
 
   Future<AgentActivityBatch> activity({int after = 0}) async {
     final uri = _uri('/api/activity').replace(queryParameters: {'after': '$after'});
-    final response = await _client.get(uri).timeout(const Duration(seconds: 4));
+    final response = await _client.get(uri).timeout(const Duration(seconds: 8));
     _requireSuccess(response, 'agent activity');
     return AgentActivityBatch.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
 
   Future<DeveloperConversationBatch> conversation({int after = 0}) async {
     final uri = _uri('/api/conversation').replace(queryParameters: {'after': '$after'});
-    final response = await _client.get(uri).timeout(const Duration(seconds: 4));
+    final response = await _client.get(uri).timeout(const Duration(seconds: 8));
     _requireSuccess(response, 'developer conversation');
     return DeveloperConversationBatch.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
@@ -1156,12 +1156,12 @@ class LocalWorkspaceClient {
           headers: const {'content-type': 'application/json'},
           body: jsonEncode({'clientId': clientId, 'text': text}),
         )
-        .timeout(const Duration(seconds: 4));
+        .timeout(const Duration(seconds: 8));
     _requireSuccess(response, 'developer conversation draft');
   }
 
   Future<AgentAdapterStatus> agentAdapterStatus() async {
-    final response = await _client.get(_uri('/api/agent-adapter')).timeout(const Duration(seconds: 4));
+    final response = await _client.get(_uri('/api/agent-adapter')).timeout(const Duration(seconds: 8));
     _requireSuccess(response, 'agent adapter status');
     return AgentAdapterStatus.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
   }
