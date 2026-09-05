@@ -180,6 +180,12 @@ Keep `.env` outside source control. A systemd unit should use an `EnvironmentFil
 with mode `0600`, set `WorkingDirectory` to this directory, and run only after
 the configured workspaces are mounted.
 
+CodexDiscord is maintained inside TotemWorkspace at `tools/codex-discord/`.
+Use the tracked [systemd template](systemd/codex-discord.service) for a per-user
+service, then place the mode-`0600` `.env` next to this README. The template
+uses `%h/workspace/TotemWorkspace`, so adjust it only if this workspace lives
+somewhere else.
+
 `CODEX_MAX_RUNTIME_SECONDS=0` leaves Codex tasks running until they complete or
 the user cancels them. Set it to 30–7200 only when a finite safety deadline is
 desired.

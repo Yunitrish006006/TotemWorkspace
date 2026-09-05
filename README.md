@@ -21,6 +21,7 @@ TotemWorkspace 是 11 個現役 Totem 模組的公開協作與文件總表。這
 - [依賴與軟整合契約](docs/dependency-contracts.md)
 - [開發注意事項](docs/development-guidelines.md)
 - [Codex Workspace Intelligence](docs/codex-intelligence.md)
+- [CodexDiscord 開發介面](tools/codex-discord/README.md)
 - [Flutter Viewer Migration](docs/flutter-viewer-roadmap.md)
 - [AI Development Graph](docs/ai-development-graph-plan.md)
 - [發布檢查表](docs/release-checklist.md)
@@ -157,6 +158,8 @@ node scripts/totem-activity.mjs status
 ### Discord 與網頁共用開發工作階段
 
 啟用 CodexDiscord 的本機同步後，Flutter Viewer 和 Discord 是同一個 TotemWorkspace Codex 佇列的兩個操作介面：網頁草稿會鏡像到 Discord、兩端送出的 Prompt 與經過白名單投影的處理狀態都會雙向顯示。完整 Prompt 只保留在 Bridge 記憶體中，不寫入 development replay；同步 API 只接受 loopback Viewer 或持有私有 token 的 CodexDiscord。
+
+CodexDiscord 現在是本 repository 的 `tools/codex-discord/` 子樹；它仍使用獨立的 Discord Bot application，並不取代 Minecraft 的 TotemDiscordBridge。
 
 在啟動 Bridge 的環境檔設定一組至少 16 字元、僅供這兩個本機服務共用的 token：
 

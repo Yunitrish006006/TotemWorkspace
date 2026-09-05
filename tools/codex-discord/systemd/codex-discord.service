@@ -1,0 +1,23 @@
+[Unit]
+Description=Allow-listed Discord bridge for local Codex sessions
+Documentation=file:%h/workspace/TotemWorkspace/tools/codex-discord/README.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/workspace/TotemWorkspace/tools/codex-discord
+Environment=PATH=%h/.npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+Environment=CODEX_STATE_DIR=%h/.local/state/codex-discord
+EnvironmentFile=%h/workspace/TotemWorkspace/tools/codex-discord/.env
+StateDirectory=codex-discord
+ExecStartPre=/usr/bin/test -r %h/workspace/TotemWorkspace/tools/codex-discord/.env
+ExecStart=/usr/bin/node %h/workspace/TotemWorkspace/tools/codex-discord/src/index.mjs
+Restart=on-failure
+RestartSec=10
+KillSignal=SIGTERM
+TimeoutStopSec=30
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target
