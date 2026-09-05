@@ -56,6 +56,18 @@ void main() {
           'branch': 'main',
           'dirty': true,
           'snapshotMatch': false,
+          'locales': <String, Object>{
+            'ja_jp': <String, Object>{
+              'applicable': true,
+              'sourceFiles': 2,
+              'presentFiles': 2,
+              'validFiles': 2,
+              'sourceKeys': 10,
+              'translatedKeys': 7,
+              'missingKeys': 3,
+              'complete': false,
+            },
+          },
         },
         <String, Object>{
           'id': 'totem-b',
@@ -65,6 +77,18 @@ void main() {
           'branch': 'main',
           'dirty': false,
           'snapshotMatch': true,
+          'locales': <String, Object>{
+            'ja_jp': <String, Object>{
+              'applicable': true,
+              'sourceFiles': 1,
+              'presentFiles': 1,
+              'validFiles': 1,
+              'sourceKeys': 3,
+              'translatedKeys': 3,
+              'missingKeys': 0,
+              'complete': true,
+            },
+          },
         },
         <String, Object>{
           'id': 'totem-c',
@@ -79,6 +103,9 @@ void main() {
     expect(status.dirtyCount, 1);
     expect(status.driftCount, 1);
     expect(status.missingCount, 1);
+    expect(status.japaneseRequiredCount, 2);
+    expect(status.japaneseCompleteCount, 1);
+    expect(status.module('totem-a')?.japanese?.missingKeys, 3);
     expect(status.module('totem-a')?.branch, 'main');
   });
 

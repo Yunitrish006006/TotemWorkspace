@@ -202,7 +202,8 @@ function publicStatus(entry) {
     dirty: entry.dirty ?? false,
     snapshotMatch: entry.snapshotMatch ?? false,
     expectedCommit: entry.expectedCommit ?? null,
-    expectedBranch: entry.expectedBranch ?? null
+    expectedBranch: entry.expectedBranch ?? null,
+    locales: entry.locales ?? {}
   });
 }
 

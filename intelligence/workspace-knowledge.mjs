@@ -640,6 +640,70 @@ function gitOutput(cwd, args) {
   }
 }
 
+function localeCoverage(repoPath, locale) {
+  const assetsRoot = path.join(repoPath, "src", "main", "resources", "assets");
+  const englishFiles = [];
+  const pending = [assetsRoot];
+  while (pending.length > 0) {
+    const directory = pending.pop();
+    let entries = [];
+    try {
+      entries = fs.readdirSync(directory, { withFileTypes: true });
+    } catch {
+      continue;
+    }
+    for (const entry of entries) {
+      const entryPath = path.join(directory, entry.name);
+      if (entry.isDirectory()) {
+        pending.push(entryPath);
+      } else if (entry.isFile() && entry.name === "en_us.json" && path.basename(path.dirname(entryPath)) === "lang") {
+        englishFiles.push(entryPath);
+      }
+    }
+  }
+
+  let presentFiles = 0;
+  let validFiles = 0;
+  let sourceKeys = 0;
+  let translatedKeys = 0;
+  for (const englishFile of englishFiles) {
+    let source;
+    try {
+      source = readJson(englishFile);
+    } catch {
+      continue;
+    }
+    if (source == null || Array.isArray(source) || typeof source !== "object") continue;
+    const targetFile = path.join(path.dirname(englishFile), `${locale}.json`);
+    let target = null;
+    if (fs.existsSync(targetFile)) {
+      presentFiles += 1;
+      try {
+        target = readJson(targetFile);
+        if (target != null && !Array.isArray(target) && typeof target === "object") validFiles += 1;
+      } catch {
+        target = null;
+      }
+    }
+    for (const key of Object.keys(source)) {
+      sourceKeys += 1;
+      if (target != null && typeof target[key] === "string") translatedKeys += 1;
+    }
+  }
+
+  const applicable = englishFiles.length > 0;
+  return Object.freeze({
+    applicable,
+    sourceFiles: englishFiles.length,
+    presentFiles,
+    validFiles,
+    sourceKeys,
+    translatedKeys,
+    missingKeys: sourceKeys - translatedKeys,
+    complete: applicable && presentFiles === englishFiles.length && validFiles === englishFiles.length && translatedKeys === sourceKeys
+  });
+}
+
 export function workspaceStatus({ knowledge = loadKnowledge(), reposRoot = defaultReposRoot(knowledge.root) } = {}) {
   return Object.freeze(knowledge.modules.map((module) => {
     const repoPath = path.join(reposRoot, module.repoName);
@@ -648,6 +712,7 @@ export function workspaceStatus({ knowledge = loadKnowledge(), reposRoot = defau
         id: module.id,
         repoName: module.repoName,
         present: false,
+        locales: Object.freeze({ ja_jp: localeCoverage(repoPath, "ja_jp") }),
         expectedCommit: module.commit,
         expectedBranch: module.defaultBranch
       });
@@ -660,6 +725,7 @@ export function workspaceStatus({ knowledge = loadKnowledge(), reposRoot = defau
       repoName: module.repoName,
       path: repoPath,
       present: true,
+      locales: Object.freeze({ ja_jp: localeCoverage(repoPath, "ja_jp") }),
       head,
       branch,
       dirty: Boolean(status),

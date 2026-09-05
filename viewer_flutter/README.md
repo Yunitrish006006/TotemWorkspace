@@ -41,11 +41,11 @@ cd viewer_flutter
 flutter run -d chrome
 ```
 
-Flutter running on localhost automatically discovers `http://127.0.0.1:8765`. The local API accepts browser origins only from `localhost`, `127.0.0.1`, or `::1` and the server itself still binds only to loopback.
+Flutter running on localhost automatically discovers `http://127.0.0.1:18765`. The local API accepts browser origins only from `localhost`, `127.0.0.1`, or `::1` and the server itself still binds only to loopback.
 
 LIVE LOCAL provides:
 
-- five-second branch / HEAD / dirty / snapshot-drift polling
+- five-second branch / HEAD / dirty / snapshot-drift polling, plus Japanese locale key coverage (the bridge refreshes this status at most every 12 seconds)
 - 11-module workspace status dialog
 - incremental code-index refresh through the existing `/api/refresh`
 - in-place graph reload from `/api/graph-data` after refresh, without reloading the browser page

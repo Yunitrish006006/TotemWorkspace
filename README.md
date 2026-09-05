@@ -89,7 +89,7 @@ node scripts/totem-intelligence.mjs render-graph
 
 Flutter 不維護自己的 architecture graph。`scripts/render-flutter-graph.mjs` 直接呼叫同一個 `buildGraphViewModel()`，輸出 `viewer_flutter/assets/graph-data.json`，確保 JS 與 Flutter renderer 使用相同語意來源。
 
-目前 Flutter 已完成 curated 3D architecture parity 與 Web LIVE LOCAL：feature cluster、relation-aware placement、精確 endpoint、線條篩選、spotlight、桌機／觸控／鍵盤操作，以及 branch / HEAD / dirty / snapshot drift 輪詢與增量 graph refresh。
+目前 Flutter 已完成 curated 3D architecture parity 與 Web LIVE LOCAL：feature cluster、relation-aware placement、精確 endpoint、線條篩選、spotlight、桌機／觸控／鍵盤操作，以及 branch / HEAD / dirty / snapshot drift、日文語系完整度輪詢與增量 graph refresh。
 
 本機執行：
 

@@ -72,7 +72,13 @@
     if (entry.dirty) flags.push("dirty");
     if (!entry.snapshotMatch) flags.push("snapshot drift");
     if (!flags.length) flags.push("snapshot match");
-    return entry.repoName + "｜" + (entry.branch || "detached") + "｜" + shortSha(entry.head) + "｜" + flags.join(", ");
+    var japanese = entry.locales && entry.locales.ja_jp;
+    var japaneseState = !japanese || japanese.applicable !== true
+      ? "JA n/a"
+      : japanese.complete === true
+        ? "JA complete"
+        : "JA " + (japanese.translatedKeys || 0) + "/" + (japanese.sourceKeys || 0);
+    return entry.repoName + "｜" + (entry.branch || "detached") + "｜" + shortSha(entry.head) + "｜" + flags.join(", ") + "｜" + japaneseState;
   }
 
   function summary(payload) {
@@ -80,7 +86,11 @@
     var missing = modules.filter(function (entry) { return !entry.present; }).length;
     var dirty = modules.filter(function (entry) { return entry.present && entry.dirty; }).length;
     var drift = modules.filter(function (entry) { return entry.present && !entry.snapshotMatch; }).length;
-    return { modules: modules.length, missing: missing, dirty: dirty, drift: drift };
+    var japanese = modules.filter(function (entry) {
+      return entry.present && entry.locales && entry.locales.ja_jp && entry.locales.ja_jp.applicable === true;
+    });
+    var japaneseComplete = japanese.filter(function (entry) { return entry.locales.ja_jp.complete === true; }).length;
+    return { modules: modules.length, missing: missing, dirty: dirty, drift: drift, japaneseRequired: japanese.length, japaneseComplete: japaneseComplete };
   }
 
   function renderBadge(payload) {
@@ -89,7 +99,7 @@
     promptToggle.hidden = false;
     statusButton.hidden = false;
     refreshButton.hidden = false;
-    liveBadge.textContent = "LIVE LOCAL · " + counts.dirty + " dirty · " + counts.drift + " drift" + (counts.missing ? " · " + counts.missing + " missing" : "");
+    liveBadge.textContent = "LIVE LOCAL · " + counts.dirty + " dirty · " + counts.drift + " drift" + (counts.missing ? " · " + counts.missing + " missing" : "") + " · JA " + counts.japaneseComplete + "/" + counts.japaneseRequired;
     liveBadge.title = "Last checked " + (payload.generatedAt || "now");
   }
 
@@ -394,22 +404,32 @@
         latestLiveSemanticActivity && latestLiveSemanticActivity.taskId === event.taskId) {
       latestLiveSemanticActivity = null;
     }
-    var semanticFocus = latestLiveSemanticActivity &&
-      (!activeTask || !latestLiveSemanticActivity.taskId || latestLiveSemanticActivity.taskId === activeTask.id)
+    // A graph pulse denotes an executing task, never the latest historical edit.
+    // Without this guard, reopening the viewer could leave the last module pulsing
+    // indefinitely after Codex had already completed the task.
+    var semanticFocus = activeTask && latestLiveSemanticActivity &&
+      latestLiveSemanticActivity.taskId === activeTask.id
       ? latestLiveSemanticActivity
-      : event;
-    window.__TOTEM_AGENT_ACTIVITY__ = hasSemanticTarget(semanticFocus) ? semanticFocus : event;
+      : null;
+    window.__TOTEM_AGENT_ACTIVITY__ = semanticFocus && hasSemanticTarget(semanticFocus) ? semanticFocus : null;
     var target = event.componentId || event.featureId || event.moduleId || event.file || event.symbol || event.test || "";
     activityBadge.hidden = false;
     activityBadge.textContent = "AGENT · " + event.type + (target ? " · " + target : "") + (event.summary ? " · " + event.summary : "");
     activityBadge.title = event.timestamp || "";
     var renderer = window.__TOTEM_CLUSTER_3D_V2__;
-    if (renderer && typeof renderer.focusActivity === "function") {
+    if (window.__TOTEM_AGENT_ACTIVITY__ && renderer && typeof renderer.focusActivity === "function") {
       renderer.focusActivity(window.__TOTEM_AGENT_ACTIVITY__, settings.autoExpandAgentFocus !== false);
+    } else if (renderer && typeof renderer.draw === "function") {
+      renderer.draw();
     } else {
       requestAgentDraw();
     }
-    if (!activityAnimation) activityAnimation = window.setInterval(requestAgentDraw, 80);
+    if (window.__TOTEM_AGENT_ACTIVITY__) {
+      if (!activityAnimation) activityAnimation = window.setInterval(requestAgentDraw, 80);
+    } else if (activityAnimation) {
+      window.clearInterval(activityAnimation);
+      activityAnimation = null;
+    }
   }
 
   async function pollActivity() {
@@ -689,7 +709,7 @@
     var counts = summary(latest);
     setInfo(
       "LIVE LOCAL workspace",
-      counts.modules + " modules · " + counts.dirty + " dirty · " + counts.drift + " snapshot drift · " + counts.missing + " missing",
+      counts.modules + " modules · " + counts.dirty + " dirty · " + counts.drift + " snapshot drift · " + counts.missing + " missing · JA " + counts.japaneseComplete + "/" + counts.japaneseRequired + " complete",
       latest.modules.map(moduleLine)
     );
   });

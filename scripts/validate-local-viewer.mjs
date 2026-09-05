@@ -57,6 +57,7 @@ assert.ok(html.includes('id="refreshLocal"'), "viewer must expose local refresh 
 assert.ok(html.includes('<script src="viewer/local-live.js"></script>'), "viewer must load the local-live adapter");
 assert.ok(html.includes("connect-src 'self' http://127.0.0.1:18765"), "legacy CSP must permit the loopback bridge");
 assert.ok(liveSource.includes('apiUrl("/api/workspace-status")'), "legacy local adapter must poll workspace status through the local bridge base");
+assert.ok(liveSource.includes("A graph pulse denotes an executing task"), "legacy activity pulse must not persist after an agent task completes");
 assert.ok(liveSource.includes('apiUrl("/api/refresh")'), "legacy local adapter must trigger index refresh through the local bridge base");
 assert.ok(liveSource.includes('apiUrl("/api/viewer-settings")'), "legacy viewer must use shared local viewer settings");
 assert.ok(liveSource.includes('apiUrl("/api/activity?after="'), "legacy viewer must poll shared agent activity");
@@ -471,6 +472,16 @@ try {
   assert.equal(payload.mode, "local");
   assert.equal(payload.modules.length, 11);
   assert.ok(payload.modules.every((entry) => !Object.hasOwn(entry, "path")), "browser API must not expose absolute local repo paths");
+  assert.ok(payload.modules.every((entry) => entry.locales?.ja_jp), "workspace status must report Japanese localization coverage");
+  assert.ok(payload.modules.every((entry) => typeof entry.locales.ja_jp.complete === "boolean"), "Japanese localization coverage must report completion state");
+  const japaneseModules = payload.modules.filter((entry) => entry.present && entry.locales.ja_jp.applicable);
+  assert.equal(japaneseModules.length, 10, "all localized Totem modules except the language-free Discord bridge must report Japanese coverage");
+  assert.ok(japaneseModules.every((entry) => entry.locales.ja_jp.complete), "Japanese locale coverage must be complete for every localized module");
+  assert.equal(
+    japaneseModules.reduce((sum, entry) => sum + entry.locales.ja_jp.sourceKeys, 0),
+    1365,
+    "Japanese coverage must account for every current English language key"
+  );
 
   const flutterRoot = await fetch(`${base}/`);
   assert.equal(flutterRoot.status, 200);

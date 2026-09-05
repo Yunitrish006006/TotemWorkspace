@@ -478,6 +478,12 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
                         : module.head!.length > 10
                             ? module.head!.substring(0, 10)
                             : module.head!;
+                    final japanese = module.japanese;
+                    final japaneseState = japanese == null || !japanese.applicable
+                        ? 'JA n/a'
+                        : japanese.complete
+                            ? 'JA complete'
+                            : 'JA ${japanese.translatedKeys}/${japanese.sourceKeys}';
                     return Container(
                       padding: const EdgeInsets.all(11),
                       decoration: BoxDecoration(
@@ -508,7 +514,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
                                     style: const TextStyle(fontWeight: FontWeight.w700)),
                                 const SizedBox(height: 3),
                                 Text(
-                                  '${module.branch ?? 'no branch'} · $head${module.snapshotMatch ? ' · snapshot match' : ' · snapshot drift'}',
+                                  '${module.branch ?? 'no branch'} · $head${module.snapshotMatch ? ' · snapshot match' : ' · snapshot drift'} · $japaneseState',
                                   style: const TextStyle(color: Color(0xFF9FB4CA), fontSize: 12),
                                 ),
                               ],
@@ -593,7 +599,6 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
         }
       }
     }
-    liveSemanticActivity ??= liveActivity;
     final displayedActivity = replaying ? _replayFrame!.activity : liveActivity;
     final displayedGraphActivity = replaying ? _replayFrame!.activity : liveSemanticActivity;
     final displayedChange = replaying ? _replayFrame!.changeIntelligence : _change;
@@ -1379,7 +1384,7 @@ class _ModeBanner extends StatelessWidget {
     final label = probing
         ? 'CHECKING LOCAL WORKSPACE'
         : local
-            ? 'LIVE LOCAL · ${live!.dirtyCount} dirty · ${live!.driftCount} drift · ${live!.missingCount} missing'
+            ? 'LIVE LOCAL · ${live!.dirtyCount} dirty · ${live!.driftCount} drift · ${live!.missingCount} missing · JA ${live!.japaneseCompleteCount}/${live!.japaneseRequiredCount}'
             : 'PUBLISHED SNAPSHOT · FLUTTER ROOT';
     return SafeArea(
       bottom: false,

@@ -22,6 +22,39 @@ String? discoverLocalApiBase({String configured = _configuredLocalApi, Uri? page
   return 'http://127.0.0.1:18765';
 }
 
+class WorkspaceLocaleStatus {
+  const WorkspaceLocaleStatus({
+    required this.applicable,
+    required this.sourceFiles,
+    required this.presentFiles,
+    required this.validFiles,
+    required this.sourceKeys,
+    required this.translatedKeys,
+    required this.missingKeys,
+    required this.complete,
+  });
+
+  final bool applicable;
+  final int sourceFiles;
+  final int presentFiles;
+  final int validFiles;
+  final int sourceKeys;
+  final int translatedKeys;
+  final int missingKeys;
+  final bool complete;
+
+  factory WorkspaceLocaleStatus.fromJson(Map<String, dynamic> json) => WorkspaceLocaleStatus(
+        applicable: json['applicable'] as bool? ?? false,
+        sourceFiles: json['sourceFiles'] as int? ?? 0,
+        presentFiles: json['presentFiles'] as int? ?? 0,
+        validFiles: json['validFiles'] as int? ?? 0,
+        sourceKeys: json['sourceKeys'] as int? ?? 0,
+        translatedKeys: json['translatedKeys'] as int? ?? 0,
+        missingKeys: json['missingKeys'] as int? ?? 0,
+        complete: json['complete'] as bool? ?? false,
+      );
+}
+
 class WorkspaceModuleStatus {
   const WorkspaceModuleStatus({
     required this.id,
@@ -33,6 +66,7 @@ class WorkspaceModuleStatus {
     required this.snapshotMatch,
     required this.expectedCommit,
     required this.expectedBranch,
+    required this.locales,
   });
 
   final String id;
@@ -44,20 +78,33 @@ class WorkspaceModuleStatus {
   final bool snapshotMatch;
   final String? expectedCommit;
   final String? expectedBranch;
+  final Map<String, WorkspaceLocaleStatus> locales;
 
   bool get drift => present && !snapshotMatch;
+  WorkspaceLocaleStatus? get japanese => locales['ja_jp'];
 
-  factory WorkspaceModuleStatus.fromJson(Map<String, dynamic> json) => WorkspaceModuleStatus(
-        id: json['id'] as String? ?? '',
-        repoName: json['repoName'] as String? ?? '',
-        present: json['present'] as bool? ?? false,
-        head: json['head'] as String?,
-        branch: json['branch'] as String?,
-        dirty: json['dirty'] as bool? ?? false,
-        snapshotMatch: json['snapshotMatch'] as bool? ?? false,
-        expectedCommit: json['expectedCommit'] as String?,
-        expectedBranch: json['expectedBranch'] as String?,
-      );
+  factory WorkspaceModuleStatus.fromJson(Map<String, dynamic> json) {
+    final rawLocales = json['locales'] as Map? ?? const <Object?, Object?>{};
+    return WorkspaceModuleStatus(
+      id: json['id'] as String? ?? '',
+      repoName: json['repoName'] as String? ?? '',
+      present: json['present'] as bool? ?? false,
+      head: json['head'] as String?,
+      branch: json['branch'] as String?,
+      dirty: json['dirty'] as bool? ?? false,
+      snapshotMatch: json['snapshotMatch'] as bool? ?? false,
+      expectedCommit: json['expectedCommit'] as String?,
+      expectedBranch: json['expectedBranch'] as String?,
+      locales: rawLocales.map(
+        (key, value) => MapEntry(
+          key.toString(),
+          value is Map
+              ? WorkspaceLocaleStatus.fromJson(Map<String, dynamic>.from(value))
+              : WorkspaceLocaleStatus.fromJson(const <String, dynamic>{}),
+        ),
+      ),
+    );
+  }
 }
 
 class WorkspaceLiveStatus {
@@ -76,6 +123,8 @@ class WorkspaceLiveStatus {
   int get dirtyCount => modules.where((module) => module.dirty).length;
   int get driftCount => modules.where((module) => module.drift).length;
   int get missingCount => modules.where((module) => !module.present).length;
+  int get japaneseRequiredCount => modules.where((module) => module.present && module.japanese?.applicable == true).length;
+  int get japaneseCompleteCount => modules.where((module) => module.present && module.japanese?.complete == true).length;
 
   WorkspaceModuleStatus? module(String id) {
     for (final module in modules) {
