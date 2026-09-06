@@ -168,21 +168,37 @@ for (const fragment of [
 }
 for (const fragment of [
   "_ChangeStrip(change: displayedChange!)",
-  "changedEntityIds: displayedChange?.changedEntityIds",
-  "impactedModuleIds: displayedChange?.impactedModuleIds",
   "changeAnimationsEnabled: _settings.changeAnimationsEnabled",
 ]) {
   assert.ok(flutterHost.includes(fragment), `Flutter Phase 3 host is missing: ${fragment}`);
 }
+assert.match(
+  flutterHost,
+  /changedEntityIds:\s*displayedChange\?\.changedEntityIds\s*\?\?\s*const <String>\{\}/,
+  "Flutter Phase 3 host must forward changed entity IDs with an empty-set fallback",
+);
+assert.match(
+  flutterHost,
+  /impactedModuleIds:\s*displayedChange\?\.impactedModuleIds\s*\?\?\s*const <String>\{\}/,
+  "Flutter Phase 3 host must forward impacted module IDs with an empty-set fallback",
+);
 for (const fragment of [
   "changedEntityIds",
   "impactedModuleIds",
   "changedRelation",
-  "final changed = changedEntityIds.contains(node.id)",
-  "final impacted = node.kind == 'module' && impactedModuleIds.contains(node.id)",
 ]) {
   assert.ok(flutterView.includes(fragment), `Flutter Phase 3 renderer is missing: ${fragment}`);
 }
+assert.match(
+  flutterView,
+  /final changed =\s*showChangeNodeIndicators\s*&&\s*changedEntityIds\.contains\(node\.id\)/,
+  "Flutter Phase 3 renderer must gate changed-node indicators through the shared setting",
+);
+assert.match(
+  flutterView,
+  /final impacted =\s*showChangeNodeIndicators\s*&&\s*node\.kind == 'module'\s*&&\s*impactedModuleIds\.contains\(node\.id\)/,
+  "Flutter Phase 3 renderer must gate impacted-module indicators through the shared setting",
+);
 assert.ok(flutterScene.includes("final id = 'implementation:${component.id}:$implementationPath'"),
   "Flutter implementation IDs must be path-stable for semantic diff");
 
