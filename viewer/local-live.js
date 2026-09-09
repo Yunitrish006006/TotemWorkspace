@@ -160,32 +160,28 @@
   }
 
   function renderOrchestration(payload) {
-    var plan = payload || {};
-    var assignments = Array.isArray(plan.assignments) ? plan.assignments : [];
-    var roles = assignments.map(function (entry) { return entry.role; });
-    var mode = plan.mode || "primary-only";
-    var score = Number(plan.score || 0);
-    var benefit = plan.estimatedBenefit || "none";
-    orchestrationBadge.hidden = false;
-    orchestrationBadge.dataset.mode = mode;
-    orchestrationBadge.textContent = "ORCH · " + mode + " · score " + score + " · " +
-      assignments.length + " subagents · " + (roles.length ? roles.join(", ") : "Primary only") +
-      " · benefit " + benefit;
-    orchestrationBadge.title = plan.rationale && Array.isArray(plan.rationale.modules)
-      ? "Modules: " + plan.rationale.modules.join(", ")
-      : "Adaptive orchestration";
+    renderOrchestrationSummary(payload);
   }
 
   function renderOrchestrationSummary(summary) {
     if (!summary) return;
-    var roles = Array.isArray(summary.roles) ? summary.roles : [];
+    var execution = summary.execution || {};
+    var waves = Array.isArray(summary.waves) ? summary.waves : [];
+    var modules = summary.affectedModules || summary.modules || [];
+    var hints = waves.map(function (wave) { return wave.modelHint; }).filter(Boolean);
     orchestrationBadge.hidden = false;
-    orchestrationBadge.dataset.mode = summary.mode || "primary-only";
-    orchestrationBadge.textContent = "ORCH · " + (summary.mode || "primary-only") +
-      " · score " + Number(summary.score || 0) +
-      " · " + Number(summary.subagents || 0) + " subagents · " +
-      (roles.length ? roles.join(", ") : "Primary only") +
-      " · benefit " + (summary.estimatedBenefit || "none");
+    orchestrationBadge.dataset.mode = execution.sharedContractStabilizationRequired ? "stabilize" : "bounded";
+    orchestrationBadge.textContent = "PLAN · Execution constraints · " + waves.length +
+      " waves · max writes " + Number(execution.maxConcurrentWrites || 0) +
+      " · " + (execution.parallelismAllowed ? "parallel permitted" : "sequential") +
+      " · " + (hints[0] || "inherit-primary") +
+      (summary.independentReviewRequired ? " · independent review required" : "");
+    orchestrationBadge.title = "Planned only; actual agents and models require runtime evidence. Modules: " +
+      modules.join(", ") + "\nValidation: " +
+      ((summary.requiredValidation || {}).validationCategories || []).join(", ") + "\n" + waves.map(function (wave) {
+        return wave.id + ": " + (wave.writeAllowed ? "write " : "read ") +
+          (wave.modules || []).join(", ") + " after " + (wave.dependsOn || []).join(", ");
+      }).join("\n");
   }
 
   function codexEventLabel(event) {

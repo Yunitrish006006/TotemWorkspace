@@ -1162,31 +1162,35 @@ class _OrchestrationStrip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final roles = summary.roles.isEmpty
-        ? 'Primary only'
-        : summary.roles.join(', ');
-    final color = switch (summary.mode) {
-      'guarded-parallel' => const Color(0xFFF0ABFC),
-      'bounded-parallel' => const Color(0xFFC4B5FD),
-      'assisted' => const Color(0xFF93C5FD),
-      _ => const Color(0xFF94A3B8),
-    };
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
-      decoration: const BoxDecoration(
-        color: Color(0xFF151026),
-        border: Border(bottom: BorderSide(color: Color(0xFF4C3A70))),
-      ),
-      child: Text(
-        'ORCH · ${summary.mode} · score ${summary.score} · ${summary.subagents} subagents · $roles · benefit ${summary.estimatedBenefit}',
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          color: color,
-          fontSize: 11,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 0.25,
+    final hints = summary.waves
+        .map((wave) => wave.modelHint)
+        .toSet()
+        .join(', ');
+    final color = summary.sharedContractStabilizationRequired
+        ? const Color(0xFFF0ABFC)
+        : const Color(0xFF93C5FD);
+    return Tooltip(
+      message:
+          'Planned only; actual agents and models require runtime evidence. '
+          'Modules: ${summary.modules.join(', ')}. Validation: ${summary.validationCategories.join(', ')}. '
+          '${summary.waves.map((wave) => '${wave.id}: ${wave.writeAllowed ? "write" : "read"} ${wave.modules.join(", ")} after ${wave.dependsOn.join(", ")}').join('; ')}',
+      child: Container(
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+        decoration: const BoxDecoration(
+          color: Color(0xFF151026),
+          border: Border(bottom: BorderSide(color: Color(0xFF4C3A70))),
+        ),
+        child: Text(
+          'PLAN · Execution constraints · ${summary.waves.length} waves · max writes ${summary.maxConcurrentWrites} · ${summary.parallelismAllowed ? "parallel permitted" : "sequential"} · $hints${summary.independentReviewRequired ? " · independent review required" : ""}',
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: TextStyle(
+            color: color,
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.25,
+          ),
         ),
       ),
     );

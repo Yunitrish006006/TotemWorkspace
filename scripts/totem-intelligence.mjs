@@ -41,6 +41,7 @@ switch (command) {
   case "resolve":
     print(resolveTask(args.join(" "), knowledge));
     break;
+  case "orchestration-plan":
   case "orchestrate":
     print(buildOrchestrationPlan({
       query: args[0] ?? "",
@@ -75,6 +76,11 @@ switch (command) {
   }
   case "impact": {
     const impact = impactAnalysis({ changedFiles: parseList(args[0]), changedModules: parseList(args[1]) }, knowledge);
+    if (impact.touchedModules.every((id) => id === "totem-workspace")) {
+      print({ ...impact, indexRefresh: { mode: "not-applicable", reason: "tooling-scope" },
+        graphPreview: { status: "skipped", regenerated: false, message: "Workspace tooling changes do not alter the curated game-module code index." } });
+      break;
+    }
     let indexRefresh;
     let graphPreview;
     try {
@@ -135,7 +141,7 @@ switch (command) {
   node scripts/totem-intelligence.mjs orchestrate "<task>" [module-id] [changed-modules] [changed-files]
   node scripts/totem-intelligence.mjs graph <totem-module-id> [depth]
   node scripts/totem-intelligence.mjs search "<query>" [module1,module2] [limit]
-  node scripts/totem-intelligence.mjs context "<task>" [primary|explorer|architect|worker|reviewer] [module-id] [maxTokens]
+  node scripts/totem-intelligence.mjs context "<task>" [primary|discovery|implementation|verification] [module-id] [maxTokens]
   node scripts/totem-intelligence.mjs impact "<file1,file2>" "<module1,module2>"
   node scripts/totem-intelligence.mjs test-plan "<task>" "<module1,module2>" "<file1,file2>"
   node scripts/totem-intelligence.mjs status

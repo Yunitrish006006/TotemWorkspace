@@ -209,16 +209,13 @@ Validation must derive active-module count from registry data rather than perman
 - graph state reconstruction,
 - commit/PR/deployment milestones.
 
-### Phase 7 — Adaptive Orchestration
+### Phase 7 - Execution constraints
 
-- deterministic complexity score from Module / Contract / Risk / Verification evidence,
-- primary-only / assisted / bounded-parallel / guarded-parallel modes,
-- bounded Explorer / Architect / Worker / Reviewer assignments,
-- maximum subagent and worker concurrency budgets,
-- module-local write scopes and read-only analysis/review roles,
-- shared MCP / CLI / Bridge / Codex prompt / Viewer orchestration contract,
-- sequential Primary fallback when multi-agent execution is unavailable,
-- no fabricated subagent lifecycle when runtime telemetry is missing.
+- Deterministic module, contract, risk and validation evidence.
+- Bounded read/write scopes, dependency waves and concurrent-write limits.
+- Astra-owned execution strategy with lightweight preference and context reuse.
+- Shared MCP, CLI, Bridge, Discord, IDE and sibling-repository contract.
+- Planned constraints remain separate from actual runtime lifecycle telemetry.
 
 ### Phase 8 — Symbol Intelligence (planned)
 
@@ -472,36 +469,23 @@ The browser Prompt request contains only the user prompt and optional semantic
 Module/Feature focus. It cannot select the executable, cwd, sandbox, model, or
 arbitrary CLI arguments.
 
-### Codex execution contract
+### Shared Codex execution contract
 
-The adapter launches Codex non-interactively with structured argv and Prompt
-stdin:
+The current adapter uses `intelligence/agent-runtime/` and Codex App Server JSON-RPC
+over stdio. Thread start/resume, turn start/steer, model/list, approvals, cancellation,
+image inputs and usage interpretation share one implementation across managed surfaces.
+Native IDE/Codex sessions consume the same constraints via MCP/skill in their own host.
 
-```text
-codex exec --json --skip-git-repo-check
-  --sandbox <host-configured mode>
-  --cd <host-configured Totem workspace cwd>
-  [--model <host-configured model>]
-  -
-```
+Host authentication is retained. The runtime sends explicit sandbox policies and
+graph-owned writable roots, keeping execution cwd inside an authorized module.
+Unsupported transport approval requests are declined. A process-wide lease rejects
+overlapping writable roots between managed tasks. An atomic filesystem lease also serializes writable turns across separate processes sharing this checkout. Stale or unknown ownership fails closed and requires confirmed-owner cleanup of ignored runtime state.
 
-The adapter intentionally does not add `--full-auto` or
-`--dangerously-bypass-approvals-and-sandbox`. Authentication and approval
-policy remain part of the operating-system user's Codex configuration.
+### Runtime events to graph activity
 
-### JSONL → graph activity
-
-The adapter consumes Codex JSONL events instead of scraping terminal prose:
-
-- process launch → `task_started`
-- `thread.started` → task thread ID
-- completed `file_change` → repository-relative `file_edit`
-- started `mcp_tool_call` → bounded `dependency_followed`
-- `turn.completed` / successful exit → `task_completed`
-- `turn.failed`, stream error, spawn/process failure → `task_failed`
-
-Absolute local file paths are mapped back to Module + repository-relative path
-before entering the browser-visible activity stream.
+Only actual runtime thread, turn, item, file-change and usage events become activity.
+The adapter maps paths to module-relative coordinates before browser exposure.
+Planned waves and model hints never create synthetic agent-spawn or actual-model events.
 
 ### Dispatch and refresh lifecycle
 
@@ -644,78 +628,28 @@ node scripts/totem-activity.mjs replay <sequence>
 prints the timeline or one reconstructed frame.
 
 
-## Phase 7 — Adaptive Orchestration implementation
+## Phase 7 - Execution-constraint implementation
 
-Phase 7 moves subagent selection out of free-form Primary prompting and into
-TotemWorkspace intelligence.
+TotemWorkspace constrains the work. It does not prescribe the internal agent topology.
+All non-trivial Totem development uses the same resolve_task -> orchestration_plan ->
+bounded context -> implementation -> impact -> test_plan -> actual validation lifecycle,
+from Web, Flutter, legacy Viewer, Discord, Bridge, CLI, IDE, or sibling repository Codex.
+The same normalized task, semantic focus and workspace state must yield equivalent constraints.
+Astra chooses direct work, delegation, specialization, scheduling and independent review.
+Respect module ownership, read/write scopes, dependency waves, max concurrent writes,
+shared-contract stabilization, impacted consumers, required validation, security and release gates.
+An independentReviewRequired constraint requires actual independent review evidence, not a
+particular agent role. Read-only waves never write. Never revert another contributor's work.
+Prefer lightweight/Spark-capable available models for bounded discovery, implementation,
+mechanical changes, tests and compact review when this reduces total task tokens.
+Correctness comes first, total model tokens second, latency last. Reuse compact findings
+and bounded context; prefer sequential work when it avoids repeated context. Escalate to
+Astra reasoning for ambiguity, shared API/protocol design, conflicting evidence, high-risk
+persistence/networking or non-local failures; supply compact evidence before escalation.
+Model hints express preferences, not actual model usage. Only runtime evidence establishes
+agent lifecycle, chosen models, usage or validation outcomes.
 
-### Deterministic planning
-
-`intelligence/orchestration-plan.mjs` combines existing evidence rather than
-model prose:
-
-```text
-resolve_task
-  + module span
-  + contract surface / critical contract types
-  + TotemCore/shared surface
-  + risk tags
-  + test_plan verification breadth
-  + optional post-edit impact
-    → orchestration score
-```
-
-Modes:
-
-```text
-0–2   primary-only
-3–5   assisted
-6–9   bounded-parallel
-10+   guarded-parallel
-```
-
-Current safety/efficiency budget:
-
-```text
-max planned subagents = 4
-max parallel write workers = 2
-worker write scope = exactly one module
-explorer / architect / reviewer = read-only
-nested subagent spawning = prohibited
-```
-
-### Assignment waves
-
-Assignments include stable IDs, role, modules, phase, dependencies, write
-permission, context audience/token budget, purpose, and expected deliverable.
-
-The execution graph is discovery → implementation → review. Shared contracts and
-protocols must be stabilized before parallel workers write.
-
-### Shared integration
-
-The same planner is exposed through:
-
-- MCP `orchestration_plan`,
-- `totem-intelligence.mjs orchestrate`,
-- role-aware `context_pack`,
-- `POST /api/orchestration-plan`,
-- every Viewer `POST /api/prompt`,
-- the Codex adapter prompt envelope,
-- Flutter + legacy ORCH status surfaces,
-- `orchestration_planned` replay activity.
-
-The planner is authoritative for **whether delegation is worthwhile and what its
-boundaries are**. Codex remains responsible for executing the plan using whatever
-multi-agent capabilities the installed runtime actually exposes.
-
-When multi-agent execution is unavailable, Primary executes the same assignment
-waves sequentially. A `primary-only` plan must never spawn a child agent.
-
-### Telemetry boundary
-
-`orchestration_planned` records the intended TotemWorkspace plan. It must not be
-misrepresented as an actual spawn/delegation event. Until the Codex exec JSON
-stream exposes reliable structured child-agent lifecycle, TotemWorkspace does not
-fabricate agent-created/agent-completed events.
-
+`intelligence/orchestration-plan.mjs` schema v2 derives constraints from existing
+graph, resolve and test-plan evidence. `intelligence/agent-runtime/` centralizes
+execution policy and model routing. Flutter and legacy presentation consume the
+same plan, with no synthetic agent counts or role assignments.

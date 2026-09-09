@@ -6,7 +6,10 @@ import '../model/graph_data.dart';
 
 const _configuredLocalApi = String.fromEnvironment('TOTEM_LOCAL_API');
 
-String? discoverLocalApiBase({String configured = _configuredLocalApi, Uri? pageUri}) {
+String? discoverLocalApiBase({
+  String configured = _configuredLocalApi,
+  Uri? pageUri,
+}) {
   final explicit = configured.trim();
   if (explicit.isNotEmpty) return explicit.replaceFirst(RegExp(r'/$'), '');
 
@@ -43,7 +46,8 @@ class WorkspaceLocaleStatus {
   final int missingKeys;
   final bool complete;
 
-  factory WorkspaceLocaleStatus.fromJson(Map<String, dynamic> json) => WorkspaceLocaleStatus(
+  factory WorkspaceLocaleStatus.fromJson(Map<String, dynamic> json) =>
+      WorkspaceLocaleStatus(
         applicable: json['applicable'] as bool? ?? false,
         sourceFiles: json['sourceFiles'] as int? ?? 0,
         presentFiles: json['presentFiles'] as int? ?? 0,
@@ -66,14 +70,19 @@ class WorkspaceRecentChanges {
   final String timestamp;
   final List<WorkspaceChangedFile> files;
 
-  factory WorkspaceRecentChanges.fromJson(Map<String, dynamic> json) => WorkspaceRecentChanges(
-        summary: json['summary'] as String? ?? '',
-        timestamp: json['timestamp'] as String? ?? '',
-        files: (json['files'] as List? ?? const <Object>[])
-            .whereType<Map>()
-            .map((entry) => WorkspaceChangedFile.fromJson(Map<String, dynamic>.from(entry)))
-            .toList(growable: false),
-      );
+  factory WorkspaceRecentChanges.fromJson(
+    Map<String, dynamic> json,
+  ) => WorkspaceRecentChanges(
+    summary: json['summary'] as String? ?? '',
+    timestamp: json['timestamp'] as String? ?? '',
+    files: (json['files'] as List? ?? const <Object>[])
+        .whereType<Map>()
+        .map(
+          (entry) =>
+              WorkspaceChangedFile.fromJson(Map<String, dynamic>.from(entry)),
+        )
+        .toList(growable: false),
+  );
 }
 
 class WorkspaceChangedFile {
@@ -82,7 +91,8 @@ class WorkspaceChangedFile {
   final String status;
   final String path;
 
-  factory WorkspaceChangedFile.fromJson(Map<String, dynamic> json) => WorkspaceChangedFile(
+  factory WorkspaceChangedFile.fromJson(Map<String, dynamic> json) =>
+      WorkspaceChangedFile(
         status: json['status'] as String? ?? 'M',
         path: json['path'] as String? ?? '',
       );
@@ -131,7 +141,9 @@ class WorkspaceModuleStatus {
       expectedCommit: json['expectedCommit'] as String?,
       expectedBranch: json['expectedBranch'] as String?,
       recentChanges: json['recentChanges'] is Map
-          ? WorkspaceRecentChanges.fromJson(Map<String, dynamic>.from(json['recentChanges'] as Map))
+          ? WorkspaceRecentChanges.fromJson(
+              Map<String, dynamic>.from(json['recentChanges'] as Map),
+            )
           : null,
       locales: rawLocales.map(
         (key, value) => MapEntry(
@@ -161,8 +173,12 @@ class WorkspaceLiveStatus {
   int get dirtyCount => modules.where((module) => module.dirty).length;
   int get driftCount => modules.where((module) => module.drift).length;
   int get missingCount => modules.where((module) => !module.present).length;
-  int get japaneseRequiredCount => modules.where((module) => module.present && module.japanese?.applicable == true).length;
-  int get japaneseCompleteCount => modules.where((module) => module.present && module.japanese?.complete == true).length;
+  int get japaneseRequiredCount => modules
+      .where((module) => module.present && module.japanese?.applicable == true)
+      .length;
+  int get japaneseCompleteCount => modules
+      .where((module) => module.present && module.japanese?.complete == true)
+      .length;
 
   WorkspaceModuleStatus? module(String id) {
     for (final module in modules) {
@@ -172,7 +188,8 @@ class WorkspaceLiveStatus {
   }
 
   factory WorkspaceLiveStatus.fromJson(Map<String, dynamic> json) {
-    final snapshot = json['snapshot'] as Map<String, dynamic>? ?? const <String, dynamic>{};
+    final snapshot =
+        json['snapshot'] as Map<String, dynamic>? ?? const <String, dynamic>{};
     final rawModules = json['modules'] as List? ?? const <Object>[];
     return WorkspaceLiveStatus(
       mode: json['mode'] as String? ?? 'local',
@@ -180,7 +197,11 @@ class WorkspaceLiveStatus {
       snapshotDate: snapshot['date'] as String? ?? 'unknown',
       modules: rawModules
           .whereType<Map>()
-          .map((entry) => WorkspaceModuleStatus.fromJson(Map<String, dynamic>.from(entry)))
+          .map(
+            (entry) => WorkspaceModuleStatus.fromJson(
+              Map<String, dynamic>.from(entry),
+            ),
+          )
           .toList(growable: false),
     );
   }
@@ -218,32 +239,32 @@ class ViewerSettings {
     bool? changeAnimationsEnabled,
     bool? autoExpandAgentFocus,
     bool? replayEnabled,
-  }) =>
-      ViewerSettings(
-        schemaVersion: schemaVersion,
-        promptEnabled: promptEnabled ?? this.promptEnabled,
-        agentActivityEnabled: agentActivityEnabled ?? this.agentActivityEnabled,
-        changeAnimationsEnabled: changeAnimationsEnabled ?? this.changeAnimationsEnabled,
-        autoExpandAgentFocus: autoExpandAgentFocus ?? this.autoExpandAgentFocus,
-        replayEnabled: replayEnabled ?? this.replayEnabled,
-      );
+  }) => ViewerSettings(
+    schemaVersion: schemaVersion,
+    promptEnabled: promptEnabled ?? this.promptEnabled,
+    agentActivityEnabled: agentActivityEnabled ?? this.agentActivityEnabled,
+    changeAnimationsEnabled:
+        changeAnimationsEnabled ?? this.changeAnimationsEnabled,
+    autoExpandAgentFocus: autoExpandAgentFocus ?? this.autoExpandAgentFocus,
+    replayEnabled: replayEnabled ?? this.replayEnabled,
+  );
 
   Map<String, dynamic> toJson() => {
-        'promptEnabled': promptEnabled,
-        'agentActivityEnabled': agentActivityEnabled,
-        'changeAnimationsEnabled': changeAnimationsEnabled,
-        'autoExpandAgentFocus': autoExpandAgentFocus,
-        'replayEnabled': replayEnabled,
-      };
+    'promptEnabled': promptEnabled,
+    'agentActivityEnabled': agentActivityEnabled,
+    'changeAnimationsEnabled': changeAnimationsEnabled,
+    'autoExpandAgentFocus': autoExpandAgentFocus,
+    'replayEnabled': replayEnabled,
+  };
 
   factory ViewerSettings.fromJson(Map<String, dynamic> json) => ViewerSettings(
-        schemaVersion: json['schemaVersion'] as int? ?? 1,
-        promptEnabled: json['promptEnabled'] as bool? ?? false,
-        agentActivityEnabled: json['agentActivityEnabled'] as bool? ?? true,
-        changeAnimationsEnabled: json['changeAnimationsEnabled'] as bool? ?? true,
-        autoExpandAgentFocus: json['autoExpandAgentFocus'] as bool? ?? true,
-        replayEnabled: json['replayEnabled'] as bool? ?? true,
-      );
+    schemaVersion: json['schemaVersion'] as int? ?? 1,
+    promptEnabled: json['promptEnabled'] as bool? ?? false,
+    agentActivityEnabled: json['agentActivityEnabled'] as bool? ?? true,
+    changeAnimationsEnabled: json['changeAnimationsEnabled'] as bool? ?? true,
+    autoExpandAgentFocus: json['autoExpandAgentFocus'] as bool? ?? true,
+    replayEnabled: json['replayEnabled'] as bool? ?? true,
+  );
 }
 
 class CodexUsage {
@@ -264,13 +285,15 @@ class CodexUsage {
   final int totalTokens;
 
   factory CodexUsage.fromJson(Map<String, dynamic> json) => CodexUsage(
-        inputTokens: (json['inputTokens'] as num?)?.toInt() ?? 0,
-        cachedInputTokens: (json['cachedInputTokens'] as num?)?.toInt() ?? 0,
-        cacheWriteInputTokens: (json['cacheWriteInputTokens'] as num?)?.toInt() ?? 0,
-        outputTokens: (json['outputTokens'] as num?)?.toInt() ?? 0,
-        reasoningOutputTokens: (json['reasoningOutputTokens'] as num?)?.toInt() ?? 0,
-        totalTokens: (json['totalTokens'] as num?)?.toInt() ?? 0,
-      );
+    inputTokens: (json['inputTokens'] as num?)?.toInt() ?? 0,
+    cachedInputTokens: (json['cachedInputTokens'] as num?)?.toInt() ?? 0,
+    cacheWriteInputTokens:
+        (json['cacheWriteInputTokens'] as num?)?.toInt() ?? 0,
+    outputTokens: (json['outputTokens'] as num?)?.toInt() ?? 0,
+    reasoningOutputTokens:
+        (json['reasoningOutputTokens'] as num?)?.toInt() ?? 0,
+    totalTokens: (json['totalTokens'] as num?)?.toInt() ?? 0,
+  );
 }
 
 class AgentActivityEvent {
@@ -319,7 +342,8 @@ class AgentActivityEvent {
   String get targetLabel =>
       featureId ?? componentId ?? moduleId ?? file ?? symbol ?? test ?? '';
 
-  factory AgentActivityEvent.fromJson(Map<String, dynamic> json) => AgentActivityEvent(
+  factory AgentActivityEvent.fromJson(Map<String, dynamic> json) =>
+      AgentActivityEvent(
         sequence: json['sequence'] as int? ?? 0,
         timestamp: json['timestamp'] as String? ?? '',
         type: json['type'] as String? ?? 'unknown',
@@ -334,7 +358,9 @@ class AgentActivityEvent {
         command: json['command'] as String?,
         tool: json['tool'] as String?,
         usage: json['usage'] is Map
-            ? CodexUsage.fromJson(Map<String, dynamic>.from(json['usage'] as Map))
+            ? CodexUsage.fromJson(
+                Map<String, dynamic>.from(json['usage'] as Map),
+              )
             : null,
         status: json['status'] as String?,
         from: json['from'] as String?,
@@ -362,7 +388,10 @@ class AgentActivityBatch {
       latestSequence: json['latestSequence'] as int? ?? 0,
       events: rawEvents
           .whereType<Map>()
-          .map((entry) => AgentActivityEvent.fromJson(Map<String, dynamic>.from(entry)))
+          .map(
+            (entry) =>
+                AgentActivityEvent.fromJson(Map<String, dynamic>.from(entry)),
+          )
           .toList(growable: false),
     );
   }
@@ -381,7 +410,8 @@ class DeveloperConversationDraft {
   final String clientId;
   final String text;
 
-  factory DeveloperConversationDraft.fromJson(Map<String, dynamic> json) => DeveloperConversationDraft(
+  factory DeveloperConversationDraft.fromJson(Map<String, dynamic> json) =>
+      DeveloperConversationDraft(
         revision: (json['revision'] as num?)?.toInt() ?? 0,
         timestamp: json['timestamp'] as String? ?? '',
         clientId: json['clientId'] as String? ?? '',
@@ -410,7 +440,8 @@ class DeveloperConversationEntry {
   final String? status;
   final String? conversationId;
 
-  factory DeveloperConversationEntry.fromJson(Map<String, dynamic> json) => DeveloperConversationEntry(
+  factory DeveloperConversationEntry.fromJson(Map<String, dynamic> json) =>
+      DeveloperConversationEntry(
         revision: (json['revision'] as num?)?.toInt() ?? 0,
         timestamp: json['timestamp'] as String? ?? '',
         source: json['source'] as String? ?? 'workspace',
@@ -442,11 +473,17 @@ class DeveloperConversationBatch {
       schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 1,
       latestRevision: (json['latestRevision'] as num?)?.toInt() ?? 0,
       draft: rawDraft is Map
-          ? DeveloperConversationDraft.fromJson(Map<String, dynamic>.from(rawDraft))
+          ? DeveloperConversationDraft.fromJson(
+              Map<String, dynamic>.from(rawDraft),
+            )
           : null,
       entries: rawEntries
           .whereType<Map>()
-          .map((entry) => DeveloperConversationEntry.fromJson(Map<String, dynamic>.from(entry)))
+          .map(
+            (entry) => DeveloperConversationEntry.fromJson(
+              Map<String, dynamic>.from(entry),
+            ),
+          )
           .toList(growable: false),
     );
   }
@@ -466,13 +503,13 @@ class ChangeEntity {
   final List<String> moduleIds;
 
   factory ChangeEntity.fromJson(Map<String, dynamic> json) => ChangeEntity(
-        id: json['id'] as String? ?? '',
-        type: json['type'] as String? ?? 'unknown',
-        moduleId: json['moduleId'] as String?,
-        moduleIds: (json['moduleIds'] as List? ?? const <Object>[])
-            .whereType<String>()
-            .toList(growable: false),
-      );
+    id: json['id'] as String? ?? '',
+    type: json['type'] as String? ?? 'unknown',
+    moduleId: json['moduleId'] as String?,
+    moduleIds: (json['moduleIds'] as List? ?? const <Object>[])
+        .whereType<String>()
+        .toList(growable: false),
+  );
 }
 
 class ChangeSemanticDiff {
@@ -490,18 +527,23 @@ class ChangeSemanticDiff {
 
   int get changedCount => changedEntityIds.length;
 
-  static List<ChangeEntity> _entities(dynamic raw) => (raw as List? ?? const <Object>[])
-      .whereType<Map>()
-      .map((entry) => ChangeEntity.fromJson(Map<String, dynamic>.from(entry)))
-      .toList(growable: false);
+  static List<ChangeEntity> _entities(dynamic raw) =>
+      (raw as List? ?? const <Object>[])
+          .whereType<Map>()
+          .map(
+            (entry) => ChangeEntity.fromJson(Map<String, dynamic>.from(entry)),
+          )
+          .toList(growable: false);
 
-  factory ChangeSemanticDiff.fromJson(Map<String, dynamic> json) => ChangeSemanticDiff(
+  factory ChangeSemanticDiff.fromJson(Map<String, dynamic> json) =>
+      ChangeSemanticDiff(
         added: _entities(json['added']),
         modified: _entities(json['modified']),
         removed: _entities(json['removed']),
-        changedEntityIds: (json['changedEntityIds'] as List? ?? const <Object>[])
-            .whereType<String>()
-            .toList(growable: false),
+        changedEntityIds:
+            (json['changedEntityIds'] as List? ?? const <Object>[])
+                .whereType<String>()
+                .toList(growable: false),
       );
 }
 
@@ -567,7 +609,8 @@ class ChangeImpact {
       impactedModules: strings('impactedModules'),
       contractIds: strings('contractIds'),
       risks: strings('risks'),
-      requiresIndependentReview: json['requiresIndependentReview'] as bool? ?? false,
+      requiresIndependentReview:
+          json['requiresIndependentReview'] as bool? ?? false,
     );
   }
 }
@@ -593,13 +636,18 @@ class ChangeIntelligence {
   final List<String> affectedEntityIds;
   final ChangeImpact impact;
 
-  bool get hasChanges => gitChanges.isNotEmpty || semanticDiff.changedEntityIds.isNotEmpty;
+  bool get hasChanges =>
+      gitChanges.isNotEmpty || semanticDiff.changedEntityIds.isNotEmpty;
   Set<String> get changedEntityIds => affectedEntityIds.toSet();
   Set<String> get impactedModuleIds => impact.impactedModules.toSet();
 
   factory ChangeIntelligence.fromJson(Map<String, dynamic> json) {
-    final before = Map<String, dynamic>.from(json['before'] as Map? ?? const <String, dynamic>{});
-    final after = Map<String, dynamic>.from(json['after'] as Map? ?? const <String, dynamic>{});
+    final before = Map<String, dynamic>.from(
+      json['before'] as Map? ?? const <String, dynamic>{},
+    );
+    final after = Map<String, dynamic>.from(
+      json['after'] as Map? ?? const <String, dynamic>{},
+    );
     final rawGit = json['gitChanges'] as List? ?? const <Object>[];
     return ChangeIntelligence(
       schemaVersion: json['schemaVersion'] as int? ?? 1,
@@ -608,16 +656,23 @@ class ChangeIntelligence {
       afterEntityCount: after['entityCount'] as int? ?? 0,
       gitChanges: rawGit
           .whereType<Map>()
-          .map((entry) => ChangeGitFile.fromJson(Map<String, dynamic>.from(entry)))
+          .map(
+            (entry) => ChangeGitFile.fromJson(Map<String, dynamic>.from(entry)),
+          )
           .toList(growable: false),
       semanticDiff: ChangeSemanticDiff.fromJson(
-        Map<String, dynamic>.from(json['semanticDiff'] as Map? ?? const <String, dynamic>{}),
+        Map<String, dynamic>.from(
+          json['semanticDiff'] as Map? ?? const <String, dynamic>{},
+        ),
       ),
-      affectedEntityIds: (json['affectedEntityIds'] as List? ?? const <Object>[])
-          .whereType<String>()
-          .toList(growable: false),
+      affectedEntityIds:
+          (json['affectedEntityIds'] as List? ?? const <Object>[])
+              .whereType<String>()
+              .toList(growable: false),
       impact: ChangeImpact.fromJson(
-        Map<String, dynamic>.from(json['impact'] as Map? ?? const <String, dynamic>{}),
+        Map<String, dynamic>.from(
+          json['impact'] as Map? ?? const <String, dynamic>{},
+        ),
       ),
     );
   }
@@ -652,7 +707,8 @@ class VerificationStateEntry {
   final List<String> contractIds;
   final List<String> capabilityIds;
 
-  factory VerificationStateEntry.fromJson(Map<String, dynamic> json) => VerificationStateEntry(
+  factory VerificationStateEntry.fromJson(Map<String, dynamic> json) =>
+      VerificationStateEntry(
         target: json['target'] as String? ?? '',
         status: json['status'] as String? ?? 'unknown',
         sequence: (json['sequence'] as num?)?.toInt() ?? 0,
@@ -681,7 +737,8 @@ class VerificationActivePlan {
   final List<String> requiredCategories;
   final List<String> requirementIds;
 
-  factory VerificationActivePlan.fromJson(Map<String, dynamic> json) => VerificationActivePlan(
+  factory VerificationActivePlan.fromJson(Map<String, dynamic> json) =>
+      VerificationActivePlan(
         modules: GraphData.strings(json['modules']),
         risks: GraphData.strings(json['risks']),
         requiredCategories: GraphData.strings(json['requiredCategories']),
@@ -722,14 +779,20 @@ class VerificationState {
   bool get hasFailures => failedCount > 0;
 
   factory VerificationState.fromJson(Map<String, dynamic> json) {
-    final summary = Map<String, dynamic>.from(json['summary'] as Map? ?? const <String, dynamic>{});
+    final summary = Map<String, dynamic>.from(
+      json['summary'] as Map? ?? const <String, dynamic>{},
+    );
     return VerificationState(
       schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 1,
       generatedAt: json['generatedAt'] as String? ?? '',
       updatedAt: json['updatedAt'] as String?,
       entries: (json['entries'] as List? ?? const <Object>[])
           .whereType<Map>()
-          .map((entry) => VerificationStateEntry.fromJson(Map<String, dynamic>.from(entry)))
+          .map(
+            (entry) => VerificationStateEntry.fromJson(
+              Map<String, dynamic>.from(entry),
+            ),
+          )
           .toList(growable: false),
       runningCount: (summary['running'] as num?)?.toInt() ?? 0,
       passedCount: (summary['passed'] as num?)?.toInt() ?? 0,
@@ -739,121 +802,95 @@ class VerificationState {
       passedTargetIds: GraphData.strings(json['passedTargetIds']).toSet(),
       failedTargetIds: GraphData.strings(json['failedTargetIds']).toSet(),
       activePlan: VerificationActivePlan.fromJson(
-        Map<String, dynamic>.from(json['activePlan'] as Map? ?? const <String, dynamic>{}),
+        Map<String, dynamic>.from(
+          json['activePlan'] as Map? ?? const <String, dynamic>{},
+        ),
       ),
     );
   }
 }
 
-class OrchestrationSummary {
-  const OrchestrationSummary({
-    required this.mode,
-    required this.score,
+class OrchestrationWave {
+  const OrchestrationWave({
+    required this.id,
     required this.modules,
-    required this.subagents,
-    required this.roles,
-    required this.maxParallelWorkers,
-    required this.estimatedBenefit,
+    required this.writeAllowed,
+    required this.dependsOn,
+    required this.modelHint,
   });
-
-  final String mode;
-  final int score;
+  final String id;
   final List<String> modules;
-  final int subagents;
-  final List<String> roles;
-  final int maxParallelWorkers;
-  final String estimatedBenefit;
-
-  factory OrchestrationSummary.fromJson(Map<String, dynamic> json) => OrchestrationSummary(
-        mode: json['mode'] as String? ?? 'primary-only',
-        score: (json['score'] as num?)?.toInt() ?? 0,
+  final bool writeAllowed;
+  final List<String> dependsOn;
+  final String modelHint;
+  factory OrchestrationWave.fromJson(Map<String, dynamic> json) =>
+      OrchestrationWave(
+        id: json['id'] as String? ?? '',
         modules: GraphData.strings(json['modules']),
-        subagents: (json['subagents'] as num?)?.toInt() ?? 0,
-        roles: GraphData.strings(json['roles']),
-        maxParallelWorkers: (json['maxParallelWorkers'] as num?)?.toInt() ?? 0,
-        estimatedBenefit: json['estimatedBenefit'] as String? ?? 'none',
+        writeAllowed: json['writeAllowed'] == true,
+        dependsOn: GraphData.strings(json['dependsOn']),
+        modelHint: json['modelHint'] as String? ?? 'inherit-primary',
       );
 }
 
-class OrchestrationAssignment {
-  const OrchestrationAssignment({
-    required this.id,
-    required this.role,
+class OrchestrationSummary {
+  const OrchestrationSummary({
+    required this.score,
     required this.modules,
-    required this.phase,
-    required this.writeAllowed,
-    required this.purpose,
+    required this.waves,
+    required this.maxConcurrentWrites,
+    required this.parallelismAllowed,
+    required this.independentReviewRequired,
+    required this.sharedContractStabilizationRequired,
+    required this.validationCategories,
   });
-
-  final String id;
-  final String role;
+  final int score;
   final List<String> modules;
-  final String phase;
-  final bool writeAllowed;
-  final String purpose;
-
-  factory OrchestrationAssignment.fromJson(Map<String, dynamic> json) => OrchestrationAssignment(
-        id: json['id'] as String? ?? '',
-        role: json['role'] as String? ?? '',
-        modules: GraphData.strings(json['modules']),
-        phase: json['phase'] as String? ?? '',
-        writeAllowed: json['writeAllowed'] as bool? ?? false,
-        purpose: json['purpose'] as String? ?? '',
-      );
+  final List<OrchestrationWave> waves;
+  final int maxConcurrentWrites;
+  final bool parallelismAllowed;
+  final bool independentReviewRequired;
+  final bool sharedContractStabilizationRequired;
+  final List<String> validationCategories;
+  factory OrchestrationSummary.fromJson(Map<String, dynamic> json) {
+    final execution = Map<String, dynamic>.from(
+      json['execution'] as Map? ?? const {},
+    );
+    return OrchestrationSummary(
+      validationCategories: GraphData.strings(
+        (json['requiredValidation'] as Map?)?['validationCategories'],
+      ),
+      score: (json['score'] as num?)?.toInt() ?? 0,
+      modules: GraphData.strings(json['affectedModules'] ?? json['modules']),
+      waves: (json['waves'] as List? ?? const [])
+          .whereType<Map>()
+          .map(
+            (entry) =>
+                OrchestrationWave.fromJson(Map<String, dynamic>.from(entry)),
+          )
+          .toList(growable: false),
+      maxConcurrentWrites:
+          (execution['maxConcurrentWrites'] as num?)?.toInt() ?? 0,
+      parallelismAllowed: execution['parallelismAllowed'] == true,
+      independentReviewRequired: json['independentReviewRequired'] == true,
+      sharedContractStabilizationRequired:
+          execution['sharedContractStabilizationRequired'] == true,
+    );
+  }
 }
 
 class OrchestrationPlan {
-  const OrchestrationPlan({
-    required this.schemaVersion,
-    required this.mode,
-    required this.score,
-    required this.modules,
-    required this.assignments,
-    required this.maxSubagents,
-    required this.maxParallelWorkers,
-    required this.estimatedBenefit,
-  });
-
+  const OrchestrationPlan({required this.schemaVersion, required this.summary});
   final int schemaVersion;
-  final String mode;
-  final int score;
-  final List<String> modules;
-  final List<OrchestrationAssignment> assignments;
-  final int maxSubagents;
-  final int maxParallelWorkers;
-  final String estimatedBenefit;
-
-  OrchestrationSummary get summary => OrchestrationSummary(
-        mode: mode,
-        score: score,
-        modules: modules,
-        subagents: assignments.length,
-        roles: assignments.map((entry) => entry.role).toList(growable: false),
-        maxParallelWorkers: maxParallelWorkers,
-        estimatedBenefit: estimatedBenefit,
+  final OrchestrationSummary summary;
+  int get score => summary.score;
+  List<String> get modules => summary.modules;
+  List<OrchestrationWave> get waves => summary.waves;
+  factory OrchestrationPlan.fromJson(Map<String, dynamic> json) =>
+      OrchestrationPlan(
+        schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 1,
+        summary: OrchestrationSummary.fromJson(json),
       );
-
-  factory OrchestrationPlan.fromJson(Map<String, dynamic> json) {
-    final rationale = Map<String, dynamic>.from(
-      json['rationale'] as Map? ?? const <String, dynamic>{},
-    );
-    final limits = Map<String, dynamic>.from(
-      json['limits'] as Map? ?? const <String, dynamic>{},
-    );
-    return OrchestrationPlan(
-      schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 1,
-      mode: json['mode'] as String? ?? 'primary-only',
-      score: (json['score'] as num?)?.toInt() ?? 0,
-      modules: GraphData.strings(rationale['modules']),
-      assignments: (json['assignments'] as List? ?? const <Object>[])
-          .whereType<Map>()
-          .map((entry) => OrchestrationAssignment.fromJson(Map<String, dynamic>.from(entry)))
-          .toList(growable: false),
-      maxSubagents: (limits['maxSubagents'] as num?)?.toInt() ?? 0,
-      maxParallelWorkers: (limits['maxParallelWorkers'] as num?)?.toInt() ?? 0,
-      estimatedBenefit: json['estimatedBenefit'] as String? ?? 'none',
-    );
-  }
 }
 
 class AgentTask {
@@ -884,22 +921,22 @@ class AgentTask {
   final OrchestrationSummary? orchestration;
 
   factory AgentTask.fromJson(Map<String, dynamic> json) => AgentTask(
-        id: json['id'] as String? ?? '',
-        adapter: json['adapter'] as String? ?? '',
-        state: json['state'] as String? ?? 'unknown',
-        moduleId: json['moduleId'] as String?,
-        featureId: json['featureId'] as String?,
-        threadId: json['threadId'] as String?,
-        startedAt: json['startedAt'] as String? ?? '',
-        completedAt: json['completedAt'] as String?,
-        summary: json['summary'] as String?,
-        error: json['error'] as String?,
-        orchestration: json['orchestration'] is Map
-            ? OrchestrationSummary.fromJson(
-                Map<String, dynamic>.from(json['orchestration'] as Map),
-              )
-            : null,
-      );
+    id: json['id'] as String? ?? '',
+    adapter: json['adapter'] as String? ?? '',
+    state: json['state'] as String? ?? 'unknown',
+    moduleId: json['moduleId'] as String?,
+    featureId: json['featureId'] as String?,
+    threadId: json['threadId'] as String?,
+    startedAt: json['startedAt'] as String? ?? '',
+    completedAt: json['completedAt'] as String?,
+    summary: json['summary'] as String?,
+    error: json['error'] as String?,
+    orchestration: json['orchestration'] is Map
+        ? OrchestrationSummary.fromJson(
+            Map<String, dynamic>.from(json['orchestration'] as Map),
+          )
+        : null,
+  );
 }
 
 class AgentAdapterStatus {
@@ -939,7 +976,9 @@ class AgentAdapterStatus {
   factory AgentAdapterStatus.fromJson(Map<String, dynamic> json) {
     AgentTask? task(String key) {
       final raw = json[key];
-      return raw is Map ? AgentTask.fromJson(Map<String, dynamic>.from(raw)) : null;
+      return raw is Map
+          ? AgentTask.fromJson(Map<String, dynamic>.from(raw))
+          : null;
     }
 
     return AgentAdapterStatus(
@@ -983,14 +1022,20 @@ class PromptSubmission {
       status: json['status'] as String? ?? 'accepted',
       execution: json['execution'] as String? ?? 'unknown',
       event: AgentActivityEvent.fromJson(
-        Map<String, dynamic>.from(json['event'] as Map? ?? const <String, dynamic>{}),
+        Map<String, dynamic>.from(
+          json['event'] as Map? ?? const <String, dynamic>{},
+        ),
       ),
-      task: rawTask is Map ? AgentTask.fromJson(Map<String, dynamic>.from(rawTask)) : null,
+      task: rawTask is Map
+          ? AgentTask.fromJson(Map<String, dynamic>.from(rawTask))
+          : null,
       adapter: rawAdapter is Map
           ? AgentAdapterStatus.fromJson(Map<String, dynamic>.from(rawAdapter))
           : null,
       orchestration: rawOrchestration is Map
-          ? OrchestrationPlan.fromJson(Map<String, dynamic>.from(rawOrchestration))
+          ? OrchestrationPlan.fromJson(
+              Map<String, dynamic>.from(rawOrchestration),
+            )
           : null,
     );
   }
@@ -1015,7 +1060,8 @@ class ReplayMilestone {
   final String? moduleId;
   final String? summary;
 
-  factory ReplayMilestone.fromJson(Map<String, dynamic> json) => ReplayMilestone(
+  factory ReplayMilestone.fromJson(Map<String, dynamic> json) =>
+      ReplayMilestone(
         sequence: (json['sequence'] as num?)?.toInt() ?? 0,
         timestamp: json['timestamp'] as String? ?? '',
         type: json['type'] as String? ?? 'unknown',
@@ -1058,23 +1104,25 @@ class ReplaySession {
   final List<ReplayMilestone> milestones;
 
   factory ReplaySession.fromJson(Map<String, dynamic> json) => ReplaySession(
-        id: json['id'] as String? ?? '',
-        taskId: json['taskId'] as String?,
-        state: json['state'] as String? ?? 'unknown',
-        startedSequence: (json['startedSequence'] as num?)?.toInt() ?? 0,
-        endedSequence: (json['endedSequence'] as num?)?.toInt(),
-        startedAt: json['startedAt'] as String? ?? '',
-        endedAt: json['endedAt'] as String?,
-        moduleId: json['moduleId'] as String?,
-        featureId: json['featureId'] as String?,
-        summary: json['summary'] as String?,
-        eventCount: (json['eventCount'] as num?)?.toInt() ?? 0,
-        milestoneCount: (json['milestoneCount'] as num?)?.toInt() ?? 0,
-        milestones: (json['milestones'] as List? ?? const <Object>[])
-            .whereType<Map>()
-            .map((entry) => ReplayMilestone.fromJson(Map<String, dynamic>.from(entry)))
-            .toList(growable: false),
-      );
+    id: json['id'] as String? ?? '',
+    taskId: json['taskId'] as String?,
+    state: json['state'] as String? ?? 'unknown',
+    startedSequence: (json['startedSequence'] as num?)?.toInt() ?? 0,
+    endedSequence: (json['endedSequence'] as num?)?.toInt(),
+    startedAt: json['startedAt'] as String? ?? '',
+    endedAt: json['endedAt'] as String?,
+    moduleId: json['moduleId'] as String?,
+    featureId: json['featureId'] as String?,
+    summary: json['summary'] as String?,
+    eventCount: (json['eventCount'] as num?)?.toInt() ?? 0,
+    milestoneCount: (json['milestoneCount'] as num?)?.toInt() ?? 0,
+    milestones: (json['milestones'] as List? ?? const <Object>[])
+        .whereType<Map>()
+        .map(
+          (entry) => ReplayMilestone.fromJson(Map<String, dynamic>.from(entry)),
+        )
+        .toList(growable: false),
+  );
 }
 
 class DevelopmentReplayTimeline {
@@ -1100,7 +1148,8 @@ class DevelopmentReplayTimeline {
 
   bool get hasEvents => eventCount > 0 && latestSequence >= earliestSequence;
 
-  factory DevelopmentReplayTimeline.fromJson(Map<String, dynamic> json) => DevelopmentReplayTimeline(
+  factory DevelopmentReplayTimeline.fromJson(Map<String, dynamic> json) =>
+      DevelopmentReplayTimeline(
         schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 1,
         generatedAt: json['generatedAt'] as String? ?? '',
         updatedAt: json['updatedAt'] as String?,
@@ -1109,11 +1158,17 @@ class DevelopmentReplayTimeline {
         eventCount: (json['eventCount'] as num?)?.toInt() ?? 0,
         sessions: (json['sessions'] as List? ?? const <Object>[])
             .whereType<Map>()
-            .map((entry) => ReplaySession.fromJson(Map<String, dynamic>.from(entry)))
+            .map(
+              (entry) =>
+                  ReplaySession.fromJson(Map<String, dynamic>.from(entry)),
+            )
             .toList(growable: false),
         milestones: (json['milestones'] as List? ?? const <Object>[])
             .whereType<Map>()
-            .map((entry) => ReplayMilestone.fromJson(Map<String, dynamic>.from(entry)))
+            .map(
+              (entry) =>
+                  ReplayMilestone.fromJson(Map<String, dynamic>.from(entry)),
+            )
             .toList(growable: false),
       );
 }
@@ -1166,14 +1221,18 @@ class DevelopmentReplayFrame {
       historicalEntityIds: GraphData.strings(graphState['entityIds']).toSet(),
       milestones: (json['milestones'] as List? ?? const <Object>[])
           .whereType<Map>()
-          .map((entry) => ReplayMilestone.fromJson(Map<String, dynamic>.from(entry)))
+          .map(
+            (entry) =>
+                ReplayMilestone.fromJson(Map<String, dynamic>.from(entry)),
+          )
           .toList(growable: false),
     );
   }
 }
 
 class LocalWorkspaceClient {
-  LocalWorkspaceClient(this.baseUrl, {http.Client? client}) : _client = client ?? http.Client();
+  LocalWorkspaceClient(this.baseUrl, {http.Client? client})
+    : _client = client ?? http.Client();
 
   final String baseUrl;
   final http.Client _client;
@@ -1186,28 +1245,42 @@ class LocalWorkspaceClient {
   Uri _uri(String path) => Uri.parse('$baseUrl$path');
 
   Future<bool> health() async {
-    final response = await _client.get(_uri('/api/health')).timeout(const Duration(seconds: 8));
+    final response = await _client
+        .get(_uri('/api/health'))
+        .timeout(const Duration(seconds: 8));
     if (response.statusCode != 200) return false;
     final payload = jsonDecode(response.body) as Map<String, dynamic>;
     return payload['status'] == 'ok' && payload['mode'] == 'local';
   }
 
   Future<WorkspaceLiveStatus> workspaceStatus() async {
-    final response = await _client.get(_uri('/api/workspace-status')).timeout(const Duration(seconds: 12));
+    final response = await _client
+        .get(_uri('/api/workspace-status'))
+        .timeout(const Duration(seconds: 12));
     _requireSuccess(response, 'workspace status');
-    return WorkspaceLiveStatus.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return WorkspaceLiveStatus.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<GraphData> graphData() async {
-    final response = await _client.get(_uri('/api/graph-data')).timeout(const Duration(seconds: 5));
+    final response = await _client
+        .get(_uri('/api/graph-data'))
+        .timeout(const Duration(seconds: 5));
     _requireSuccess(response, 'graph data');
-    return GraphData.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return GraphData.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<ViewerSettings> viewerSettings() async {
-    final response = await _client.get(_uri('/api/viewer-settings')).timeout(const Duration(seconds: 4));
+    final response = await _client
+        .get(_uri('/api/viewer-settings'))
+        .timeout(const Duration(seconds: 4));
     _requireSuccess(response, 'viewer settings');
-    return ViewerSettings.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return ViewerSettings.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<ViewerSettings> updateViewerSettings(ViewerSettings settings) async {
@@ -1219,21 +1292,31 @@ class LocalWorkspaceClient {
         )
         .timeout(const Duration(seconds: 4));
     _requireSuccess(response, 'viewer settings update');
-    return ViewerSettings.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return ViewerSettings.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<AgentActivityBatch> activity({int after = 0}) async {
-    final uri = _uri('/api/activity').replace(queryParameters: {'after': '$after'});
+    final uri = _uri(
+      '/api/activity',
+    ).replace(queryParameters: {'after': '$after'});
     final response = await _client.get(uri).timeout(const Duration(seconds: 8));
     _requireSuccess(response, 'agent activity');
-    return AgentActivityBatch.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return AgentActivityBatch.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<DeveloperConversationBatch> conversation({int after = 0}) async {
-    final uri = _uri('/api/conversation').replace(queryParameters: {'after': '$after'});
+    final uri = _uri(
+      '/api/conversation',
+    ).replace(queryParameters: {'after': '$after'});
     final response = await _client.get(uri).timeout(const Duration(seconds: 8));
     _requireSuccess(response, 'developer conversation');
-    return DeveloperConversationBatch.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return DeveloperConversationBatch.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<void> updateConversationDraft(String clientId, String text) async {
@@ -1248,9 +1331,13 @@ class LocalWorkspaceClient {
   }
 
   Future<AgentAdapterStatus> agentAdapterStatus() async {
-    final response = await _client.get(_uri('/api/agent-adapter')).timeout(const Duration(seconds: 8));
+    final response = await _client
+        .get(_uri('/api/agent-adapter'))
+        .timeout(const Duration(seconds: 8));
     _requireSuccess(response, 'agent adapter status');
-    return AgentAdapterStatus.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return AgentAdapterStatus.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<OrchestrationPlan> orchestrationPlan(
@@ -1276,28 +1363,44 @@ class LocalWorkspaceClient {
   }
 
   Future<DevelopmentReplayTimeline> replayTimeline() async {
-    final response = await _client.get(_uri('/api/replay')).timeout(const Duration(seconds: 5));
+    final response = await _client
+        .get(_uri('/api/replay'))
+        .timeout(const Duration(seconds: 5));
     _requireSuccess(response, 'development replay timeline');
-    return DevelopmentReplayTimeline.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return DevelopmentReplayTimeline.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<DevelopmentReplayFrame> replayFrame(int sequence) async {
-    final uri = _uri('/api/replay/frame').replace(queryParameters: {'sequence': '$sequence'});
+    final uri = _uri(
+      '/api/replay/frame',
+    ).replace(queryParameters: {'sequence': '$sequence'});
     final response = await _client.get(uri).timeout(const Duration(seconds: 6));
     _requireSuccess(response, 'development replay frame');
-    return DevelopmentReplayFrame.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return DevelopmentReplayFrame.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<ChangeIntelligence> changeIntelligence() async {
-    final response = await _client.get(_uri('/api/change-intelligence')).timeout(const Duration(seconds: 6));
+    final response = await _client
+        .get(_uri('/api/change-intelligence'))
+        .timeout(const Duration(seconds: 6));
     _requireSuccess(response, 'change intelligence');
-    return ChangeIntelligence.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return ChangeIntelligence.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<VerificationState> verificationState() async {
-    final response = await _client.get(_uri('/api/verification-state')).timeout(const Duration(seconds: 6));
+    final response = await _client
+        .get(_uri('/api/verification-state'))
+        .timeout(const Duration(seconds: 6));
     _requireSuccess(response, 'verification state');
-    return VerificationState.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return VerificationState.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<PromptSubmission> submitPrompt(
@@ -1319,10 +1422,14 @@ class LocalWorkspaceClient {
         )
         .timeout(const Duration(seconds: 8));
     _requireSuccess(response, 'prompt submission');
-    return PromptSubmission.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    return PromptSubmission.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
-  Future<ChangeIntelligence> refresh({List<String> modules = const <String>[]}) async {
+  Future<ChangeIntelligence> refresh({
+    List<String> modules = const <String>[],
+  }) async {
     final response = await _client
         .post(
           _uri('/api/refresh'),
@@ -1333,7 +1440,9 @@ class LocalWorkspaceClient {
     _requireSuccess(response, 'workspace refresh');
     final payload = jsonDecode(response.body) as Map<String, dynamic>;
     return ChangeIntelligence.fromJson(
-      Map<String, dynamic>.from(payload['changeIntelligence'] as Map? ?? const <String, dynamic>{}),
+      Map<String, dynamic>.from(
+        payload['changeIntelligence'] as Map? ?? const <String, dynamic>{},
+      ),
     );
   }
 

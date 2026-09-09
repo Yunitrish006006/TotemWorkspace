@@ -124,11 +124,11 @@ Phase 3 加入 change intelligence：Local Bridge 在重新索引前後建立 se
 
 Phase 4 加入 Verification Graph：實際被 code index 掃到的 Test / GameTest / E2E 檔案才會成為 Test entity，穩定 ID 為 `test:<module-id>:<repo-relative-path>`；`test-matrix.json` 只代表 required verification，不會被當成已通過證據。Feature、contract/API 與 shared capability 可產生 `validated-by` 關係；Local Bridge 透過 `/api/verification-state` 保存與傳送 `test_started / test_passed / test_failed` 最新狀態，Flutter 與 legacy 3D 同步顯示 Test LOD、驗證線與 pass/run/fail highlighting。
 
-Phase 5 加入 opt-in Codex Agent Adapter：只有主機端設定 `TOTEM_AGENT_ADAPTER=codex` 時，Prompt 才會透過 `codex exec --json` 建立真實 Codex task；瀏覽器不能指定 executable、cwd、sandbox、model 或 CLI flags。Bridge 會輸出 `task_started / task_completed / task_failed`，把 Codex JSONL 的 file change / MCP activity 映射回既有 activity graph，task 結束後自動重新索引並更新 Phase 3 change intelligence。Adapter 未啟用或 Codex 不可用時，Prompt 只記錄為 submitted，不會假裝 agent 已開始。
+Phase 5 的 opt-in Codex Agent Adapter 已統一使用 `intelligence/agent-runtime/` Codex App Server runtime。主機設定 `TOTEM_AGENT_ADAPTER=codex` 後，Bridge／Web 與 Discord 共用 developer instructions、model discovery/routing、thread/turn lifecycle、approvals、steering、cancellation 與 usage adapter。瀏覽器不能指定 executable、cwd、sandbox、model 或 CLI flags。只有實際 runtime events 才能成為 task／agent activity；啟動後失敗不會自動重送任務。
 
 Phase 6 加入 Development Replay：Bridge 會把 bounded activity、task session、commit/PR/deployment milestone 與 refresh checkpoint 持久化到 `.totem-index/development-replay.json`，重啟後 sequence 不歸零。Flutter 與 legacy 都有 timeline scrubber；拖到歷史 sequence 時會重建該時點的 Activity、Phase 3 change/impact、Phase 4 verification 狀態，並依 checkpoint 隱藏當時尚不存在的 graph entity/edge；按 `LIVE` 回到最新狀態。
 
-Phase 7 加入 Adaptive Orchestration：每次非 trivial Prompt 由 TotemWorkspace 依 Module span、跨模組 contract、TotemCore/shared surface、risk 與 verification breadth 計算 deterministic orchestration score，選擇 `primary-only / assisted / bounded-parallel / guarded-parallel`。Planner 最多規劃 4 個 subagents、2 個平行 write workers；Explorer／Architect／Reviewer 唯讀，Worker 僅能寫入單一指派模組。MCP、CLI、Bridge、Codex prompt envelope、Flutter／legacy ORCH 狀態與 Replay 都使用同一份 plan；若 runtime 沒有 multi-agent 能力，Primary 依同一 waves 序列執行，不會捨棄邊界或假造 child-agent telemetry。
+Phase 7 使用 schema-v2 execution constraints：`intelligence/orchestration-plan.mjs` 決定 affected modules/contracts、read/write scopes、dependency waves、concurrent-write limits、required validation 及 security/release constraints。Astra 自行選擇是否委派、數量、specialization 與 scheduling；沒有固定角色或 topology。Correctness 優先，其次最小化整個任務的 model tokens，再考慮 latency。Bounded work 優先可用 lightweight/Spark 模型，重用 compact findings，必要時升級 Astra reasoning。所有 surfaces 使用相同 contract，planned waves/model hints 不等於實際 agent lifecycle/model usage。
 
 ### VS Code Remote-SSH / tmux Bridge
 
@@ -141,7 +141,7 @@ bash tools/remote/bridge.sh status
 bash tools/remote/bridge.sh logs
 ```
 
-要讓 Viewer Prompt 直接交給 Codex，先確認遠端使用者可執行 `codex --version`，再以主機環境啟用：
+要讓 Viewer Prompt 直接交給 Codex，先以 `node scripts/totem-runtime.mjs capabilities` 確認 CLI、App Server、model catalog、MCP 與 intelligence 能力，再以主機環境啟用：
 
 ```sh
 export TOTEM_AGENT_ADAPTER=codex
@@ -153,7 +153,17 @@ node scripts/totem-activity.mjs prompt on
 node scripts/totem-activity.mjs status
 ```
 
-`TOTEM_CODEX_MODEL` 可選；未設定時沿用 Codex 本身的 model 設定。Bridge 不會自動加入 `--full-auto` 或 dangerous approval/sandbox bypass。
+`TOTEM_CODEX_MODEL` 是可選的明確偏好；未設定時由 shared router 依即時 model catalog 與 task constraints 決定，缺少模型時 graceful fallback。Bridge 不會繞過 approval 或 sandbox。
+
+Shared runtime CLI：
+
+```sh
+node scripts/totem-runtime.mjs capabilities
+node scripts/totem-runtime.mjs run --read-only "inspect TotemCore Observer contract"
+node scripts/totem-runtime.mjs resume --thread <thread-id> "continue the same task"
+```
+
+`capabilities` 不建立 model turn；`run`／`resume` 支援 stdin、`--cwd`、`--model`、`--effort`。SIGINT 取消；CLI 尚無互動 approval UI，遇到 approval 會拒絕。Native IDE／Codex session 透過 MCP／skill 共用 contract，並非強制共用 Bridge process。Runtime enforce module sandbox roots 與 overlapping-write lease；共用 filesystem lock 讓不同 Bridge／Discord／CLI process 保守地依序寫入。同 process 可在不重疊 roots 內並行。Stale／unknown lock fail closed，只有確認 owner 已退出後才能清理 ignored runtime state。Arbitrary tool calls 的 wave completion 仍需要可驗證的 execution evidence。
 
 ### Discord 與網頁共用開發工作階段
 

@@ -192,9 +192,13 @@ node scripts/totem-activity.mjs prompt on
 node scripts/totem-activity.mjs status
 ```
 
-`TOTEM_CODEX_CWD` must resolve inside the Totem workspace. For the current sibling-repository layout, the common parent directory is the useful write boundary. The adapter invokes Codex with structured argv and sends the Prompt over stdin; browser payloads cannot choose the executable, working directory, sandbox, model, or CLI flags.
+`TOTEM_CODEX_CWD` must resolve inside the Totem workspace. The shared planner derives permitted module write roots; execution cwd stays inside an authorized root rather than implicitly granting the entire sibling workspace. Browser payloads cannot choose executable, working directory, sandbox, model, or CLI flags.
 
-The adapter uses `codex exec --json` and consumes JSONL lifecycle/items. It does **not** force `--full-auto` or `--dangerously-bypass-approvals-and-sandbox`; Codex approval/auth configuration remains owned by the remote operating-system user.
+The adapter uses the shared `intelligence/agent-runtime/` Codex App Server implementation, including thread start/resume, turn start/steer, cancellation, approvals and actual model/usage events. Authentication remains owned by the remote operating-system user; unsupported transport approvals are declined, never bypassed.
+
+Run `node scripts/totem-runtime.mjs capabilities` for live CLI/version, App Server, model catalog, MCP and intelligence readiness. A successful `codex --version` alone is insufficient. Model hints are preferences; the available catalog controls fallback. CLI `run` and `resume --thread <id>` use the same runner, with stdin task input and optional `--model`/`--effort`. Native IDE sessions follow the same MCP/skill contract within their host runtime.
+
+Sandbox roots enforce module scope. In-process leases reject overlapping roots; an atomic filesystem lease in `.totem-index/runtime-write-leases/` conservatively serializes writes across Bridge, Discord and CLI processes sharing the checkout. Stale or unknown owners fail closed: inspect the owner and remove abandoned local state only after confirming the owner has exited. The runtime does not mechanically gate each arbitrary delegated tool call on completed waves; independent review and validation require actual evidence.
 
 Useful endpoints:
 

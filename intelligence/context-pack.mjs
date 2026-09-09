@@ -79,11 +79,13 @@ function clampByApproxTokens(value, maxTokens) {
   return { text, truncated: true };
 }
 
-export function buildContextPack(query, { audience = "primary", moduleId = null, maxTokens = 8_000, includeCode = true, knowledge = loadKnowledge() } = {}) {
+export function buildContextPack(query, { audience = "primary", moduleId = null, maxTokens = 8_000, includeCode = true, knowledge = loadKnowledge(), orchestrationPlan = null } = {}) {
   const resolved = resolveTask(query, knowledge);
-  const selectedModuleIds = moduleId
-    ? [moduleId]
-    : resolved.modules.map((module) => module.id);
+  const selectedModuleIds = orchestrationPlan
+    ? [...new Set((orchestrationPlan.readScope ?? []).map((scope) => scope.moduleId).concat(orchestrationPlan.affectedModules ?? []))]
+    : moduleId
+      ? [...new Set([moduleId, ...resolved.modules.map((module) => module.id)])]
+      : resolved.modules.map((module) => module.id);
   const moduleSet = new Set(selectedModuleIds);
 
   const modules = knowledge.modules.filter((module) => moduleSet.has(module.id)).map(compactModule);
@@ -93,8 +95,8 @@ export function buildContextPack(query, { audience = "primary", moduleId = null,
   const contracts = resolved.contracts
     .filter((contract) => [contract.from, contract.to, ...(contract.relatedNodes ?? [])].some((node) => moduleSet.has(node)))
     .map(compactContract);
-  const plan = testPlan({ query, changedModules: selectedModuleIds }, knowledge);
-  const orchestration = buildOrchestrationPlan({
+  const plan = orchestrationPlan?.requiredValidation ?? testPlan({ query, changedModules: selectedModuleIds }, knowledge);
+  const orchestration = orchestrationPlan ?? buildOrchestrationPlan({
     query,
     moduleId,
     knowledge
@@ -109,7 +111,7 @@ export function buildContextPack(query, { audience = "primary", moduleId = null,
         : audience === "explorer"
           ? 14
           : 16;
-  const code = includeCode
+  const code = includeCode && selectedModuleIds.length > 0 && !selectedModuleIds.includes("totem-workspace")
     ? searchCode(query, {
       knowledge,
       modules: selectedModuleIds,
@@ -118,19 +120,16 @@ export function buildContextPack(query, { audience = "primary", moduleId = null,
     : { indexed: false, freshness: null, results: [] };
 
   const pack = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     audience,
     query,
     snapshot: knowledge.snapshot,
     routing: {
       modules: selectedModuleIds,
       risks: resolved.risks,
-      recommendedAgents: resolved.recommendedAgents,
       orchestration: orchestrationPlanSummary(orchestration),
-      assignment: orchestration.assignments.find((entry) =>
-        entry.contextAudience === audience
-        && (!moduleId || entry.modules.includes(moduleId))
-      ) ?? null
+      executionConstraints: { readScope: orchestration.readScope, writeScope: orchestration.writeScope, dependencyOrdering: orchestration.dependencyOrdering },
+      contextReuse: "Pass compact file/symbol/test findings downstream instead of rediscovering them."
     },
     modules,
     features,
@@ -149,9 +148,9 @@ export function buildContextPack(query, { audience = "primary", moduleId = null,
       "Use TotemWorkspace graph/contracts as the cross-module architecture source of truth.",
       "Do not broaden repository-wide reads before using this narrowed context unless evidence requires it.",
       "For shared contract changes, stabilize the contract before parallel module implementation.",
-      "Follow the TotemWorkspace orchestration assignment boundaries; read-only roles must not edit files and workers must stay inside their assigned module.",
-      "Do not spawn subagents for a primary-only orchestration plan.",
-      "If the runtime cannot execute multiple agents, preserve the same role/order boundaries sequentially in Primary rather than discarding the orchestration plan.",
+      "TotemWorkspace constrains the work. It does not prescribe the internal agent topology.",
+      "Respect write scope, module ownership, dependency ordering and max concurrent writes regardless of execution strategy.",
+      "Prefer lightweight available models for bounded work when total task tokens decrease; reuse compact evidence and escalate only for correctness.",
       "After edits, run impact analysis; the MCP impact path refreshes touched module index chunks before validation/review."
     ]
   };

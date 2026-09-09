@@ -100,16 +100,20 @@ Discord user and channel.
   response is visible only to the caller. The Bot's Discord activity also shows
   a compact remaining-usage summary; it refreshes at startup, after each Codex
   task finishes, and whenever `/codex usage` is queried.
-- CodexDiscord now gives the selected primary model an adaptive orchestration
-  policy instead of forcing every coding request through exactly one worker.
-  The primary may work directly on trivial isolated changes, use explorers for
-  read-heavy investigation, use architecture/core specialists for shared APIs
-  and cross-module contracts, fan independent modules out to bounded workers,
-  and request an independent integration review for substantial changes.
-  Minecraft/Fabric work additionally checks configured versions, mappings,
-  module consumers, Gradle validation, and client/dedicated-server boundaries.
-  `gpt-5.3-codex-spark` at medium reasoning remains the preferred implementation
-  worker when available, but it is no longer the only allowed delegation shape.
+- CodexDiscord uses `intelligence/agent-runtime/runtime.mjs`, the shared App
+  Server lifecycle and prompt policy. TotemWorkspace supplies execution
+  constraints; the primary chooses delegation, specialization and scheduling.
+  No role topology or hard-coded coding model is required. Live catalog routing
+  prefers capable lightweight/Spark models for bounded work and stronger Astra
+  reasoning for ambiguity, shared critical contracts and non-local failures.
+  Correctness comes first, total model tokens second, latency third. Compact
+  evidence reuse and sequential work avoid repeated repository context.
+  Module/write boundaries, dependency ordering, concurrency limits, independent
+  review when required, Java 25/Fabric safety, deterministic validation and
+  explicit release authorization remain mandatory. Actual runtime events alone
+  establish delegation, selected models and usage; missing models are not
+  displayed as Spark. Approvals, session resume, steering, images and cancellation
+  use the same runtime as other launching surfaces.
 - Attach a PNG, JPEG, WebP, or GIF to an ordinary message and Codex receives it
   as visual context; a message containing only an image asks Codex to inspect
   it. `/codex run` also accepts one optional `image` attachment. Up to four
@@ -209,3 +213,27 @@ prompts in TotemWorkspace replay data. Discord cannot expose characters in a
 user's unsubmitted composer, so Discord input is shown in the web transcript
 when the message is sent; browser drafts are mirrored in a throttled Bot-owned
 preview message.
+
+The same runtime is available without Discord through
+`node scripts/totem-runtime.mjs run "<task>"` from TotemWorkspace, or by invoking
+that script's absolute path from a sibling repository. Use `--cwd` to select an
+explicit workspace, pipe a task through stdin when convenient, and use
+`resume --thread <id> "<next task>"` to continue the session ID printed to stderr.
+`--read-only` confines inspection; SIGINT cancels the active turn. This minimal
+CLI declines approvals because it has no approval UI. `capabilities` performs
+read-only discovery without a model turn and is also used by remote Bridge
+`doctor`; it reports CLI/App Server, live models, MCP and intelligence status.
+
+All shared runtime processes coordinate writes through the conservative
+workspace-wide advisory lock at `.totem-index/runtime-write-leases/workspace.lock`.
+The lock is created exclusively with mode 0600 and removed only when its ownership
+token matches. Different processes serialize writing tasks; one process may run
+independent module tasks within the plan's concurrency limits. Read-only tasks do
+not acquire this lock. Abrupt termination can leave a stale lock: the runtime
+fails closed and reports its location and owner PID. Remove it manually only
+after confirming the owning process exited and no task is still writing.
+The runtime waits for App Server process-close evidence before releasing write
+ownership. Shutdown escalates from SIGTERM to SIGKILL after two seconds; if close
+is still unconfirmed after four seconds, the task fails and retains the lock.
+Confirm the App Server and any remaining task processes have stopped before
+manually cleaning this exceptional local state.

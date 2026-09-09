@@ -25,14 +25,19 @@ the 11 active Totem repositories. It is not a Minecraft mod.
 
 ## Java 25 and module release gate
 
+- Verify actual repository Minecraft version, Fabric Loader/API and mappings; use
+  the repository Gradle wrapper, isolate client-only classes, preserve dedicated-server
+  safety, and inspect all consumers before changing a shared API. Keep feature logic
+  in its owning module rather than moving it into Core.
+
 - **Java 25 is mandatory** for every Gradle, compile, test, GameTest, runtime
   probe, remap, and release operation in an active Totem module. Before the
   first Gradle command, select a JDK 25 through `JAVA_HOME` and verify both
   `java -version` and `./gradlew -version` report JVM 25. Never silently fall
   back to the system JDK or downgrade to Java 21/17 because a command happens
   to start.
-- Treat a distributable active-module change as incomplete until its verified
-  release sequence is finished. The sequence is: choose and record a new
+- When a module release is explicitly authorized, treat it as incomplete until
+  its verified release sequence is finished. The sequence is: choose and record a new
   module version; run the module's real Java-25 build and applicable tests;
   inspect the remapped artifact; commit and push the exact source/version
   change to the module's default GitHub branch; confirm the required GitHub
@@ -67,31 +72,28 @@ the 11 active Totem repositories. It is not a Minecraft mod.
   newer than the recorded snapshot. The workspace snapshot still defines the
   documented cross-module contract until deliberately refreshed.
 
-## Adaptive orchestration rules
+## Execution contract
 
-- TotemWorkspace owns the deterministic orchestration decision for non-trivial Totem work. Use `orchestration_plan` (or the deterministic CLI fallback) rather than inventing a different role split in free-form prompts.
-- **Surface-invariant orchestration**: the Web Viewer/Prompt, terminal Codex,
-  IDE Codex, and a Codex session opened directly in any sibling active module
-  must call this same planner when TotemWorkspace is available. For the same
-  normalized prompt and semantic module focus, they must retain the same plan
-  payload: mode, score, limits, waves, assignments, module write boundaries,
-  and required validation. A parent workspace containing `TotemWorkspace/` is
-  enough to require the handoff; changing the starting directory must never
-  create a different delegation plan for the same task.
-- The Web adapter's orchestration envelope is the behavioral contract, not
-  browser-only decoration: Primary owns integration; read-only assignments do
-  not write; `primary-only` never delegates; and runtimes without multi-agent
-  support execute the same waves sequentially. Direct Codex need not emit
-  browser activity telemetry, but after edits it must perform the same impact,
-  test-plan, and actual module-validation lifecycle.
-- `primary-only` means no subagent should be spawned. Small changes must not pay orchestration overhead merely because multi-agent tooling is available.
-- Subagent count is bounded by the plan. Current policy caps planned subagents at four and parallel write workers at two.
-- Explorer, Architect, and Reviewer assignments are read-only. Worker assignments may write only inside their assigned single Totem module.
-- Shared contracts/protocols must be stabilized in the discovery/architecture wave before parallel worker writes begin.
-- Subagents must be told they are not alone in the workspace, must not revert unrelated work, and must not recursively spawn further subagents.
-- If the Codex runtime does not expose reliable multi-agent execution, execute the same plan sequentially in Primary while preserving assignment boundaries and independent-review intent.
-- Do not infer or fabricate actual subagent lifecycle from `codex exec --json` when structured spawn telemetry is absent. `orchestration_planned` records the TotemWorkspace decision, not proof that a child agent was created.
-- After implementation, re-run `impact`, `test_plan`, and an independent reviewer when the orchestration plan requires it.
+TotemWorkspace constrains the work. It does not prescribe the internal agent topology.
+All non-trivial Totem development uses the same resolve_task -> orchestration_plan ->
+bounded context -> implementation -> impact -> test_plan -> actual validation lifecycle,
+from Web, Flutter, legacy Viewer, Discord, Bridge, CLI, IDE, or sibling repository Codex.
+The same normalized task, semantic focus and workspace state must yield equivalent constraints.
+Astra chooses direct work, delegation, specialization, scheduling and independent review.
+Respect module ownership, read/write scopes, dependency waves, max concurrent writes,
+shared-contract stabilization, impacted consumers, required validation, security and release gates.
+An independentReviewRequired constraint requires actual independent review evidence, not a
+particular agent role. Read-only waves never write. Never revert another contributor's work.
+Prefer lightweight/Spark-capable available models for bounded discovery, implementation,
+mechanical changes, tests and compact review when this reduces total task tokens.
+Correctness comes first, total model tokens second, latency last. Reuse compact findings
+and bounded context; prefer sequential work when it avoids repeated context. Escalate to
+Astra reasoning for ambiguity, shared API/protocol design, conflicting evidence, high-risk
+persistence/networking or non-local failures; supply compact evidence before escalation.
+Model hints express preferences, not actual model usage. Only runtime evidence establishes
+agent lifecycle, chosen models, usage or validation outcomes.
+
+Use the repository-local intelligence skill for retrieval and lifecycle details.
 
 ## V2 viewer isolation rules
 

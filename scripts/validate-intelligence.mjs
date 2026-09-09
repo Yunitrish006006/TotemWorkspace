@@ -159,7 +159,7 @@ async function validateMcpServer() {
   try {
     const init = await request(1, "initialize", { protocolVersion: "2025-06-18", clientInfo: { name: "TotemWorkspace validation", version: "1" }, capabilities: {} });
     assert.equal(init.serverInfo?.name, "totem-workspace-intelligence");
-    assert.equal(init.serverInfo?.version, "0.4.0");
+    assert.equal(init.serverInfo?.version, "0.5.0");
     child.stdin.write(`${JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized", params: {} })}\n`);
     const listed = await request(2, "tools/list", {});
     const names = (listed.tools ?? []).map((t) => t.name);
@@ -173,9 +173,10 @@ async function validateMcpServer() {
       arguments: { query: "死亡背包跟 Nexus 同步" }
     });
     assert.equal(orchestration.isError, false);
-    assert.equal(orchestration.structuredContent?.schemaVersion, 1);
-    assert.ok(["primary-only", "assisted", "bounded-parallel", "guarded-parallel"].includes(orchestration.structuredContent?.mode));
-    assert.ok((orchestration.structuredContent?.assignments?.length ?? 0) <= 4);
+    assert.equal(orchestration.structuredContent?.schemaVersion, 2);
+    assert.equal(orchestration.structuredContent?.assignments, undefined);
+    assert.ok(orchestration.structuredContent?.execution.maxConcurrentWrites >= 1);
+    assert.ok(orchestration.structuredContent?.waves.length >= 3);
 
     const architectPack = buildContextPack("修改 Observer Screen provider protocol", {
       audience: "architect",

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { ActionRowBuilder, ActivityType, ButtonBuilder, ButtonStyle, Client, Events, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from "discord.js";
 import { isAllowedInteraction, isAllowedMessage } from "./config.mjs";
-import { CODING_SUBAGENT_MODEL, validateModel } from "./codex-runner.mjs";
+import { validateModel } from "./codex-runner.mjs";
 import { discordOutputImages } from "./output-images.mjs";
 import { conversationKey, sessionKey, taskKey } from "./session-store.mjs";
 import { createWorkspaceSync } from "./workspace-sync.mjs";
@@ -335,7 +335,7 @@ function cliItemDetail(item, completed) {
   if (type === "imageview") return `檢視圖片：${safeProgressText(item?.path) || "圖片"}`;
   if (type === "imagegeneration") return completed ? "圖片產生完成" : "正在產生圖片";
   if (type === "collabagenttoolcall" || type === "collabtoolcall") {
-    const model = safeProgressText(item?.model) || CODING_SUBAGENT_MODEL;
+    const model = safeProgressText(item?.model) || "model 未回報";
     if (item?.tool === "spawnAgent") return `${completed ? "已啟動" : "正在啟動"}程式 subagent：${model}`;
     if (item?.tool === "wait") return completed ? "程式 subagent 工作完成" : "正在等待程式 subagent";
     return `${completed ? "subagent 協調完成" : "正在協調 subagent"}：${model}`;
@@ -672,7 +672,7 @@ export function createProgressReporter({ workspaceName, task, model, reasoningEf
       }
       if (itemType === "commandexecution") activity = "正在執行本機工作…";
       else if (itemType === "filechange") activity = "正在修改工作區檔案…";
-      else if (itemType === "collabagenttoolcall" || itemType === "collabtoolcall" || itemType === "subagentactivity") activity = `正在協調 ${CODING_SUBAGENT_MODEL} subagent…`;
+      else if (itemType === "collabagenttoolcall" || itemType === "collabtoolcall" || itemType === "subagentactivity") activity = "正在協調 subagent…";
       else if (itemType === "mcptoolcall" || itemType === "dynamictoolcall") activity = "正在使用整合工具…";
       else if (itemType === "agentmessage") activity = "正在整理回覆…";
       else if (itemType === "websearch") activity = "正在搜尋資料…";

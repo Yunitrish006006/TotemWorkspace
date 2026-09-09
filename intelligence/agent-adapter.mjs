@@ -1,6 +1,14 @@
 import path from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { orchestrationPlanSummary } from "./orchestration-plan.mjs";
+import { probeCodexRuntime } from "./codex-runtime-probe.mjs";
+import { resolveModelPolicy } from "./model-policy.mjs";
+import { CodexRunner } from "./agent-runtime/runtime.mjs";
+import { normalizeAppServerEvent } from "./agent-runtime/activity-adapter.mjs";
+import { buildOrchestrationPlan } from "./orchestration-plan.mjs";
+import { buildContextPack } from "./context-pack.mjs";
+import { constrainedWriteRoots, executionWorkspace } from "./agent-runtime/orchestration-context.mjs";
+import { buildDeveloperInstructions } from "./agent-runtime/runtime-policy.mjs";
 
 const ADAPTER_SCHEMA_VERSION = 1;
 const TASK_SCHEMA_VERSION = 1;
@@ -55,50 +63,9 @@ function publicTask(task) {
     error: task.error ?? null,
     finalMessage: task.finalMessage ?? null,
     usage: task.usage ?? null,
+    chosenModel: task.chosenModel ?? null,
     orchestration: task.orchestration ?? null
   });
-}
-
-function orchestrationEnvelope(plan) {
-  if (!plan) return [];
-  const lines = [
-    "",
-    "TotemWorkspace adaptive orchestration plan:",
-    `Mode: ${plan.mode}; score: ${plan.score}; estimated benefit: ${plan.estimatedBenefit}.`,
-    `Subagent budget: ${plan.limits?.recommendedSubagents ?? 0}/${plan.limits?.maxSubagents ?? 0}; max parallel workers: ${plan.limits?.maxParallelWorkers ?? 0}.`,
-    "The Primary agent owns integration and the final answer."
-  ];
-  for (const wave of plan.executionWaves ?? []) {
-    lines.push(`Wave ${wave.phase} (parallel=${wave.parallel}): ${(wave.assignments ?? []).join(", ")}`);
-  }
-  for (const item of plan.assignments ?? []) {
-    lines.push(
-      `Assignment ${item.id}: role=${item.role}; modules=${(item.modules ?? []).join(",") || "none"}; writeAllowed=${item.writeAllowed}; purpose=${item.purpose}`
-    );
-  }
-  lines.push(
-    "If this Codex runtime exposes multi-agent/subagent tools, follow this plan and do not exceed the subagent budget.",
-    "Tell every spawned subagent that it must not spawn further subagents and must respect its read/write/module boundary.",
-    "Do not spawn any subagent for a primary-only plan.",
-    "If multi-agent execution is unavailable, execute the same waves sequentially in Primary while preserving the same boundaries.",
-    "Do not invent delegation telemetry; TotemWorkspace records the orchestration plan separately from actual runtime agent lifecycle."
-  );
-  return lines;
-}
-
-function promptEnvelope(request) {
-  const lines = [
-    "You are running through the TotemWorkspace local Codex agent adapter.",
-    "Work only on the user's requested Totem development task.",
-    "Use TotemWorkspace graph/MCP/skill context when available before broad repository search.",
-    "Respect repository instructions and existing validation workflows.",
-    "Do not expose credentials, secrets, or absolute local filesystem paths in user-facing summaries."
-  ];
-  if (request.moduleId) lines.push(`Semantic module focus: ${request.moduleId}`);
-  if (request.featureId) lines.push(`Semantic feature focus: ${request.featureId}`);
-  lines.push(...orchestrationEnvelope(request.orchestrationPlan));
-  lines.push("", "User request:", request.prompt);
-  return lines.join("\n");
 }
 
 function moduleFileFor(rawPath, { cwd, workspaceRoot, reposRoot, knowledge }) {
@@ -167,8 +134,10 @@ export function createAgentAdapter({
   reposRoot,
   knowledge,
   env = process.env,
+  probeRuntime = probeCodexRuntime,
   spawnImpl = spawn,
   spawnSyncImpl = spawnSync,
+  runtimeImpl = null,
   onActivity = () => {},
   onTaskSettled = async () => {}
 } = {}) {
@@ -178,6 +147,8 @@ export function createAgentAdapter({
     available: false,
     reason: null,
     version: null,
+    capabilities: null,
+    ready: false,
     activeTask: null,
     lastTask: null,
     child: null,
@@ -225,14 +196,32 @@ export function createAgentAdapter({
     }
   }
 
+  const runner = runtimeImpl ?? new CodexRunner({ spawnImpl, probeRuntime, codexBin, env });
+  let capabilityProbe = null;
+  let runtimeSnapshot = null;
+  async function refreshCapabilities() {
+    if (!state.available) return null;
+    if (runtimeSnapshot && Date.now() - runtimeSnapshot.observedAt < 60_000) return runtimeSnapshot;
+    if (capabilityProbe) return capabilityProbe;
+    capabilityProbe = probeRuntime({ codexBin, cwd: codexCwd, env, spawnImpl }).then(runtime => {
+      state.capabilities = { ...runtime.capabilities, cliAvailable: true, version: state.version };
+      state.ready = runtime.capabilities?.appServerAvailable === true && runtime.models?.length > 0;
+      runtimeSnapshot = { ...runtime, observedAt: Date.now() };
+      return runtime;
+    }).finally(() => { capabilityProbe = null; });
+    return capabilityProbe;
+  }
+
   function status() {
     return Object.freeze({
       schemaVersion: ADAPTER_SCHEMA_VERSION,
       kind: configuredKind,
       configured: configuredKind === "codex",
-      available: state.available,
+      available: state.available && state.ready,
       busy: Boolean(state.activeTask),
       version: state.version,
+      ready: state.ready,
+      capabilities: state.capabilities,
       sandbox,
       model: model ?? null,
       reason: state.reason,
@@ -307,7 +296,8 @@ export function createAgentAdapter({
       return;
     }
 
-    if (event.type === "turn.completed") {
+    if (event.type === "turn.completed" || event.type === "usage.updated") {
+      if (!event.usage) return;
       task.usage = normalizedUsage(event.usage ?? {});
       emit({
         type: "usage_updated",
@@ -318,7 +308,6 @@ export function createAgentAdapter({
         summary: `Tokens · in ${task.usage.inputTokens} · cached ${task.usage.cachedInputTokens} · out ${task.usage.outputTokens}`,
         usage: task.usage
       });
-      void settle(task, "completed");
       return;
     }
 
@@ -328,10 +317,18 @@ export function createAgentAdapter({
       return;
     }
     if (event.type === "error") {
-      void settle(task, "failed", event.message ?? "Codex stream error");
+      // App Server can retry a transient notification. Only the runner settles the turn.
       return;
     }
 
+    if (["agent.spawned", "agent.completed", "model.selected", "context.reused", "escalation"].includes(event.type)) {
+      if (event.type === "model.selected") task.chosenModel = boundedText(event.model, 128);
+      emit({ type: event.type.replaceAll(".", "_"), source: "codex-adapter", taskId: task.id,
+        moduleId: task.moduleId, featureId: task.featureId,
+        model: boundedText(event.model, 128), agentId: boundedText(event.agentId, 160),
+        summary: boundedText(event.summary, 500) ?? event.type });
+      return;
+    }
     const item = eventItem(event);
     if (!item) return;
 
@@ -359,7 +356,7 @@ export function createAgentAdapter({
     if (item.type === "file_change" && event.type === "item.completed") {
       for (const change of item.changes ?? []) {
         const mapped = moduleFileFor(change.path, {
-          cwd: codexCwd,
+          cwd: task.cwd ?? codexCwd,
           workspaceRoot,
           reposRoot,
           knowledge
@@ -500,7 +497,7 @@ export function createAgentAdapter({
       });
     }
   }
-  function dispatch(request = {}) {
+  async function dispatch(request = {}) {
     if (!state.available) {
       const error = new Error(state.reason || "agent adapter is unavailable");
       error.code = "ADAPTER_UNAVAILABLE";
@@ -511,12 +508,16 @@ export function createAgentAdapter({
       error.code = "AGENT_BUSY";
       throw error;
     }
-    const prompt = boundedText(request.prompt, 8 * 1024);
-    if (!prompt) {
+    const prompt = typeof request.prompt === "string" ? request.prompt.trim() : "";
+    if (!prompt || prompt.length > 120_000) {
       const error = new Error("prompt is required");
       error.code = "INVALID_PROMPT";
       throw error;
     }
+    const selectedPlan = request.orchestrationPlan ?? buildOrchestrationPlan({
+      query: prompt, moduleId: request.moduleId, featureId: request.featureId, knowledge
+    });
+    const requestedModel = boundedText(request.model, 128);
 
     const task = {
       id: `task:${Date.now()}:${++state.counter}`,
@@ -531,117 +532,91 @@ export function createAgentAdapter({
       error: null,
       finalMessage: null,
       usage: null,
-      orchestration: request.orchestrationPlan
-        ? orchestrationPlanSummary(request.orchestrationPlan)
-        : null,
+      orchestration: orchestrationPlanSummary(selectedPlan),
+      modelPolicy: null,
       settled: false
     };
     state.activeTask = task;
 
-    const args = ["exec", "--json", "--skip-git-repo-check", "--sandbox", sandbox, "--cd", codexCwd];
-    if (model) args.push("--model", model);
-    args.push("-");
-
-    let child;
+    let resolvedModel = model;
+    let modelPolicy = null;
+    let boundedContext;
     try {
-      child = spawnImpl(codexBin, args, {
-        cwd: codexCwd,
-        env,
-        stdio: ["pipe", "pipe", "pipe"],
-        windowsHide: true
+      boundedContext = buildContextPack(prompt, {
+        audience: "primary", moduleId: request.moduleId ?? null, knowledge,
+        includeCode: true, maxTokens: 4000, orchestrationPlan: selectedPlan
+      }).rendered;
+      const runtime = await refreshCapabilities();
+      modelPolicy = resolveModelPolicy({
+        plan: selectedPlan,
+        models: runtime.models,
+        usage: runtime.usage,
+        requestedModel: requestedModel ?? model,
+        requestedEffort: null,
+        hasImages: false,
+        contextTokens: Math.ceil((prompt.length + (boundedContext?.length ?? 0)
+          + buildDeveloperInstructions({ plan: selectedPlan }).length) / 4)
       });
+      if (modelPolicy.mode === "blocked" || !modelPolicy.coordinator?.model) {
+        const error = new Error(`Codex model policy blocked this task: ${(modelPolicy.reasonCodes ?? []).join(", ")}`);
+        error.code = "MODEL_POLICY_BLOCKED";
+        error.modelPolicy = modelPolicy;
+        throw error;
+      }
+      resolvedModel = modelPolicy.coordinator.model;
+      task.modelPolicy = modelPolicy;
     } catch (error) {
-      state.activeTask = null;
-      state.lastTask = task;
-      task.state = "failed";
-      task.completedAt = nowIso();
-      task.error = sanitizeMessage(error instanceof Error ? error.message : String(error), {
-        workspaceRoot,
-        reposRoot
-      });
-      const wrapped = new Error(task.error);
-      wrapped.code = "ADAPTER_SPAWN_FAILED";
-      throw wrapped;
+      await settle(task, "failed", error instanceof Error ? error.message : String(error));
+      throw error;
+    }
+    if (task.settled || state.activeTask !== task) {
+      const cancelled = new Error("Codex task was cancelled before it could be started");
+      void settle(task, "failed", cancelled.message);
+      throw cancelled;
     }
 
-    state.child = child;
     task.state = "running";
-    emit({
-      type: "task_started",
-      source: "codex-adapter",
-      taskId: task.id,
-      moduleId: task.moduleId,
-      featureId: task.featureId,
-      summary: "Codex task started"
+    const writableRoots = constrainedWriteRoots(selectedPlan, knowledge);
+    task.cwd = executionWorkspace(codexCwd, writableRoots, sandbox === "read-only" || !writableRoots.length);
+    emit({ type: "task_started", source: "codex-adapter", taskId: task.id,
+      moduleId: task.moduleId, featureId: task.featureId, summary: "Codex task started" });
+    const execution = runner.execute({
+      key: task.id, workspace: codexCwd, prompt,
+      orchestrationPlan: selectedPlan, modelPolicy, boundedContext,
+      model: resolvedModel, reasoningEffort: modelPolicy.coordinator.effort,
+      resumeSessionId: request.threadId ?? null,
+      readOnly: sandbox === "read-only",
+      autoApproveGradle: false,
+      writableRoots,
+      onSessionId: threadId => handleCodexEvent(task, { type: "thread.started", thread_id: threadId }),
+      onProgress: event => {
+        for (const normalized of normalizeAppServerEvent(event)) handleCodexEvent(task, normalized);
+      },
+      // Bridge has no approval interaction yet. Decline safely instead of hanging or granting permission.
+      onApproval: approval => runner.approve(task.id, approval.requestId, "decline")
     });
-
-    let stdoutBuffer = "";
-    let stderrBuffer = "";
-    const consumeLine = (line) => {
-      const text = String(line ?? "").trim();
-      if (!text) return;
-      try {
-        handleCodexEvent(task, JSON.parse(text));
-      } catch {
-        // Ignore malformed/non-JSON stdout. JSONL events remain authoritative.
-      }
-    };
-
-    child.stdout?.setEncoding?.("utf8");
-    child.stdout?.on?.("data", (chunk) => {
-      stdoutBuffer += chunk;
-      let newline;
-      while ((newline = stdoutBuffer.indexOf("\n")) >= 0) {
-        consumeLine(stdoutBuffer.slice(0, newline));
-        stdoutBuffer = stdoutBuffer.slice(newline + 1);
-      }
-    });
-
-    child.stderr?.setEncoding?.("utf8");
-    child.stderr?.on?.("data", (chunk) => {
-      if (stderrBuffer.length < 4000) stderrBuffer += String(chunk).slice(0, 4000 - stderrBuffer.length);
-    });
-
-    child.on?.("error", (error) => {
-      void settle(task, "failed", error instanceof Error ? error.message : String(error));
-    });
-    child.on?.("close", (code, signal) => {
-      if (stdoutBuffer.trim()) consumeLine(stdoutBuffer);
-      if (task.settled) return;
-      if (code === 0) {
-        void settle(task, "completed");
-        return;
-      }
-      const stderr = sanitizeMessage(stderrBuffer, { workspaceRoot, reposRoot });
-      void settle(
-        task,
-        "failed",
-        stderr || `Codex process exited with ${code ?? "unknown"}${signal ? ` (${signal})` : ""}`
-      );
-    });
-
-    child.stdin?.end?.(promptEnvelope({ ...request, prompt }));
+    execution.then(result => {
+      if (result.model && result.model !== task.chosenModel) handleCodexEvent(task, {
+        type: "model.selected", model: result.model, summary: `Runtime reported model ${result.model}`
+      });
+      if (result.message && !task.finalMessage) handleCodexEvent(task, {
+        type: "item.completed", item: { type: "agent_message", text: result.message }
+      });
+      if (result.usage) task.usage = normalizedUsage(result.usage.last ?? result.usage.total ?? result.usage);
+      void settle(task, result.exitCode === 0 && !result.timedOut ? "completed" : "failed",
+        result.exitCode === 0 && !result.timedOut ? null : "Codex App Server task failed or was interrupted");
+    }).catch(error => void settle(task, "failed", error instanceof Error ? error.message : String(error)));
     return publicTask(task);
   }
 
   function close(reason = "Bridge shutdown interrupted active task") {
     const task = state.activeTask;
-    const child = state.child;
     if (task && !task.settled) {
+      runner.cancel(task.id);
       void settle(task, "failed", reason);
-    }
-    if (child && !child.killed) {
-      try {
-        child.kill("SIGTERM");
-      } catch {
-        // Best effort on Bridge shutdown.
-      }
     }
   }
 
-  return Object.freeze({
-    status,
-    dispatch,
-    close
-  });
+  return Object.freeze({ status, dispatch, close, refreshCapabilities,
+    steer: (text) => state.activeTask ? runner.steer(state.activeTask.id, text) : false });
 }

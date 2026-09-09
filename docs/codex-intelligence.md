@@ -163,28 +163,29 @@ The repository-local skill is stored at:
 
 When Codex is started from TotemWorkspace, it can discover the skill directly. If CodexDiscord uses the common parent directory as its workspace cwd, expose the same skill from that parent `.agents/skills` directory (for example with a local symlink) or install it at user scope. Do not independently maintain duplicate skill text.
 
-## Recommended CodexDiscord flow
+## Shared development lifecycle
 
-```text
-Discord request
-  -> resolve_task
-  -> orchestration_plan
-       -> primary-only | assisted | bounded-parallel | guarded-parallel
-       -> bounded role/module/write assignments
-  -> context_pack(primary)
-  -> planned explorer / architect wave
-  -> context_pack(worker, module)
-  -> bounded implementation
-  -> impact
-       -> incremental RAG refresh
-       -> generated graph-data refresh
-  -> test_plan
-  -> reviewer context
-  -> Gradle / GameTest validation
-  -> Discord result
-```
+TotemWorkspace constrains the work. It does not prescribe the internal agent topology.
+All non-trivial Totem development uses the same resolve_task -> orchestration_plan ->
+bounded context -> implementation -> impact -> test_plan -> actual validation lifecycle,
+from Web, Flutter, legacy Viewer, Discord, Bridge, CLI, IDE, or sibling repository Codex.
+The same normalized task, semantic focus and workspace state must yield equivalent constraints.
+Astra chooses direct work, delegation, specialization, scheduling and independent review.
+Respect module ownership, read/write scopes, dependency waves, max concurrent writes,
+shared-contract stabilization, impacted consumers, required validation, security and release gates.
+An independentReviewRequired constraint requires actual independent review evidence, not a
+particular agent role. Read-only waves never write. Never revert another contributor's work.
+Prefer lightweight/Spark-capable available models for bounded discovery, implementation,
+mechanical changes, tests and compact review when this reduces total task tokens.
+Correctness comes first, total model tokens second, latency last. Reuse compact findings
+and bounded context; prefer sequential work when it avoids repeated context. Escalate to
+Astra reasoning for ambiguity, shared API/protocol design, conflicting evidence, high-risk
+persistence/networking or non-local failures; supply compact evidence before escalation.
+Model hints express preferences, not actual model usage. Only runtime evidence establishes
+agent lifecycle, chosen models, usage or validation outcomes.
 
-The primary model should not begin by searching all 11 repositories. Graph retrieval determines the initial scope, and code retrieval stays inside selected modules unless evidence requires expansion.
+The primary model uses graph retrieval before source discovery. Each delegated task
+receives only selected context and compact upstream evidence.
 
 ## Incremental freshness behavior
 
@@ -208,48 +209,23 @@ This is lazy/proactive incremental freshness rather than a background daemon.
 - Generated V2 code-detail nodes describe discovered code structure but do not promote a relationship into an architecture contract.
 - Never reset newer local source merely to match the snapshot.
 
-## Adaptive orchestration
+## Execution constraints and shared runtime
 
-TotemWorkspace is the orchestration policy owner; Codex is the execution harness.
+The authoritative schema-v2 contract is `intelligence/orchestration-plan.mjs`.
+It returns affected modules/features/components/contracts, read/write scopes, impacted
+consumers, dependency waves, parallelism and concurrent-write limits, validation,
+independent-review, risk/security/release constraints and token/context hints.
+Complexity scores are diagnostics and never mandate agents.
 
-Every non-trivial task can be scored deterministically from graph/test evidence:
+The shared `intelligence/agent-runtime/` layer owns runtime policy, model routing and
+prompt instructions. Surfaces own transport and presentation. App Server capability
+and model discovery determine available execution paths; unavailable models fall back
+gracefully. Native IDE/CLI Codex consumes the same MCP/skill contract within its host
+session rather than pretending to share a process with Bridge or Discord.
 
-- module span,
-- contract surface and critical contract types,
-- TotemCore/shared surface,
-- risk breadth and high-risk tags,
-- verification breadth,
-- routing uncertainty.
-
-The planner returns one of four modes:
-
-```text
-primary-only      no subagents
-assisted          one bounded discovery/architecture role, optional reviewer
-bounded-parallel  discovery → up to two module workers → reviewer
-guarded-parallel  architect → bounded workers → independent reviewer
-```
-
-The current policy caps planned subagents at four and parallel workers at two.
-Explorer/Architect/Reviewer are read-only; each write Worker owns one module.
-If multi-agent execution is unavailable, Primary must execute the same waves
-sequentially instead of inventing a different workflow.
-
-Use:
-
-```sh
-node scripts/totem-intelligence.mjs orchestrate "<task>"
-```
-
-or MCP `orchestration_plan` to inspect the decision and score factors.
-
-The Bridge runs the same planner for Viewer Prompt submissions and emits
-`orchestration_planned` before starting Codex. The Codex adapter receives the
-same plan in its prompt envelope. Viewer surfaces display mode/score/roles.
-
-The plan describes intended delegation. It is deliberately not treated as proof
-that a child agent actually spawned when the Codex JSON event stream does not
-provide reliable structured spawn telemetry.
+Viewer execution strips display planned waves, scopes, concurrent-write limits and
+model preference. Actual lifecycle and token usage are shown only when emitted by the
+runtime. `orchestration_planned` is never evidence of agent creation or Spark usage.
 
 ## Validation
 
@@ -261,3 +237,21 @@ node scripts/validate-intelligence.mjs
 ```
 
 The intelligence validator checks 11 modules, 58 curated features, 32 contracts, representative Chinese routing, incremental index create/modify/delete behavior, MCP initialize/tools/list/resolve, generated-data determinism, source-body exclusion, and the requirement that `graph-v2.html` contain no graph data or inline graph script.
+
+## Runtime operation and enforcement limits
+
+Use `node scripts/totem-runtime.mjs capabilities` to inspect live runtime readiness
+without a model turn. `run` accepts a task argument or stdin; `resume --thread <id>`
+continues a saved thread. Optional `--model` and `--effort` are user preferences.
+SIGINT cancels; the CLI declines approvals because it has no interactive approval UI.
+
+The App Server receives graph-derived module sandbox roots and an execution cwd
+inside an allowed root. In-process leases reject overlapping writes across managed
+runner instances. A shared atomic filesystem lease conservatively serializes writes across independent processes using the same checkout; stale or unknown owners fail closed until the exited owner is confirmed and abandoned local state is cleaned. Dependency-wave
+completion and max writes inside arbitrary agent tools are semantic obligations, not
+a universal tool-level gate. Native IDE sessions inherit their own host enforcement.
+Required independent review and deterministic validation still need actual evidence.
+
+Model catalog fallback is capability-based. Usage reflects available runtime evidence;
+missing subagent accounting, cached/repeated context and escalation costs must not be
+reported as measured totals. No additional model calls are made for token accounting.

@@ -1,27 +1,33 @@
+import fs from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import { after } from "node:test";
 import test from "node:test";
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
 import { PassThrough } from "node:stream";
-import { approvalResponse, CODING_SUBAGENT_MODEL, CodexRunner, finalAgentMessage, generatedImagePaths, imageInputs, isAutoApprovedGradleCompile, threadResumeParams, threadStartParams, turnStartParams, turnSteerParams, validateModel, validatePrompt, validateReasoningEffort } from "../src/codex-runner.mjs";
+import { approvalResponse, CodexRunner, finalAgentMessage, generatedImagePaths, imageInputs, isAutoApprovedGradleCompile, threadResumeParams, threadStartParams, turnStartParams, turnSteerParams, validateModel, validatePrompt, validateReasoningEffort } from "../src/codex-runner.mjs";
 import { taskKey } from "../src/session-store.mjs";
+
+const leaseDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "totem-runtime-test-locks-"));
+after(() => fs.rmSync(leaseDirectory, { recursive: true, force: true }));
 
 test("Codex App Server sessions always confine writes to the selected workspace", () => {
   const start = threadStartParams({ workspace: "/srv/nexus", model: "gpt-5.6-terra" });
   assert.deepEqual(start, {
     cwd: "/srv/nexus",
-    runtimeWorkspaceRoots: ["/srv/nexus"],
     approvalPolicy: "on-request",
     approvalsReviewer: "user",
     sandbox: "workspace-write",
     developerInstructions: start.developerInstructions,
     model: "gpt-5.6-terra"
   });
-  assert.match(start.developerInstructions, /delegate the implementation to one implementation-focused subagent/);
-  assert.match(start.developerInstructions, new RegExp(CODING_SUBAGENT_MODEL));
-  assert.match(start.developerInstructions, /medium reasoning effort/);
+  assert.match(start.developerInstructions, /does not prescribe your internal agent topology/);
+  assert.match(start.developerInstructions, /lightweight\/Spark/);
+  assert.match(start.developerInstructions, /total model-token consumption/);
   assert.equal(JSON.stringify(start).includes("danger-full-access"), false);
   const resumed = threadResumeParams({ threadId: "thread-123", workspace: "/srv/nexus" });
-  assert.deepEqual(resumed.runtimeWorkspaceRoots, ["/srv/nexus"]);
+  assert.equal(resumed.cwd, "/srv/nexus");
   assert.equal(resumed.developerInstructions, start.developerInstructions);
 
   const turn = turnStartParams({
@@ -161,7 +167,7 @@ test("the model catalog uses only picker-visible models reported by Codex", asyn
       });
     }
   });
-  const runner = new CodexRunner({ maxRuntimeMs: 5_000, spawnImpl: () => child });
+  const runner = new CodexRunner({ leaseDirectory, probeRuntime: fakeRuntime, planImpl: () => ({ mode: "primary-only", assignments: [] }), maxRuntimeMs: 5_000, spawnImpl: () => child });
 
   const models = await runner.listModels({ workspace: "/srv/nexus" });
 
@@ -206,7 +212,7 @@ test("usage limits are read from the authenticated Codex App Server account", as
       });
     }
   });
-  const runner = new CodexRunner({ maxRuntimeMs: 5_000, spawnImpl: () => child });
+  const runner = new CodexRunner({ leaseDirectory, probeRuntime: fakeRuntime, planImpl: () => ({ mode: "primary-only", assignments: [] }), maxRuntimeMs: 5_000, spawnImpl: () => child });
 
   const usage = await runner.getUsage({ workspace: "/srv/nexus" });
 
@@ -245,7 +251,7 @@ test("an expired saved thread is replaced when its next turn cannot start", asyn
   });
   const saved = [];
   const progress = [];
-  const runner = new CodexRunner({ maxRuntimeMs: 5_000, spawnImpl: () => child });
+  const runner = new CodexRunner({ leaseDirectory, probeRuntime: fakeRuntime, planImpl: () => ({ mode: "primary-only", assignments: [] }), maxRuntimeMs: 5_000, spawnImpl: () => child });
 
   const result = await runner.execute({
     key: "user:channel:workspace",
@@ -281,7 +287,7 @@ test("zero max runtime leaves a Codex task running until it completes", async ()
       }), 20);
     }
   });
-  const runner = new CodexRunner({ maxRuntimeMs: 0, spawnImpl: () => child });
+  const runner = new CodexRunner({ leaseDirectory, probeRuntime: fakeRuntime, planImpl: () => ({ mode: "primary-only", assignments: [] }), maxRuntimeMs: 0, spawnImpl: () => child });
 
   const result = await runner.execute({
     key: "user:channel:workspace",
@@ -308,7 +314,7 @@ test("one active task key blocks a second Discord thread for the same workspace"
       notify({ method: "turn/completed", params: { turn: { status: "interrupted", items: [] } } });
     }
   });
-  const runner = new CodexRunner({ maxRuntimeMs: 0, spawnImpl: () => child });
+  const runner = new CodexRunner({ leaseDirectory, probeRuntime: fakeRuntime, planImpl: () => ({ mode: "primary-only", assignments: [] }), maxRuntimeMs: 0, spawnImpl: () => child });
   const firstThreadKey = taskKey({ userId: "user", channelId: "discord-thread-a", workspace: "core" });
   const secondThreadKey = taskKey({ userId: "user", channelId: "discord-thread-b", workspace: "core" });
   const first = runner.execute({ key: firstThreadKey, workspace: "/srv/core", prompt: "Keep working" });
@@ -343,7 +349,7 @@ test("steering uses the active turn IDs, image input, and FIFO request order", a
       notify({ method: "turn/completed", params: { turn: { status: "completed", items: [{ type: "agentMessage", text: "Steered." }] } } });
     }
   });
-  const runner = new CodexRunner({ maxRuntimeMs: 5_000, spawnImpl: () => child });
+  const runner = new CodexRunner({ leaseDirectory, probeRuntime: fakeRuntime, planImpl: () => ({ mode: "primary-only", assignments: [] }), maxRuntimeMs: 5_000, spawnImpl: () => child });
   const run = runner.execute({ key, workspace: "/srv/nexus", prompt: "Start the work" });
 
   await startedTurn;
@@ -393,7 +399,7 @@ test("early steering waits for turn IDs and rejects truthfully when the turn com
       respond({ id: request.id, result: { turnId: "race-turn" } });
     }
   });
-  const runner = new CodexRunner({ maxRuntimeMs: 5_000, spawnImpl: () => child });
+  const runner = new CodexRunner({ leaseDirectory, probeRuntime: fakeRuntime, planImpl: () => ({ mode: "primary-only", assignments: [] }), maxRuntimeMs: 5_000, spawnImpl: () => child });
   const run = runner.execute({ key, workspace: "/srv/nexus", prompt: "Finish quickly" });
   const steering = runner.steer(key, { prompt: "Actually wait." });
 
@@ -437,7 +443,7 @@ test("task-scoped automatic approval accepts current and subsequent permission t
       });
     }
   });
-  runner = new CodexRunner({ maxRuntimeMs: 0, spawnImpl: () => child });
+  runner = new CodexRunner({ leaseDirectory, probeRuntime: fakeRuntime, planImpl: () => ({ mode: "primary-only", assignments: [] }), maxRuntimeMs: 0, spawnImpl: () => child });
 
   const result = await runner.execute({
     key,
@@ -476,6 +482,7 @@ class FakeAppServer extends EventEmitter {
   kill() {
     this.killed = true;
     this.stdin.destroyed = true;
+    queueMicrotask(() => this.emit("close", 0, "SIGTERM"));
     return true;
   }
 
@@ -483,3 +490,105 @@ class FakeAppServer extends EventEmitter {
     this.stdout.write(`${JSON.stringify(message)}\n`);
   }
 }
+
+test("writing lease remains held until delayed App Server close after a turn failure", async () => {
+  let requestedStop;
+  const stopRequested = new Promise(resolve => { requestedStop = resolve; });
+  const child = new FakeAppServer((request, respond) => {
+    if (request.method === "initialize") respond({ id: request.id, result: {} });
+    else if (request.method === "thread/start") respond({ id: request.id, result: { thread: { id: "delayed" } } });
+    else if (request.method === "turn/start") respond({ id: request.id, error: { message: "Validation turn failed" } });
+  });
+  child.kill = () => { child.killed = true; requestedStop(); return true; };
+  const common = { leaseDirectory, planImpl: () => ({ assignments: [] }), probeRuntime: fakeRuntime };
+  const runner = new CodexRunner({ ...common, spawnImpl: () => child });
+  const workspace = "/tmp/delayed-runtime-close";
+  const running = runner.execute({ key: "delayed", workspace, prompt: "Fix" });
+  const failure = assert.rejects(running, /Validation turn failed/);
+  await stopRequested;
+  const other = new CodexRunner({ ...common, spawnImpl: () => { throw new Error("Must not spawn during overlap"); } });
+  await assert.rejects(other.execute({ key: "other", workspace, prompt: "Fix" }), error => error.code === "RUNTIME_WRITE_CONFLICT");
+  child.emit("close", 1, "SIGTERM");
+  await failure;
+  const afterClose = new CodexRunner({ ...common, probeRuntime: async () => { throw new Error("Lease was released"); } });
+  await assert.rejects(afterClose.execute({ key: "after", workspace, prompt: "Fix" }), /Lease was released/);
+});
+
+async function fakeRuntime() {
+  return { models: [{ model: "gpt-6-astra", supportedReasoningEfforts: ["medium", "high"], inputModalities: ["text", "image"] },
+    { model: "gpt-5.3-codex-spark", supportedReasoningEfforts: ["medium"], inputModalities: ["text"] }],
+    usage: { checkedAt: Date.now(), rateLimitsByLimitId: {
+      codex: { primary: { usedPercent: 20 } }, codex_bengalfox: { primary: { usedPercent: 20 } }
+    } } };
+}
+
+test("live Spark-only policy is identical across resumed thread and turn and cannot be changed by status or steer", async () => {
+  const requests = [];
+  let finish;
+  const child = new FakeAppServer((request, respond, notify) => {
+    requests.push(request);
+    if (request.method === "initialize") respond({ id: request.id, result: {} });
+    else if (request.method === "thread/resume") respond({ id: request.id, result: { thread: { id: "saved" } } });
+    else if (request.method === "turn/start") {
+      respond({ id: request.id, result: { turn: { id: "active" } } });
+      finish = () => notify({ method: "turn/completed", params: { turn: { status: "completed", items: [] } } });
+    }
+  });
+  let probes = 0;
+  const runner = new CodexRunner({ leaseDirectory, maxRuntimeMs: 5000, spawnImpl: () => child,
+    planImpl: () => ({ mode: "assisted", assignments: [{ id: "worker:one", role: "worker" }, { id: "reviewer:one", role: "reviewer" }] }),
+    probeRuntime: async () => {
+      probes++;
+      const snapshot = await fakeRuntime();
+      snapshot.usage.rateLimitsByLimitId.codex.primary.usedPercent = 100;
+      return snapshot;
+    }
+  });
+  const task = runner.execute({ key: "spark", workspace: "/srv/nexus", prompt: "Fix it", model: "gpt-6-astra", resumeSessionId: "saved",
+    onModelPolicy: policy => { assert.throws(() => { policy.coordinator.model = "other"; }, TypeError); }
+  });
+  while (!finish) await new Promise(resolve => setImmediate(resolve));
+  await assert.rejects(runner.steer("spark", { prompt: "See image", imageUrls: ["https://example.com/a.png"] }), /Spark-only/);
+  const resumed = requests.find(request => request.method === "thread/resume").params;
+  const turn = requests.find(request => request.method === "turn/start").params;
+  assert.equal(resumed.model, "gpt-5.3-codex-spark");
+  assert.equal(turn.model, resumed.model);
+  assert.equal(turn.effort, "medium");
+  assert.match(resumed.developerInstructions, /"model":"gpt-5.3-codex-spark"/);
+  assert.match(resumed.developerInstructions, /fork_turns="none"/);
+  assert.equal(requests.some(request => request.method === "turn/steer"), false);
+  assert.equal(probes, 1);
+  finish();
+  await task;
+});
+
+test("blocked separate Spark quota prevents any coding process or hidden model fallback", async () => {
+  let spawns = 0;
+  let decision;
+  const runner = new CodexRunner({ leaseDirectory, maxRuntimeMs: 5000, spawnImpl: () => { spawns++; throw new Error("must not launch"); },
+    planImpl: () => ({ assignments: [] }), probeRuntime: async () => {
+      const snapshot = await fakeRuntime();
+      snapshot.usage.rateLimitsByLimitId.codex.primary.usedPercent = 100;
+      delete snapshot.usage.rateLimitsByLimitId.codex_bengalfox;
+      return snapshot;
+    }
+  });
+  await assert.rejects(runner.execute({ key: "blocked", workspace: "/srv/nexus", prompt: "Fix it", onModelPolicy: value => { decision = value; } }),
+    error => error.code === "MODEL_POLICY_BLOCKED" && error.modelPolicy.mode === "blocked");
+  assert.equal(decision.mode, "blocked");
+  assert.equal(spawns, 0);
+  assert.equal(runner.isRunning("blocked"), false);
+});
+
+test("quota failure on resumed turn never replays the task in a fresh thread", async () => {
+  let started = 0;
+  const child = new FakeAppServer((request, respond) => {
+    if (request.method === "initialize") respond({ id: request.id, result: {} });
+    else if (request.method === "thread/resume") respond({ id: request.id, result: { thread: { id: "saved" } } });
+    else if (request.method === "turn/start") respond({ id: request.id, error: { message: "Usage limit exhausted" } });
+    else if (request.method === "thread/start") started++;
+  });
+  const runner = new CodexRunner({ leaseDirectory, maxRuntimeMs: 5000, spawnImpl: () => child, probeRuntime: fakeRuntime, planImpl: () => ({ assignments: [] }) });
+  await assert.rejects(runner.execute({ key: "no-replay", workspace: "/srv/nexus", prompt: "Fix", resumeSessionId: "saved" }), /Usage limit/);
+  assert.equal(started, 0);
+});

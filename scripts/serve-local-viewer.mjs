@@ -41,8 +41,8 @@ const ROOT = path.resolve(HERE, "..");
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 18765;
 const FLUTTER_WEB_ROOT = path.join(ROOT, "viewer_flutter", "build", "web");
-const BODY_LIMIT = 64 * 1024;
-const PROMPT_LIMIT = 8 * 1024;
+const BODY_LIMIT = 1024 * 1024;
+const PROMPT_LIMIT = 120_000;
 const ACTIVITY_LIMIT = 500;
 const APPROVED_BROWSER_ORIGINS = new Set([
   "https://yunitrish006006.github.io"
@@ -74,6 +74,11 @@ const ACTIVITY_TYPES = new Set([
   "usage_updated",
   "prompt_submitted",
   "orchestration_planned",
+  "agent_spawned",
+  "agent_completed",
+  "model_selected",
+  "context_reused",
+  "escalation",
   "feature_selected",
   "file_read",
   "file_edit",
@@ -279,6 +284,7 @@ function normalizeActivityEvent(value = {}, { source = "bridge" } = {}) {
     ["taskId", 160],
     ["orchestrationId", 160],
     ["orchestrationMode", 64]
+    , ["model", 128], ["agentId", 160]
   ];
   for (const [key, max] of fields) {
     const text = boundedText(value[key], max);
@@ -592,7 +598,10 @@ async function handleApi(req, res, url, { agentAdapter, conversation, conversati
     if (!settings.promptEnabled) {
       return { status: 403, payload: { error: "prompt is disabled in viewer settings" } };
     }
-    const prompt = boundedText(args.prompt, PROMPT_LIMIT);
+    if (typeof args.prompt !== "string" || args.prompt.trim().length > PROMPT_LIMIT) {
+      return { status: 400, payload: { error: "prompt must contain at most 120000 characters" } };
+    }
+    const prompt = args.prompt.trim();
     if (!prompt) {
       return { status: 400, payload: { error: "prompt is required" } };
     }
@@ -633,11 +642,11 @@ async function handleApi(req, res, url, { agentAdapter, conversation, conversati
       moduleId: args.moduleId,
       featureId: args.featureId,
       orchestrationId,
-      orchestrationMode: orchestration.mode,
       status: String(orchestration.score),
-      summary: `${orchestration.mode} · score ${orchestration.score} · ${orchestrationSummary.subagents} subagents · ${orchestrationSummary.roles.join(", ") || "primary"}`
+      summary: `Execution constraints · ${orchestrationSummary.modules.length} modules · max ${orchestration.execution.maxConcurrentWrites} concurrent writes · ${orchestration.waves.length} waves`
     }, { source: "bridge" });
 
+    await agentAdapter?.refreshCapabilities?.();
     const adapterStatus = agentAdapter?.status?.();
     if (!agentAdapter || !adapterStatus?.available) {
       conversation.append({
@@ -661,7 +670,7 @@ async function handleApi(req, res, url, { agentAdapter, conversation, conversati
     }
 
     try {
-      const task = agentAdapter.dispatch({
+      const task = await agentAdapter.dispatch({
         prompt,
         moduleId: args.moduleId,
         featureId: args.featureId,
@@ -705,6 +714,7 @@ async function handleApi(req, res, url, { agentAdapter, conversation, conversati
     }
   }
   if (req.method === "GET" && pathname === "/api/health") {
+    await agentAdapter?.refreshCapabilities?.();
     const adapterStatus = agentAdapter?.status?.() ?? {
       kind: "off",
       configured: false,
@@ -717,7 +727,7 @@ async function handleApi(req, res, url, { agentAdapter, conversation, conversati
       activitySchemaVersion: 3,
       verificationSchemaVersion: 1,
       replaySchemaVersion: 1,
-      orchestrationSchemaVersion: 1,
+      orchestrationSchemaVersion: 2,
       agentAdapterSchemaVersion: 1,
       promptExecution: adapterStatus.available ? adapterStatus.kind : "agent-adapter-required",
       agentAdapter: {
@@ -731,6 +741,7 @@ async function handleApi(req, res, url, { agentAdapter, conversation, conversati
   }
 
   if (req.method === "GET" && pathname === "/api/agent-adapter") {
+    await agentAdapter?.refreshCapabilities?.();
     json(res, 200, agentAdapter?.status?.() ?? {
       schemaVersion: 1,
       kind: "off",
@@ -746,6 +757,10 @@ async function handleApi(req, res, url, { agentAdapter, conversation, conversati
 
   if (req.method === "POST" && pathname === "/api/orchestration-plan") {
     const args = await readJsonBody(req);
+    if (String(args.query ?? args.prompt ?? "").trim().length > PROMPT_LIMIT) {
+      json(res, 400, { error: "query must contain at most 120000 characters" });
+      return true;
+    }
     const query = boundedText(args.query ?? args.prompt, PROMPT_LIMIT);
     if (!query) {
       json(res, 400, { error: "query is required" });

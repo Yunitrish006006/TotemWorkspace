@@ -53,3 +53,24 @@
 - 不以「已 push」推論 GitHub Actions 全綠，也不以「Actions 全綠」推論 Modrinth 已發布；三者分別查證。
 - CI 不持續輪詢；只在狀態改變或需要處理失敗時查看。紅燈要讀 log、修正、push、重跑，不能停在失敗狀態。
 - 已獲授權的模組版本發佈依 `docs/release-checklist.md` 的必經順序完成：JDK 25 驗證與測試、artifact 檢查、GitHub push／CI 綠燈、Modrinth publish、API 回讀與 SHA-512 驗證。任何一段缺少權限或證據時，報告 blocker，不可說「已發布」。
+
+## Unified execution lifecycle
+
+TotemWorkspace constrains the work. It does not prescribe the internal agent topology.
+All non-trivial Totem development uses the same resolve_task -> orchestration_plan ->
+bounded context -> implementation -> impact -> test_plan -> actual validation lifecycle,
+from Web, Flutter, legacy Viewer, Discord, Bridge, CLI, IDE, or sibling repository Codex.
+The same normalized task, semantic focus and workspace state must yield equivalent constraints.
+Astra chooses direct work, delegation, specialization, scheduling and independent review.
+Respect module ownership, read/write scopes, dependency waves, max concurrent writes,
+shared-contract stabilization, impacted consumers, required validation, security and release gates.
+An independentReviewRequired constraint requires actual independent review evidence, not a
+particular agent role. Read-only waves never write. Never revert another contributor's work.
+Prefer lightweight/Spark-capable available models for bounded discovery, implementation,
+mechanical changes, tests and compact review when this reduces total task tokens.
+Correctness comes first, total model tokens second, latency last. Reuse compact findings
+and bounded context; prefer sequential work when it avoids repeated context. Escalate to
+Astra reasoning for ambiguity, shared API/protocol design, conflicting evidence, high-risk
+persistence/networking or non-local failures; supply compact evidence before escalation.
+Model hints express preferences, not actual model usage. Only runtime evidence establishes
+agent lifecycle, chosen models, usage or validation outcomes.

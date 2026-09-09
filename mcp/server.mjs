@@ -7,7 +7,7 @@ import { buildOrchestrationPlan } from "../intelligence/orchestration-plan.mjs";
 import { renderGraphV2 } from "../scripts/render-graph-v2.mjs";
 
 const SERVER_NAME = "totem-workspace-intelligence";
-const SERVER_VERSION = "0.4.0";
+const SERVER_VERSION = "0.5.0";
 
 function jsonSchema(properties, required = []) {
   return { type: "object", additionalProperties: false, properties, required };
@@ -16,12 +16,12 @@ function jsonSchema(properties, required = []) {
 const TOOLS = Object.freeze([
   {
     name: "resolve_task",
-    description: "Resolve a Totem development request to likely modules, feature branches, dependency contracts, risks, and useful subagent roles before broad repository reading.",
+    description: "Resolve a Totem development request to likely modules, feature branches, dependency contracts, risks, and bounded evidence before broad repository reading.",
     inputSchema: jsonSchema({ query: { type: "string", minLength: 1 } }, ["query"])
   },
   {
     name: "orchestration_plan",
-    description: "Build a deterministic adaptive orchestration plan: complexity score, Primary/subagent mode, bounded role assignments, execution waves, write scopes, and fallback when multi-agent execution is unavailable.",
+    description: "Build the authoritative topology-free execution constraints: affected modules/contracts, read/write scopes, dependency waves, concurrency, review, validation, security and token/model preferences.",
     inputSchema: jsonSchema({
       query: { type: "string", minLength: 1 },
       module_id: { type: ["string", "null"], default: null },
@@ -49,10 +49,10 @@ const TOOLS = Object.freeze([
   },
   {
     name: "context_pack",
-    description: "Build a bounded task-specific context pack for the primary coordinator, a module worker, or a reviewer. Code retrieval automatically refreshes changed chunks in the selected modules.",
+    description: "Build a bounded task-specific context pack for coordination, discovery, implementation or verification; audiences never mandate agent roles. Code retrieval automatically refreshes changed chunks in the selected modules.",
     inputSchema: jsonSchema({
       query: { type: "string", minLength: 1 },
-      audience: { type: "string", enum: ["primary", "explorer", "architect", "worker", "reviewer"], default: "primary" },
+      audience: { type: "string", enum: ["primary", "discovery", "implementation", "verification", "explorer", "architect", "worker", "reviewer"], default: "primary" },
       module_id: { type: ["string", "null"], default: null },
       max_tokens: { type: "integer", minimum: 1000, maximum: 40000, default: 8000 },
       include_code: { type: "boolean", default: true }
@@ -135,6 +135,10 @@ function safeRenderGraph(knowledge, index = loadCodeIndex({ knowledge })) {
 }
 
 function safeRefresh(knowledge, modules) {
+  if (modules.length && modules.every((id) => id === "totem-workspace")) return {
+    freshness: { mode: "not-applicable", reason: "tooling-scope", checkedModules: modules, refreshedModules: [] },
+    graphPreview: { status: "skipped", regenerated: false, message: "Workspace tooling changes do not alter the curated game-module code index." }
+  };
   try {
     const refreshed = refreshCodeIndex({
       knowledge,

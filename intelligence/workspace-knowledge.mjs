@@ -444,22 +444,15 @@ function riskTagsForText(knowledge, text) {
   return [...tags];
 }
 
-function recommendedAgents({ modules, contracts, risks }) {
-  const agents = [];
-  if (modules.length > 1 || contracts.length > 0) agents.push("explorer");
-  if (modules.includes("totem-core") || contracts.some((contract) => ["hard-core", "runtime-optional", "observer-provider", "eventbus"].includes(contract.type))) {
-    agents.push("architecture/core-specialist");
-  }
-  if (risks.some((tag) => ["fabric-compat", "client-server", "observer"].includes(tag))) {
-    agents.push("fabric-compatibility-specialist");
-  }
-  if (modules.length > 1) agents.push("bounded-module-workers");
-  if (modules.length > 1 || risks.length > 1) agents.push("integration-reviewer");
-  return [...new Set(agents)];
-}
-
 export function resolveTask(query, knowledge = loadKnowledge()) {
   if (typeof query !== "string" || !query.trim()) throw new Error("query is required");
+  // Workspace tooling is a separate scope, never the in-game Discord integration.
+  if (/totemworkspace|totem-workspace|codex[ -]discord|agent[ -]runtime|orchestration|local bridge|viewer prompt/i.test(query)) {
+    return Object.freeze({ query, expandedQuery: query, snapshot: knowledge.snapshot,
+      modules: [{ id: "totem-workspace", name: "TotemWorkspace", role: "development tooling", score: 100 }],
+      features: [], contracts: [], risks: /runtime|orchestration|approval|security/i.test(query) ? ["security"] : [],
+      components: ["intelligence", "agent-runtime", "surfaces", "validation"] });
+  }
   const expanded = expandedQuery(knowledge, query);
   const tokens = tokenize(expanded);
 
@@ -516,8 +509,7 @@ export function resolveTask(query, knowledge = loadKnowledge()) {
     })),
     features: Object.freeze(rankedFeatures.slice(0, 8).map(({ feature, score }) => Object.freeze({ ...feature, score }))),
     contracts: Object.freeze(relevantContracts),
-    risks: Object.freeze(risks),
-    recommendedAgents: Object.freeze(recommendedAgents({ modules: moduleList, contracts: relevantContracts, risks }))
+    risks: Object.freeze(risks)
   });
 }
 
@@ -558,6 +550,7 @@ function detectModulesFromFiles(knowledge, changedFiles) {
   const modules = new Set();
   for (const file of changedFiles ?? []) {
     const normalized = normalizeText(file).replaceAll("\\", "/");
+    if (normalized.includes("totemworkspace/") || /^(intelligence|scripts|mcp|viewer|viewer_flutter|tools|docs|\.agents)\//.test(normalized)) modules.add("totem-workspace");
     for (const module of knowledge.modules) {
       if (normalized.includes(normalizeText(module.repoName)) || normalized.includes(normalizeText(module.id))) {
         modules.add(module.id);
@@ -568,7 +561,7 @@ function detectModulesFromFiles(knowledge, changedFiles) {
 }
 
 export function impactAnalysis({ changedFiles = [], changedModules = [] } = {}, knowledge = loadKnowledge()) {
-  const touched = new Set((changedModules ?? []).filter((id) => knowledge.moduleById.has(id)));
+  const touched = new Set((changedModules ?? []).filter((id) => id === "totem-workspace" || knowledge.moduleById.has(id)));
   for (const id of detectModulesFromFiles(knowledge, changedFiles)) touched.add(id);
   if (touched.size === 0) throw new Error("impact analysis needs changedFiles or changedModules that identify a Totem module");
 
@@ -587,7 +580,8 @@ export function impactAnalysis({ changedFiles = [], changedModules = [] } = {}, 
   }
 
   const riskText = [...changedFiles, ...changedModules, ...contracts.flatMap((contract) => [contract.id, contract.type, contract.feature])].join(" ");
-  const risks = riskTagsForText(knowledge, riskText);
+  const toolingOnly = touched.size === 1 && touched.has("totem-workspace");
+  const risks = toolingOnly ? (/runtime|orchestration|approval|mcp\//i.test(riskText) ? ["runtime-security"] : []) : riskTagsForText(knowledge, riskText);
   if (touched.has("totem-core")) risks.push("shared-contract");
 
   return Object.freeze({
@@ -595,13 +589,12 @@ export function impactAnalysis({ changedFiles = [], changedModules = [] } = {}, 
     impactedModules: Object.freeze([...impacted]),
     contracts: Object.freeze(contracts),
     risks: Object.freeze([...new Set(risks)]),
-    requiresIndependentReview: impacted.size > 1 || contracts.length > 0,
-    recommendedAgents: Object.freeze(recommendedAgents({ modules: [...impacted], contracts, risks }))
+    requiresIndependentReview: impacted.size > 1 || contracts.length > 0 || risks.includes("runtime-security")
   });
 }
 
 export function testPlan({ query = "", changedModules = [], changedFiles = [] } = {}, knowledge = loadKnowledge()) {
-  let modules = [...new Set((changedModules ?? []).filter((id) => knowledge.moduleById.has(id)))];
+  let modules = [...new Set((changedModules ?? []).filter((id) => id === "totem-workspace" || knowledge.moduleById.has(id)))];
   let risks = riskTagsForText(knowledge, `${query} ${(changedFiles ?? []).join(" ")}`);
   if (modules.length === 0 && query) {
     const resolved = resolveTask(query, knowledge);
@@ -612,7 +605,11 @@ export function testPlan({ query = "", changedModules = [], changedFiles = [] } 
     modules = [...new Set([...modules, ...detectModulesFromFiles(knowledge, changedFiles)])];
   }
 
-  const categories = new Set(knowledge.testMatrix.defaults?.validation ?? ["build"]);
+  const toolingOnly = modules.length === 1 && modules[0] === "totem-workspace";
+  if (toolingOnly) risks = /security|runtime|approval|orchestration/i.test(query) ? ["runtime-security"] : [];
+  const categories = new Set(toolingOnly
+    ? ["workspace-validation", "intelligence-validation", "adaptive-orchestration-validation", "agent-adapter-validation", "affected-surface-runtime-tests"]
+    : knowledge.testMatrix.defaults?.validation ?? ["build"]);
   const notes = [];
   for (const moduleId of modules) {
     const modulePlan = knowledge.testMatrix.modules?.[moduleId];

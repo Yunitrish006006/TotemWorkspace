@@ -51,6 +51,7 @@ assert.ok(serverSource.includes("prepareApiCors(req, res)"), "Flutter dev access
 assert.ok(serverSource.includes("approved TotemWorkspace or loopback clients"), "browser CORS must be restricted to approved Pages or loopback origins");
 assert.ok(!serverSource.includes('const DEFAULT_HOST = "0.0.0.0"'), "local viewer must not expose LAN by default");
 
+assert.ok(html.includes('maxlength="120000"'), "legacy prompt must match the shared runtime prompt length limit");
 assert.ok(html.includes('id="liveLocal"'), "viewer must expose LIVE LOCAL badge");
 assert.ok(html.includes('id="localStatus"'), "viewer must expose local status button");
 assert.ok(html.includes('id="refreshLocal"'), "viewer must expose local refresh button");
@@ -145,7 +146,7 @@ try {
   assert.equal(healthPayload.activitySchemaVersion, 3);
   assert.equal(healthPayload.verificationSchemaVersion, 1);
   assert.equal(healthPayload.replaySchemaVersion, 1);
-  assert.equal(healthPayload.orchestrationSchemaVersion, 1);
+  assert.equal(healthPayload.orchestrationSchemaVersion, 2);
   assert.equal(healthPayload.agentAdapterSchemaVersion, 1);
   assert.equal(healthPayload.promptExecution, "codex");
   assert.equal(healthPayload.agentAdapter.available, true);
@@ -180,9 +181,12 @@ try {
   });
   assert.equal(planned.status, 200);
   const plannedPayload = await planned.json();
-  assert.equal(plannedPayload.schemaVersion, 1);
-  assert.ok(["primary-only", "assisted", "bounded-parallel", "guarded-parallel"].includes(plannedPayload.mode));
-  assert.ok(plannedPayload.assignments.length <= 4);
+  assert.equal(plannedPayload.schemaVersion, 2);
+  assert.ok(plannedPayload.execution.maxConcurrentWrites <= 2);
+  assert.ok(Array.isArray(plannedPayload.waves));
+  assert.equal(plannedPayload.assignments, undefined);
+  assert.ok(!liveSource.includes("assignments.length"));
+  assert.ok(liveSource.includes("actual agents and models require runtime evidence"));
 
   const preflight = await fetch(`${base}/api/refresh`, {
     method: "OPTIONS",
@@ -256,11 +260,11 @@ try {
   assert.equal(promptPayload.execution, "codex");
   assert.equal(promptPayload.event.type, "prompt_submitted");
   assert.equal(promptPayload.task.id, "task:http-fixture:1");
-  assert.equal(promptPayload.orchestration.schemaVersion, 1);
+  assert.equal(promptPayload.orchestration.schemaVersion, 2);
   assert.ok(promptPayload.orchestration.score >= 0);
   assert.equal(dispatchedPrompts.length, 1);
   assert.equal(dispatchedPrompts[0].prompt, "inspect TotemAutomata gathering outline");
-  assert.equal(dispatchedPrompts[0].orchestrationPlan.schemaVersion, 1);
+  assert.equal(dispatchedPrompts[0].orchestrationPlan.schemaVersion, 2);
 
   const transcript = await fetch(`${base}/api/conversation`, {
     headers: { Origin: "http://127.0.0.1:54321" }

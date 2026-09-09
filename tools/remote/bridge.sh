@@ -424,8 +424,11 @@ doctor() {
   if [[ "${TOTEM_AGENT_ADAPTER:-off}" == "codex" ]]; then
     local codex_bin="${TOTEM_CODEX_BIN:-codex}"
     if command -v "$codex_bin" >/dev/null 2>&1 || [[ -x "$codex_bin" ]]; then
-      echo "codex: OK ($codex_bin)"
-      "$codex_bin" --version 2>/dev/null | head -n 1 || true
+      echo "codex: checking shared runtime capabilities ($codex_bin)"
+      if ! node "$ROOT/scripts/totem-runtime.mjs" capabilities --cwd "${TOTEM_CODEX_CWD:-$ROOT}"; then
+        echo "codex: required runtime capabilities unavailable"
+        failed=1
+      fi
     else
       echo "codex: MISSING ($codex_bin)"
       failed=1

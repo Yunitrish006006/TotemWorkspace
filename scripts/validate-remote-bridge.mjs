@@ -41,11 +41,14 @@ for (const fragment of [
   'agent_busy()',
   'guard_agent_idle()',
   'show_agent_status()',
+  'scripts/totem-runtime.mjs" capabilities --cwd',
   'Refusing Bridge $action: Codex has an active task.',
   'TOTEM_BRIDGE_FORCE=1 bash tools/remote/bridge.sh $action',
 ]) {
   assert.ok(bridge.includes(fragment), `remote bridge controller is missing: ${fragment}`);
 }
+
+assert.ok(!bridge.includes('"$codex_bin" --version'), 'bridge readiness must use shared capability discovery, not version-only detection');
 
 for (const action of ["start)", "stop)", "restart)", "status)", "logs)", "follow)", "attach)", "doctor)"]) {
   assert.ok(bridge.includes(action), `remote bridge controller is missing action: ${action}`);

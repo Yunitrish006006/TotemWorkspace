@@ -1,373 +1,96 @@
-import {
-  impactAnalysis,
-  loadKnowledge,
-  resolveTask,
-  testPlan
-} from "./workspace-knowledge.mjs";
+import { impactAnalysis, loadKnowledge, resolveTask, testPlan } from "./workspace-knowledge.mjs";
 
-const SCHEMA_VERSION = 1;
-const MAX_SUBAGENTS = 4;
-const CRITICAL_CONTRACT_TYPES = new Set([
-  "hard-core",
-  "runtime-optional",
-  "observer-provider",
-  "eventbus"
-]);
-const HIGH_RISK_TAGS = new Set([
-  "shared-contract",
-  "client-server",
-  "observer",
-  "fabric-compat",
-  "privacy",
-  "privacy-redaction"
-]);
+const unique = (values) => [...new Set((values ?? []).filter(Boolean))].sort();
+const criticalTypes = new Set(["hard-core", "runtime-optional", "observer-provider", "eventbus"]);
+const highRiskTags = new Set(["shared-contract", "client-server", "observer", "fabric-compat", "privacy", "privacy-redaction", "persistence", "networking", "security"]);
 
-function unique(values) {
-  return [...new Set((values ?? []).filter(Boolean))];
-}
+export const EXECUTION_OPTIMIZATION = Object.freeze({
+  primaryGoal: "correctness",
+  secondaryGoal: "minimize-total-model-tokens",
+  latencyPriority: "low",
+  preferLightweightModels: true,
+  avoidDuplicateContext: true,
+  preferSequentialWhenCheaper: true
+});
 
-function clamp(value, min, max) {
-  return Math.max(min, Math.min(max, value));
-}
-
-function moduleIdsFromResolution(resolved) {
-  return unique((resolved?.modules ?? []).map((entry) => entry.id));
-}
-
-function selectedContracts(knowledge, moduleIds, resolvedContracts) {
-  const moduleSet = new Set(moduleIds);
-  const resolvedIds = new Set((resolvedContracts ?? []).map((entry) => entry.id));
-  return knowledge.contracts.filter((contract) => {
-    if (resolvedIds.has(contract.id)) return true;
-    const endpoints = unique([contract.from, contract.to, ...(contract.relatedNodes ?? [])]);
-    return endpoints.filter((id) => moduleSet.has(id)).length >= 2;
-  });
-}
-
-function scoreFactors({
-  knowledge,
-  modules,
-  contracts,
-  risks,
-  validationCategories,
-  resolution
-}) {
-  const defaultValidationCount = new Set(knowledge.testMatrix?.defaults?.validation ?? []).size;
-  const criticalContracts = contracts.filter((contract) => CRITICAL_CONTRACT_TYPES.has(contract.type));
-  const highRisks = risks.filter((risk) => HIGH_RISK_TAGS.has(risk));
-  const inferredModules = (resolution?.modules ?? []).filter((entry) => Number(entry.score ?? 0) <= 0).length;
-
-  const factors = Object.freeze({
-    moduleSpan: clamp(Math.max(0, modules.length - 1) * 2, 0, 6),
-    contractSurface: clamp(contracts.length, 0, 3),
-    criticalContracts: clamp(criticalContracts.length, 0, 3),
-    coreSurface: modules.includes("totem-core") ? 2 : 0,
-    riskBreadth: clamp(risks.length, 0, 3),
-    highRisk: highRisks.length ? 2 : 0,
-    verificationBreadth: clamp(
-      Math.max(0, new Set(validationCategories).size - defaultValidationCount),
-      0,
-      3
-    ),
-    routingUncertainty: inferredModules > 1 ? 1 : 0
-  });
-
-  return Object.freeze({
-    factors,
-    total: Object.values(factors).reduce((sum, value) => sum + value, 0),
-    criticalContractIds: Object.freeze(criticalContracts.map((contract) => contract.id)),
-    highRisks: Object.freeze(highRisks)
-  });
-}
-
-function modeForScore(score) {
-  if (score <= 2) return "primary-only";
-  if (score <= 5) return "assisted";
-  if (score <= 9) return "bounded-parallel";
-  return "guarded-parallel";
-}
-
-function assignment({
-  id,
-  role,
-  purpose,
-  modules = [],
-  phase,
-  dependsOn = [],
-  writeAllowed = false,
-  contextAudience,
-  maxContextTokens,
-  deliverable
-}) {
-  return Object.freeze({
-    id,
-    role,
-    purpose,
-    modules: Object.freeze(unique(modules)),
-    phase,
-    dependsOn: Object.freeze(unique(dependsOn)),
-    writeAllowed,
-    contextAudience,
-    maxContextTokens,
-    deliverable
-  });
-}
-
-function chooseWorkerModules(modules, resolution, maxWorkers = 2) {
-  const scores = new Map((resolution?.modules ?? []).map((entry) => [entry.id, Number(entry.score ?? 0)]));
-  return [...modules]
-    .sort((a, b) => (scores.get(b) ?? 0) - (scores.get(a) ?? 0) || a.localeCompare(b))
-    .slice(0, maxWorkers);
-}
-
-function buildAssignments({
-  mode,
-  modules,
-  contracts,
-  risks,
-  resolution,
-  requiresIndependentReview,
-  validationCategories
-}) {
-  if (mode === "primary-only") return Object.freeze([]);
-
-  const assignments = [];
-  const criticalArchitecture = modules.includes("totem-core")
-    || contracts.some((contract) => CRITICAL_CONTRACT_TYPES.has(contract.type))
-    || risks.some((risk) => HIGH_RISK_TAGS.has(risk));
-
-  const discoveryModules = modules.slice(0, 4);
-  const workerModules = chooseWorkerModules(modules, resolution, 2);
-
-  if (mode === "assisted") {
-    if (criticalArchitecture) {
-      assignments.push(assignment({
-        id: "architect:contracts",
-        role: "architect",
-        purpose: "Stabilize ownership, shared contracts, protocol boundaries, and ordering constraints before edits.",
-        modules: discoveryModules,
-        phase: "discovery",
-        writeAllowed: false,
-        contextAudience: "architect",
-        maxContextTokens: 7000,
-        deliverable: "Contract/ownership decision, risk notes, and explicit worker boundaries."
-      }));
-    } else {
-      assignments.push(assignment({
-        id: "explorer:scope",
-        role: "explorer",
-        purpose: "Confirm the smallest relevant code surface and concrete implementation locations.",
-        modules: discoveryModules,
-        phase: "discovery",
-        writeAllowed: false,
-        contextAudience: "explorer",
-        maxContextTokens: 6000,
-        deliverable: "Bounded file/symbol map and unresolved questions."
-      }));
-    }
-
-    if (requiresIndependentReview && assignments.length < MAX_SUBAGENTS) {
-      assignments.push(assignment({
-        id: "reviewer:integration",
-        role: "reviewer",
-        purpose: "Independently review the Primary implementation against cross-module contracts and required verification.",
-        modules: discoveryModules,
-        phase: "review",
-        dependsOn: assignments.map((entry) => entry.id),
-        writeAllowed: false,
-        contextAudience: "reviewer",
-        maxContextTokens: 7000,
-        deliverable: "Findings ordered by severity plus validation gaps."
-      }));
-    }
-    return Object.freeze(assignments);
-  }
-
-  if (mode === "guarded-parallel" && criticalArchitecture) {
-    assignments.push(assignment({
-      id: "architect:contracts",
-      role: "architect",
-      purpose: "Freeze contract/API/protocol decisions before parallel implementation starts.",
-      modules: discoveryModules,
-      phase: "discovery",
-      writeAllowed: false,
-      contextAudience: "architect",
-      maxContextTokens: 8000,
-      deliverable: "Stable contract decision and module-by-module implementation constraints."
-    }));
-  } else {
-    assignments.push(assignment({
-      id: "explorer:scope",
-      role: "explorer",
-      purpose: "Map relevant implementations and confirm that proposed module splits do not overlap.",
-      modules: discoveryModules,
-      phase: "discovery",
-      writeAllowed: false,
-      contextAudience: "explorer",
-      maxContextTokens: 6500,
-      deliverable: "File/symbol ownership map and safe parallelization boundaries."
-    }));
-  }
-
-  const discoveryIds = assignments.map((entry) => entry.id);
-  for (const moduleId of workerModules) {
-    if (assignments.length >= MAX_SUBAGENTS - 1) break;
-    assignments.push(assignment({
-      id: `worker:${moduleId}`,
-      role: "worker",
-      purpose: `Implement only the bounded ${moduleId} portion of the task after discovery/contract constraints are stable.`,
-      modules: [moduleId],
-      phase: "implementation",
-      dependsOn: discoveryIds,
-      writeAllowed: true,
-      contextAudience: "worker",
-      maxContextTokens: 9000,
-      deliverable: "Module-local implementation, changed-file list, and module-local verification result."
-    }));
-  }
-
-  if (assignments.length < MAX_SUBAGENTS) {
-    assignments.push(assignment({
-      id: "reviewer:integration",
-      role: "reviewer",
-      purpose: "Review integrated changes independently after workers/Primary complete, with emphasis on contracts, regressions, and required tests.",
-      modules: discoveryModules,
-      phase: "review",
-      dependsOn: assignments.filter((entry) => entry.role === "worker").map((entry) => entry.id),
-      writeAllowed: false,
-      contextAudience: "reviewer",
-      maxContextTokens: 8000,
-      deliverable: `Independent findings and confirmation of verification coverage: ${validationCategories.join(", ") || "default build"}.`
-    }));
-  }
-
-  return Object.freeze(assignments);
-}
-
-function executionWaves(assignments) {
-  const discovery = assignments.filter((entry) => entry.phase === "discovery").map((entry) => entry.id);
-  const implementation = assignments.filter((entry) => entry.phase === "implementation").map((entry) => entry.id);
-  const review = assignments.filter((entry) => entry.phase === "review").map((entry) => entry.id);
-  return Object.freeze([
-    ...(discovery.length ? [Object.freeze({ phase: "discovery", parallel: true, assignments: Object.freeze(discovery) })] : []),
-    ...(implementation.length ? [Object.freeze({ phase: "implementation", parallel: implementation.length > 1, assignments: Object.freeze(implementation) })] : []),
-    ...(review.length ? [Object.freeze({ phase: "review", parallel: false, assignments: Object.freeze(review) })] : [])
-  ]);
-}
-
-export function buildOrchestrationPlan({
-  query,
-  moduleId = null,
-  featureId = null,
-  changedModules = [],
-  changedFiles = [],
-  knowledge = loadKnowledge()
-} = {}) {
+// This is a work contract. The executor chooses its internal agent topology.
+export function buildOrchestrationPlan({ query, moduleId = null, featureId = null, changedModules = [], changedFiles = [], knowledge = loadKnowledge() } = {}) {
   if (typeof query !== "string" || !query.trim()) throw new Error("orchestration plan requires a query");
-
   const resolved = resolveTask(query, knowledge);
-  const modules = new Set(moduleIdsFromResolution(resolved));
-  if (moduleId && knowledge.moduleById.has(moduleId)) modules.add(moduleId);
-  if (featureId && knowledge.featureById.has(featureId)) modules.add(knowledge.featureById.get(featureId).ownerId);
-  for (const id of changedModules ?? []) {
-    if (knowledge.moduleById.has(id)) modules.add(id);
-  }
-
+  const valid = (id) => id === "totem-workspace" || knowledge.moduleById.has(id);
+  // A sibling starting directory is transport context, not an extra game-module write target for tooling work.
+  const focus = resolved.modules.some((entry) => entry.id === "totem-workspace")
+    ? "totem-workspace"
+    : featureId ? knowledge.featureById.get(featureId)?.ownerId : moduleId;
+  const writeModules = unique([
+    ...resolved.modules.map((entry) => entry.id),
+    ...(valid(focus) ? [focus] : []),
+    ...changedModules.filter(valid)
+  ]);
   let impact = null;
-  if ((changedModules?.length ?? 0) || (changedFiles?.length ?? 0)) {
-    try {
-      impact = impactAnalysis({ changedModules, changedFiles }, knowledge);
-      for (const id of impact.impactedModules) modules.add(id);
-    } catch {
-      impact = null;
-    }
-  }
-
-  const moduleList = [...modules].slice(0, 7);
-  const contracts = selectedContracts(knowledge, moduleList, resolved.contracts);
-  const verification = testPlan({
-    query,
-    changedModules: unique([...moduleList, ...(changedModules ?? [])]),
-    changedFiles
-  }, knowledge);
-  const risks = unique([...(resolved.risks ?? []), ...(impact?.risks ?? []), ...(verification.risks ?? [])]);
-  const scoring = scoreFactors({
-    knowledge,
-    modules: moduleList,
-    contracts,
-    risks,
-    validationCategories: verification.validationCategories,
-    resolution: resolved
+  if (writeModules.length || changedFiles.length) impact = impactAnalysis({ changedModules: writeModules, changedFiles }, knowledge);
+  for (const id of impact?.touchedModules ?? []) if (!writeModules.includes(id)) writeModules.push(id);
+  writeModules.sort();
+  const affectedModules = unique([...writeModules, ...(impact?.impactedModules ?? [])]);
+  const contracts = unique([...(resolved.contracts ?? []).map((entry) => entry.id), ...(impact?.contracts ?? []).map((entry) => entry.id)])
+    .map((id) => knowledge.contractById.get(id)).filter(Boolean);
+  const requiredValidation = testPlan({ query, changedModules: affectedModules, changedFiles }, knowledge);
+  const sharedChangeIntent = writeModules.includes("totem-core") || writeModules.length > 1
+    || /shared|contract|\bapi\b|protocol|observer|persistence|network|共享|協議|契約/i.test(query);
+  const risks = unique([...resolved.risks, ...(sharedChangeIntent ? impact?.risks ?? [] : []), ...requiredValidation.risks,
+    ...(/persist|storage|database|network|protocol|security|credential/i.test(query) ? ["high-risk-behavior"] : [])]);
+  const critical = contracts.filter((entry) => criticalTypes.has(entry.type));
+  const highRisks = risks.filter((risk) => highRiskTags.has(risk) || risk === "high-risk-behavior");
+  const sharedContractStabilizationRequired = (critical.length > 0 && sharedChangeIntent) || writeModules.includes("totem-core");
+  const independentReviewRequired = writeModules.length > 1 || sharedContractStabilizationRequired || highRisks.length > 0
+    || /refactor|runtime|orchestration|重構/i.test(query);
+  const maxConcurrentWrites = sharedContractStabilizationRequired || highRisks.length ? 1 : Math.max(1, Math.min(2, writeModules.length));
+  const ownerModules = unique(critical.map((contract) => contract.type === "hard-core" ? contract.to : contract.providerOwner ?? contract.from)
+    .filter((id) => writeModules.includes(id)));
+  if (writeModules.includes("totem-core") && !ownerModules.includes("totem-core")) ownerModules.unshift("totem-core");
+  const wave = (id, modules, writeAllowed, dependsOn, goals, modelHint = "lightweight-preferred") => ({
+    id, phase: id, modules, writeAllowed, dependsOn, goals, required: true,
+    parallelizable: !writeAllowed || (maxConcurrentWrites > 1 && modules.length > 1),
+    maxConcurrentWrites: writeAllowed ? maxConcurrentWrites : 0,
+    modelHint, contextBudget: modelHint === "strong-reasoning-preferred" ? 12000 : 6000,
+    parallelismBenefit: writeAllowed && maxConcurrentWrites > 1 ? "conditional-on-low-context-duplication" : "low"
   });
-  const mode = modeForScore(scoring.total);
-  const requiresIndependentReview = Boolean(
-    impact?.requiresIndependentReview
-    || moduleList.length > 1
-    || contracts.length > 0
-    || scoring.total >= 6
-  );
-  const assignments = buildAssignments({
-    mode,
-    modules: moduleList,
-    contracts,
-    risks,
-    resolution: resolved,
-    requiresIndependentReview,
-    validationCategories: verification.validationCategories
-  });
-  const workers = assignments.filter((entry) => entry.role === "worker");
-
+  const waves = [wave("discovery", affectedModules, false, [], ["Locate implementation, consumers, symbols and tests once; retain compact evidence."])];
+  if (sharedContractStabilizationRequired) waves.push(wave("shared-contract", ownerModules, ownerModules.length > 0, ["discovery"],
+    ["Inspect all impacted consumers and stabilize API/protocol decisions before consumer writes."], "strong-reasoning-preferred"));
+  const implementationModules = sharedContractStabilizationRequired ? writeModules.filter((id) => !ownerModules.includes(id)) : writeModules;
+  if (implementationModules.length) waves.push(wave(sharedContractStabilizationRequired ? "consumer-update" : "implementation", implementationModules, true,
+    [sharedContractStabilizationRequired ? "shared-contract" : "discovery"], ["Implement within module write boundaries; reuse upstream evidence."], highRisks.length ? "strong-reasoning-preferred" : "lightweight-preferred"));
+  waves.push(wave("verification", affectedModules, false, [waves.at(-1).id],
+    ["Run impact, obtain test_plan, inspect impacted consumers and execute actual required deterministic validation."]));
+  if (independentReviewRequired) waves.push(wave("independent-review", affectedModules, false, ["verification"],
+    ["Obtain an actually independent review and record evidence; the executor chooses the mechanism."], highRisks.length ? "strong-reasoning-preferred" : "lightweight-preferred"));
+  const scope = (ids) => ids.map((id) => ({ moduleId: id, paths: [`${id === "totem-workspace" ? "TotemWorkspace" : knowledge.moduleById.get(id)?.repoName ?? id}/**`] }));
+  const scoreFactors = { moduleSpan: Math.max(0, affectedModules.length - 1) * 2, contractSurface: contracts.length, highRisk: highRisks.length * 2 };
   return Object.freeze({
-    schemaVersion: SCHEMA_VERSION,
-    query,
-    mode,
-    score: scoring.total,
-    scoreFactors: scoring.factors,
-    rationale: Object.freeze({
-      modules: Object.freeze(moduleList),
-      contractIds: Object.freeze(contracts.map((contract) => contract.id)),
-      criticalContractIds: scoring.criticalContractIds,
-      risks: Object.freeze(risks),
-      highRisks: scoring.highRisks,
-      validationCategories: verification.validationCategories,
-      requiresIndependentReview
-    }),
-    coordinator: Object.freeze({
-      role: "primary",
-      responsibility: "Own the user goal, merge agent outputs, resolve conflicts, run final impact/test planning, and deliver the final result."
-    }),
-    assignments,
-    executionWaves: executionWaves(assignments),
-    limits: Object.freeze({
-      maxSubagents: MAX_SUBAGENTS,
-      recommendedSubagents: assignments.length,
-      maxParallelWorkers: Math.min(2, workers.length),
-      duplicateRepositoryReads: "avoid",
-      workerWriteScope: "module-bounded"
-    }),
-    fallback: Object.freeze({
-      whenMultiAgentUnavailable: "Execute the same assignments sequentially in the Primary agent while preserving read/write boundaries and independent review intent.",
-      smallTaskRule: "primary-only plans must not spawn subagents."
-    }),
-    estimatedBenefit: moduleList.length >= 3 || workers.length > 1
-      ? "high"
-      : assignments.length >= 2
-        ? "medium"
-        : assignments.length === 1
-          ? "low"
-          : "none"
+    schemaVersion: 2, query: query.trim().replace(/\s+/g, " "),
+    affectedModules, affectedFeatures: unique(resolved.features.map((feature) => feature.id)),
+    affectedComponents: resolved.components ?? [], contracts, readScope: scope(affectedModules), writeScope: scope(writeModules),
+    impactedConsumers: affectedModules.filter((id) => !ownerModules.includes(id) && (!writeModules.includes(id) || sharedContractStabilizationRequired)),
+    execution: { parallelismAllowed: true, maxConcurrentWrites, sharedContractStabilizationRequired, moduleOwnershipRequired: true, overlappingWritesAllowed: false },
+    dependencyOrdering: waves.flatMap((entry) => entry.dependsOn.map((dependency) => ({ before: dependency, after: entry.id }))),
+    waves, executionWaves: waves, parallelizableWork: waves.filter((entry) => entry.parallelizable).map((entry) => entry.id),
+    independentReviewRequired, requiredValidation,
+    riskConstraints: risks,
+    releaseConstraints: ["Validation is not release authorization.", "Commit/push only when authorized; publish only with explicit authorization; verify CI and Modrinth read-back."],
+    securityConstraints: ["Preserve secrets/privacy redaction and approval boundaries.", "Preserve Observer owner-provided production rendering, monotonic semantic snapshots, input suppression and framebuffer-free reconstruction."],
+    engineeringConstraints: ["Java 25 and repository Gradle wrapper; inspect configured Minecraft, Fabric Loader/API and mappings.", "Preserve dedicated-server safety and client-only class isolation; inspect shared API consumers before edits.", "Keep feature-specific behavior in its owning module; required validation cannot be waived for token savings."],
+    optimization: EXECUTION_OPTIMIZATION,
+    contextHints: { budget: 8000, reuseEvidence: true, evidenceFields: ["modules", "contracts", "files", "symbols", "tests", "findings", "unresolvedQuestions"], modelPreference: highRisks.length || sharedContractStabilizationRequired ? "strong-reasoning-preferred" : "lightweight-preferred", escalationAllowed: true,
+      escalationTriggers: ["architecture judgment", "conflicting contracts or evidence", "high-risk persistence/networking", "non-local validation failure", "insufficient correctness confidence", "retries cost more tokens than escalation"],
+      strategy: "Use the cheapest capable available model for bounded work. Reuse compact evidence before delegation or escalation; prefer sequential execution when it avoids duplicate context. No fixed agent topology is required." },
+    score: Object.values(scoreFactors).reduce((sum, value) => sum + value, 0), scoreFactors,
+    rationale: { modules: affectedModules, contractIds: contracts.map((entry) => entry.id), criticalContractIds: critical.map((entry) => entry.id), risks, highRisks, validationCategories: requiredValidation.validationCategories, requiresIndependentReview: independentReviewRequired }
   });
 }
 
 export function orchestrationPlanSummary(plan) {
-  const roles = plan.assignments.map((entry) => entry.role);
-  return Object.freeze({
-    mode: plan.mode,
-    score: plan.score,
-    modules: plan.rationale.modules,
-    subagents: plan.assignments.length,
-    roles: Object.freeze(roles),
-    maxParallelWorkers: plan.limits.maxParallelWorkers,
-    estimatedBenefit: plan.estimatedBenefit
-  });
+  return Object.freeze({ schemaVersion: plan.schemaVersion, score: plan.score, modules: plan.affectedModules,
+    execution: plan.execution, waves: plan.waves, independentReviewRequired: plan.independentReviewRequired,
+    requiredValidation: plan.requiredValidation, optimization: plan.optimization, contextHints: plan.contextHints });
 }
