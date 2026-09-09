@@ -459,8 +459,6 @@ for (const fragment of [
 }
 for (const fragment of [
   "_AgentAdapterStrip(",
-  "replaySession:",
-  "_replayTimeline?.sessions.isNotEmpty == true",
   "'INTERRUPTED'",
   "'CODEX CONSOLE · ${widget.taskId} · ${taskEvents.length} events'",
   "events: _activity",
@@ -470,6 +468,11 @@ for (const fragment of [
 ]) {
   assert.ok(flutterHost.includes(fragment), `Flutter Phase 5 host missing: ${fragment}`);
 }
+assert.match(
+  flutterHost,
+  /replaySession:\s*_replayTimeline\?\.sessions\.isNotEmpty == true\s*\? _replayTimeline!\.sessions\.last\s*: null/,
+  "Flutter Phase 5 host must forward the latest replay session when one is available",
+);
 for (const fragment of [
   'document.getElementById("agentAdapter")',
   'fetch(apiUrl("/api/agent-adapter")',
