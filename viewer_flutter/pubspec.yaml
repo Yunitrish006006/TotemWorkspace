@@ -1,5 +1,5 @@
 name: totem_workspace_viewer
-description: Flutter rewrite prototype for the TotemWorkspace 3D architecture explorer.
+description: Production Flutter viewer for the TotemWorkspace architecture and development graph.
 publish_to: none
 version: 0.2.0+2
 

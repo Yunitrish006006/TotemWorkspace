@@ -57,20 +57,21 @@
 ## Unified execution lifecycle
 
 TotemWorkspace constrains the work. It does not prescribe the internal agent topology.
-All non-trivial Totem development uses the same resolve_task -> orchestration_plan ->
-bounded context -> implementation -> impact -> test_plan -> actual validation lifecycle,
-from Web, Flutter, legacy Viewer, Discord, Bridge, CLI, IDE, or sibling repository Codex.
-The same normalized task, semantic focus and workspace state must yield equivalent constraints.
-Astra chooses direct work, delegation, specialization, scheduling and independent review.
-Respect module ownership, read/write scopes, dependency waves, max concurrent writes,
-shared-contract stabilization, impacted consumers, required validation, security and release gates.
-An independentReviewRequired constraint requires actual independent review evidence, not a
-particular agent role. Read-only waves never write. Never revert another contributor's work.
-Prefer lightweight/Spark-capable available models for bounded discovery, implementation,
-mechanical changes, tests and compact review when this reduces total task tokens.
-Correctness comes first, total model tokens second, latency last. Reuse compact findings
-and bounded context; prefer sequential work when it avoids repeated context. Escalate to
-Astra reasoning for ambiguity, shared API/protocol design, conflicting evidence, high-risk
-persistence/networking or non-local failures; supply compact evidence before escalation.
-Model hints express preferences, not actual model usage. Only runtime evidence establishes
-agent lifecycle, chosen models, usage or validation outcomes.
+All non-trivial Totem development uses the same lifecycle from Flutter, Discord, Bridge, CLI, IDE or sibling-repository Codex:
+
+```text
+resolve_task
+→ orchestration_plan
+→ bounded context
+→ implementation
+→ impact
+→ test_plan
+→ required independent review when specified
+→ actual validation
+```
+
+The same normalized task, semantic focus and workspace state must yield equivalent constraints. Runtime strategy may choose direct work, delegation, specialization and scheduling, but must respect module ownership, read/write scopes, dependency waves, max concurrent writes, shared-contract stabilization, impacted consumers, required validation, security and release gates.
+
+An `independentReviewRequired` constraint requires actual independent review evidence, not a particular agent role. Read-only waves never write. Never revert unrelated work from another contributor.
+
+Correctness comes first, total model tokens second and latency last. Reuse bounded context and compact findings; prefer lightweight execution where sufficient. Escalate reasoning for ambiguity, shared API/protocol design, conflicting evidence, high-risk persistence/networking or non-local failures. Model hints express preferences, not actual model usage. Only runtime evidence establishes agent lifecycle, chosen models, usage or validation outcomes.

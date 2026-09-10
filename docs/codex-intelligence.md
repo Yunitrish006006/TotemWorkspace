@@ -1,20 +1,21 @@
 # Totem Workspace Intelligence
 
-TotemWorkspace includes a repository-local Codex skill plus a dependency-aware local MCP server. The goal is to narrow a Totem task by module, feature, contract, and risk before the primary model reads large parts of the 11 repositories.
+TotemWorkspace includes a repository-local Codex skill plus dependency-aware MCP/local runtime tooling. Its job is to narrow Totem work by module, Feature, contract, Component and risk before models read large portions of sibling repositories.
 
-## What V1 provides
+## Responsibilities
 
-- Graph retrieval derived from the existing `index.html` feature graph and `data/modules.json` snapshot.
-- Chinese/English aliases for common Totem concepts.
-- Local lexical + symbol-aware code indexing across sibling Totem repositories.
-- Automatic incremental freshness checks for selected modules before code retrieval.
-- Task resolution, dependency neighborhood, impact analysis, test planning, workspace drift checks, and audience-specific context packs.
-- Generated V2 architecture visualization that combines curated architecture with factual code-detail metadata.
-- No embeddings, remote vector database, external graph database, or external visualization service is required.
+- graph retrieval from validated curated architecture and `data/modules.json`
+- Chinese/English aliases for Totem concepts
+- local lexical + symbol-aware indexing across sibling repositories
+- incremental freshness checks for selected modules
+- task resolution, dependency neighborhood, impact analysis and test planning
+- audience-specific bounded context packs
+- generated Flutter graph data combining curated architecture with factual implementation evidence
+- Change Intelligence, Verification Graph and Development Replay inputs
 
-The local index is disposable and lives under `.totem-index/`; it is not a source of truth and must not be committed.
+No embedding service, remote vector database or external graph database is required. Disposable local state lives under `.totem-index/` and must not be committed.
 
-## Expected local layout
+## Expected workspace layout
 
 ```text
 workspace/
@@ -26,23 +27,12 @@ workspace/
 └── ...
 ```
 
-If your layout differs, set `TOTEM_REPOS_ROOT` to the directory containing the module repositories and `TOTEM_WORKSPACE_ROOT` to the TotemWorkspace checkout.
+Set `TOTEM_REPOS_ROOT` when sibling repositories use a different parent directory and `TOTEM_WORKSPACE_ROOT` when TotemWorkspace itself is elsewhere.
 
-## Build the local code index
-
-From `TotemWorkspace`:
+## CLI
 
 ```sh
 node scripts/totem-intelligence.mjs build-index
-```
-
-The curated architecture graph itself does not need an index build; it is derived directly from the validated repository sources. Code search and generated code-detail visualization use `.totem-index/code-index.json` when present. A successful `build-index` also regenerates `viewer/generated/graph-data.js`.
-
-The code index uses schema v2 per-file metadata: file size, modification time, content SHA-256, module repository HEAD/branch, and a Git worktree fingerprint. After the first full build, narrowed retrieval checks only selected modules and replaces chunks only for changed, new, deleted, or hash-mismatched files.
-
-Useful CLI checks:
-
-```sh
 node scripts/totem-intelligence.mjs summary
 node scripts/totem-intelligence.mjs resolve "死亡背包跟 Nexus 同步有問題"
 node scripts/totem-intelligence.mjs orchestrate "死亡背包跟 Nexus 同步有問題"
@@ -54,80 +44,49 @@ node scripts/totem-intelligence.mjs render-graph
 node scripts/totem-intelligence.mjs status
 ```
 
-`refresh-index` is normally unnecessary because `search` and `context` automatically freshness-check selected modules. `build-index` remains the explicit full rebuild command.
+`build-index`, `refresh-index`, `impact` and `render-graph` ultimately refresh the Flutter JSON graph asset. The retired browser JavaScript viewer is not regenerated.
 
-## Architecture visualization V2
+## Graph data contract
 
-V2 intentionally separates presentation code from graph data:
+`intelligence/code-graph.mjs` owns `buildGraphViewModel()`. It combines two evidence classes:
 
-```text
-graph-v2.html
-viewer/graph-v2.css
-viewer/graph-v2-adapter.js
-viewer/graph-v2.js
-viewer/generated/graph-data.js
-```
+1. **Curated architecture** — active modules, Feature branches, dependency contracts, EventBus relations, external services and Observer providers.
+2. **Generated implementation evidence** — production-code-only Components, implementation paths, symbols, shared capabilities and discovered Tests.
 
-The boundary is strict:
-
-- `graph-v2.html` is a renderer shell only. It contains no module, feature, contract, file, symbol, or code-index data.
-- `viewer/graph-v2.css`, `viewer/graph-v2-adapter.js`, and `viewer/graph-v2.js` are stable presentation assets.
-- `viewer/generated/graph-data.js` is the only generated V2 data artifact. Normal source/architecture changes regenerate this file rather than rewriting HTML/CSS/renderer code.
-- The generated data file is derived from the same validated `loadKnowledge()` graph used by MCP plus the local code index; it is not a third manually maintained dependency graph.
-
-The visualization has two knowledge levels:
-
-1. **Curated architecture** — 11 active modules, 58 feature branches, hard dependencies, Fabric `suggests`, runtime optional contracts, EventBus relationships, external services, and Observer provider contracts.
-2. **Generated code detail** — deterministic metadata for indexed code categories, real relative source-file paths, test files, and indexed symbol names.
-
-Generated code detail deliberately excludes source bodies and cannot create or redefine module contracts.
-
-### 2D layered view
-
-The V2 overview uses left-to-right rank hints. Forward edges remain monotonic. A semantic relationship that must point toward an earlier visual layer is routed through a separate rail instead of cutting back through the main dependency tree.
-
-Selecting a module opens a bounded detail tree:
+Generated implementation evidence deliberately excludes source bodies and cannot create or redefine curated contracts.
 
 ```text
-module
-├── curated feature
-└── generated code category
-    └── real file
-        └── indexed symbol
+validated architecture + local code index
+                │
+                ▼
+       buildGraphViewModel()
+                │
+       ┌────────┴────────┐
+       ▼                 ▼
+/api/graph-data   viewer_flutter/assets/graph-data.json
+       │                 │
+       └────────► Flutter Viewer
 ```
 
-File blocks allocate vertical space from their symbol count so added detail does not simply overlap existing nodes.
+`scripts/render-flutter-graph.mjs` is the maintained persistent graph-data generator.
 
-### 3D preview isolation
-
-3D is a Canvas presentation mode that reads the same generated view model. It has no authority over architecture or automation:
-
-- it never feeds data back into MCP or RAG;
-- it never changes dependency/contracts;
-- it is not required for indexing, impact analysis, test planning, or build validation;
-- a visualization-data generation failure is returned as a warning and cannot make a successful code-index refresh or `impact` call fail.
-
-## Automatic graph update flow
-
-For a normal edit:
+## Automatic refresh flow
 
 ```text
 implementation
-  -> impact
-      -> refresh touched code-index chunks
-      -> regenerate viewer/generated/graph-data.js
-  -> test_plan
-  -> reviewer context
-  -> Gradle / GameTest validation
+  → impact
+      → refresh touched code-index chunks
+      → refresh Flutter graph data
+  → test_plan
+  → required review
+  → Gradle / GameTest / E2E validation
 ```
 
-If `search` or `context_pack` discovers an index change before `impact`, MCP also attempts to refresh generated graph data. The HTML/CSS/renderer files remain unchanged during normal data refreshes.
+`search` and `context_pack` also freshness-check selected modules before retrieval. Graph generation remains presentation output; a graph warning must not convert successful indexing/impact/test analysis into failure.
 
-The graph becomes more detailed as the index sees real files and symbols, but those details are not automatically promoted into architecture facts. Only curated architecture may define dependency direction, ownership, optional-contract semantics, EventBus relationships, or Observer protocol ownership.
+## MCP server
 
-## Register the MCP server with Codex
-
-Add a server entry to the Codex configuration used by the same operating-system user that runs CodexDiscord. Replace the example paths with real absolute paths:
+Example Codex configuration:
 
 ```toml
 [mcp_servers.totemWorkspace]
@@ -135,8 +94,6 @@ command = "node"
 args = ["/absolute/path/to/TotemWorkspace/mcp/server.mjs"]
 env = { TOTEM_WORKSPACE_ROOT = "/absolute/path/to/TotemWorkspace", TOTEM_REPOS_ROOT = "/absolute/path/to/workspace" }
 ```
-
-Restart Codex/CodexDiscord after changing MCP configuration. In Codex TUI, `/mcp` verifies that the server is active.
 
 The server exposes:
 
@@ -151,52 +108,49 @@ The server exposes:
 - `refresh_index`
 - `summary`
 
-`search` and `context_pack` automatically refresh relevant changed chunks before retrieval. `impact` proactively refreshes directly touched modules and then attempts to regenerate V2 graph data, so normal implementation flow updates both RAG and the detailed graph before reviewer context is built. Viewer-data errors remain separate warnings.
+The MCP `graphPreview` result describes `viewer_flutter/assets/graph-data.json`; it does not report a browser HTML artifact.
 
-## Skill discovery
+## Repository skill
 
-The repository-local skill is stored at:
+The repository-local skill is stored under:
 
 ```text
 .agents/skills/totem-workspace-intelligence/
 ```
 
-When Codex is started from TotemWorkspace, it can discover the skill directly. If CodexDiscord uses the common parent directory as its workspace cwd, expose the same skill from that parent `.agents/skills` directory (for example with a local symlink) or install it at user scope. Do not independently maintain duplicate skill text.
+Do not maintain independent copies of the skill text. A Codex session started from a common parent workspace should expose this same skill through the supported local/user-scope mechanism.
 
 ## Shared development lifecycle
 
-TotemWorkspace constrains the work. It does not prescribe the internal agent topology.
-All non-trivial Totem development uses the same resolve_task -> orchestration_plan ->
-bounded context -> implementation -> impact -> test_plan -> actual validation lifecycle,
-from Web, Flutter, legacy Viewer, Discord, Bridge, CLI, IDE, or sibling repository Codex.
-The same normalized task, semantic focus and workspace state must yield equivalent constraints.
-Astra chooses direct work, delegation, specialization, scheduling and independent review.
-Respect module ownership, read/write scopes, dependency waves, max concurrent writes,
-shared-contract stabilization, impacted consumers, required validation, security and release gates.
-An independentReviewRequired constraint requires actual independent review evidence, not a
-particular agent role. Read-only waves never write. Never revert another contributor's work.
-Prefer lightweight/Spark-capable available models for bounded discovery, implementation,
-mechanical changes, tests and compact review when this reduces total task tokens.
-Correctness comes first, total model tokens second, latency last. Reuse compact findings
-and bounded context; prefer sequential work when it avoids repeated context. Escalate to
-Astra reasoning for ambiguity, shared API/protocol design, conflicting evidence, high-risk
-persistence/networking or non-local failures; supply compact evidence before escalation.
-Model hints express preferences, not actual model usage. Only runtime evidence establishes
-agent lifecycle, chosen models, usage or validation outcomes.
+TotemWorkspace constrains work; it does not prescribe a fixed internal agent topology.
 
-The primary model uses graph retrieval before source discovery. Each delegated task
-receives only selected context and compact upstream evidence.
+All non-trivial Totem development uses the same lifecycle from Flutter, Discord, Bridge, CLI, IDE or a sibling-repository Codex session:
 
-## Incremental freshness behavior
+```text
+resolve_task
+→ orchestration_plan
+→ bounded context
+→ implementation
+→ impact
+→ test_plan
+→ required independent review when specified
+→ actual validation
+```
 
-The index does not run a filesystem watcher and does not rewrite itself on every keystroke. Instead:
+For the same normalized task, semantic focus and workspace state, execution constraints must remain equivalent regardless of starting surface. Respect module ownership, read/write scopes, dependency waves, maximum concurrent writes, shared-contract stabilization, impacted consumers, validation, security and release gates.
 
-1. `search` and `context_pack` check selected repositories immediately before retrieval.
-2. File size/mtime, repository identity/worktree state, and SHA-256 verification detect changes.
-3. Only affected chunks are rebuilt; unrelated modules stay intact.
-4. Deleted files remove old chunks and newly created indexable files are added.
-5. After implementation, MCP `impact` refreshes touched modules, then refreshes generated V2 data.
-6. If index schema/root/knowledge shape no longer matches, one full rebuild occurs automatically.
+An `independentReviewRequired` constraint requires actual independent review evidence rather than a particular named role. Correctness comes first, total model tokens second and latency last. Prefer bounded/lightweight execution where sufficient; escalate reasoning for ambiguous shared APIs/protocols, conflicting evidence, high-risk persistence/networking or non-local failures. Model hints are preferences, not execution evidence.
+
+## Incremental freshness
+
+The code index is not a filesystem watcher:
+
+1. `search` and `context_pack` inspect selected repositories before retrieval.
+2. file metadata/worktree state and SHA-256 checks detect changes.
+3. only affected chunks are rebuilt.
+4. deleted files remove stale chunks; new indexable files are added.
+5. `impact` refreshes touched modules and Flutter graph data.
+6. incompatible index schema/root/knowledge shape can force a full rebuild.
 
 This is lazy/proactive incremental freshness rather than a background daemon.
 
@@ -204,54 +158,36 @@ This is lazy/proactive incremental freshness rather than a background daemon.
 
 `data/modules.json` records a validated architecture/source snapshot. A local module repository may move ahead during development.
 
-- Live module source is authoritative for implementation details.
-- TotemWorkspace remains authoritative for documented cross-module ownership and contracts until deliberately refreshed.
-- Generated V2 code-detail nodes describe discovered code structure but do not promote a relationship into an architecture contract.
-- Never reset newer local source merely to match the snapshot.
+- live module source is authoritative for implementation details
+- TotemWorkspace remains authoritative for documented cross-module ownership/contracts until deliberately refreshed
+- generated code-detail evidence does not promote a relationship into an architecture contract
+- never reset newer local source merely to match the snapshot
 
-## Execution constraints and shared runtime
+## Execution constraints and runtime
 
-The authoritative schema-v2 contract is `intelligence/orchestration-plan.mjs`.
-It returns affected modules/features/components/contracts, read/write scopes, impacted
-consumers, dependency waves, parallelism and concurrent-write limits, validation,
-independent-review, risk/security/release constraints and token/context hints.
-Complexity scores are diagnostics and never mandate agents.
+`intelligence/orchestration-plan.mjs` returns schema-v2 affected modules/features/components/contracts, read/write scopes, impacted consumers, dependency waves, parallelism/concurrent-write limits, validation, independent-review, risk/security/release constraints and token/context hints. Complexity scores are diagnostics; they do not mandate agent count.
 
-The shared `intelligence/agent-runtime/` layer owns runtime policy, model routing and
-prompt instructions. Surfaces own transport and presentation. App Server capability
-and model discovery determine available execution paths; unavailable models fall back
-gracefully. Native IDE/CLI Codex consumes the same MCP/skill contract within its host
-session rather than pretending to share a process with Bridge or Discord.
+The shared `intelligence/agent-runtime/` layer owns runtime policy, model routing and prompt instructions. Flutter, Discord, Bridge and CLI own transport/presentation. Actual lifecycle, chosen model and token usage are displayed only when emitted by the runtime.
 
-Viewer execution strips display planned waves, scopes, concurrent-write limits and
-model preference. Actual lifecycle and token usage are shown only when emitted by the
-runtime. `orchestration_planned` is never evidence of agent creation or Spark usage.
+```sh
+node scripts/totem-runtime.mjs capabilities
+node scripts/totem-runtime.mjs run --read-only "inspect TotemCore Observer contract"
+node scripts/totem-runtime.mjs resume --thread <thread-id> "continue"
+```
+
+Managed execution receives graph-derived module sandbox roots and an execution cwd inside an allowed root. In-process leases reject overlapping writes; shared atomic filesystem leases conservatively serialize conflicting writes across Bridge/Discord/CLI processes. Stale or unknown owners fail closed.
 
 ## Validation
 
-Run both validators before merging intelligence/viewer changes:
+Core checks include:
 
 ```sh
 node scripts/validate-workspace.mjs
 node scripts/validate-intelligence.mjs
+node scripts/validate-flutter-root.mjs
+node scripts/validate-local-viewer.mjs
+node scripts/validate-ai-development-viewer.mjs
+node scripts/validate-semantic-lod.mjs
 ```
 
-The intelligence validator checks 11 modules, 58 curated features, 32 contracts, representative Chinese routing, incremental index create/modify/delete behavior, MCP initialize/tools/list/resolve, generated-data determinism, source-body exclusion, and the requirement that `graph-v2.html` contain no graph data or inline graph script.
-
-## Runtime operation and enforcement limits
-
-Use `node scripts/totem-runtime.mjs capabilities` to inspect live runtime readiness
-without a model turn. `run` accepts a task argument or stdin; `resume --thread <id>`
-continues a saved thread. Optional `--model` and `--effort` are user preferences.
-SIGINT cancels; the CLI declines approvals because it has no interactive approval UI.
-
-The App Server receives graph-derived module sandbox roots and an execution cwd
-inside an allowed root. In-process leases reject overlapping writes across managed
-runner instances. A shared atomic filesystem lease conservatively serializes writes across independent processes using the same checkout; stale or unknown owners fail closed until the exited owner is confirmed and abandoned local state is cleaned. Dependency-wave
-completion and max writes inside arbitrary agent tools are semantic obligations, not
-a universal tool-level gate. Native IDE sessions inherit their own host enforcement.
-Required independent review and deterministic validation still need actual evidence.
-
-Model catalog fallback is capability-based. Usage reflects available runtime evidence;
-missing subagent accounting, cached/repeated context and escalation costs must not be
-reported as measured totals. No additional model calls are made for token accounting.
+Viewer/intelligence validation must enforce that Flutter remains the sole maintained viewer, retired browser artifacts stay absent, graph semantics remain evidence-driven, MCP metadata matches the Flutter asset and Local Bridge/runtime security boundaries remain intact.

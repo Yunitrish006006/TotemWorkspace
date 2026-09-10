@@ -9,8 +9,6 @@ const tasks = JSON.parse(fs.readFileSync(".vscode/tasks.json", "utf8"));
 const server = fs.readFileSync("scripts/serve-local-viewer.mjs", "utf8");
 const fingerprint = fs.readFileSync("scripts/flutter-local-build-fingerprint.mjs", "utf8");
 const flutter = fs.readFileSync("viewer_flutter/lib/live/workspace_live.dart", "utf8");
-const legacy = fs.readFileSync("viewer/local-live.js", "utf8");
-const legacyHtml = fs.readFileSync("graph-v2.html", "utf8");
 const activityCli = fs.readFileSync("scripts/totem-activity.mjs", "utf8");
 const analysisOptions = fs.readFileSync("viewer_flutter/analysis_options.yaml", "utf8");
 
@@ -48,8 +46,7 @@ for (const fragment of [
   assert.ok(bridge.includes(fragment), `remote bridge controller is missing: ${fragment}`);
 }
 
-assert.ok(!bridge.includes('"$codex_bin" --version'), 'bridge readiness must use shared capability discovery, not version-only detection');
-
+assert.ok(!bridge.includes('"$codex_bin" --version'), "bridge readiness must use shared capability discovery, not version-only detection");
 for (const action of ["start)", "stop)", "restart)", "status)", "logs)", "follow)", "attach)", "doctor)"]) {
   assert.ok(bridge.includes(action), `remote bridge controller is missing action: ${action}`);
 }
@@ -63,7 +60,6 @@ assert.ok(remoteGuide.includes("RUNNING") && remoteGuide.includes("COMPLETED") &
   "remote guide must document durable task lifecycle states");
 assert.ok(remoteGuide.includes("TOTEM_BRIDGE_FORCE=1"), "remote guide must document the explicit emergency restart override");
 
-const labels = new Set((tasks.tasks ?? []).map((task) => task.label));
 for (const fragment of [
   'FLUTTER_VERSION="${TOTEM_FLUTTER_VERSION:-3.47.0}"',
   '.local/share',
@@ -74,6 +70,7 @@ for (const fragment of [
   assert.ok(bootstrap.includes(fragment), `Flutter bootstrap is missing: ${fragment}`);
 }
 
+const labels = new Set((tasks.tasks ?? []).map((task) => task.label));
 for (const label of [
   "Totem: Bootstrap Flutter",
   "Totem: Start Bridge",
@@ -85,27 +82,34 @@ for (const label of [
   assert.ok(labels.has(label), `VS Code shared task is missing: ${label}`);
 }
 
-assert.ok(server.includes('const DEFAULT_PORT = 18765;'), "bridge server default port must be 18765");
+assert.ok(server.includes("const DEFAULT_PORT = 18765;"), "bridge server default port must be 18765");
 assert.ok(server.includes('const FLUTTER_WEB_ROOT = path.join(ROOT, "viewer_flutter", "build", "web")'), "local bridge must serve the Flutter build");
-assert.ok(server.includes('decoded === "/legacy" || decoded === "/legacy/"'), "legacy viewer must remain mounted at /legacy/");
 assert.ok(fingerprint.includes('createHash("sha256")'), "local Flutter build freshness must be content-addressed");
 for (const platformExclude of ["build/**", "android/**", "ios/**", "web/**", "windows/**", "macos/**", "linux/**"]) {
   assert.ok(analysisOptions.includes(`- ${platformExclude}`), `Flutter 3.47 analyzer migration is missing exclude: ${platformExclude}`);
 }
 assert.ok(bridge.indexOf("render_flutter_graph_asset") < bridge.indexOf("case \"$FLUTTER_BUILD_MODE\" in"), "Flutter graph asset must be rendered before build freshness is evaluated");
 assert.ok(flutter.includes("http://127.0.0.1:18765"), "Flutter Pages must discover port 18765");
-assert.ok(legacy.includes('return "http://127.0.0.1:18765"'), "legacy Pages must discover port 18765");
-assert.ok(legacyHtml.includes("http://127.0.0.1:18765"), "legacy CSP must allow port 18765");
 assert.ok(activityCli.includes('"http://127.0.0.1:18765"'), "activity CLI must default to port 18765");
 
 for (const [label, source] of [
   ["bridge server", server],
   ["Flutter live client", flutter],
-  ["legacy live client", legacy],
-  ["legacy CSP", legacyHtml],
   ["activity CLI", activityCli],
 ]) {
   assert.ok(!source.includes("127.0.0.1:8765"), `${label} still contains the retired bridge port 8765`);
 }
 
-console.log("Remote bridge validation passed: no-sudo Flutter bootstrap, Flutter root build lifecycle, /legacy/ rollback surface, tmux/nohup lifecycle, VS Code tasks, and shared 18765 port contract are consistent.");
+for (const removed of [
+  "graph-v2.html",
+  "viewer/graph-v2-adapter.js",
+  "viewer/graph-v2-cluster.js",
+  "viewer/graph-v2-cluster-v2.js",
+  "viewer/graph-v2.css",
+  "viewer/local-live.js",
+  "viewer/generated/graph-data.js",
+]) {
+  assert.equal(fs.existsSync(removed), false, `legacy viewer artifact must stay removed: ${removed}`);
+}
+
+console.log("Remote bridge validation passed: no-sudo Flutter bootstrap, Flutter-only root build lifecycle, tmux/nohup lifecycle, VS Code tasks, and shared 18765 port contract are consistent.");

@@ -18,12 +18,9 @@ assert.ok(
   "Flutter CI must validate the same root base href used by Pages"
 );
 assert.ok(pages.includes("cp -R viewer_flutter/build/web/. _site/"), "Flutter build must own the Pages root");
-assert.ok(!pages.includes("cp graph-v2.html _site/index.html"), "legacy JavaScript shell must not replace Flutter at the Pages root");
-assert.ok(pages.includes("cp graph-v2.html _site/legacy/index.html"), "legacy JavaScript viewer must remain available for rollback/debugging");
-assert.ok(
-  pages.includes("cp viewer/graph-v2-cluster-v2.js _site/legacy/viewer/graph-v2-cluster-v2.js"),
-  "legacy rollback surface must package the current standalone JS renderer"
-);
+assert.ok(!pages.includes("_site/legacy"), "Pages must not publish a legacy viewer subtree");
+assert.ok(!pages.includes("graph-v2.html"), "Pages must not package the retired JavaScript shell");
+assert.ok(!pages.includes("viewer/graph-v2"), "Pages must not package retired JavaScript renderer assets");
 
 assert.ok(host.includes("PUBLISHED SNAPSHOT · FLUTTER ROOT"), "Flutter UI must identify the production-root mode");
 assert.ok(host.includes("程式碼盤點"), "Flutter root must expose the code-first inventory surface");
@@ -33,4 +30,16 @@ assert.ok(inventory.includes('sourceScope: "production-code-only"'), "inventory 
 assert.ok(inventory.includes('value.startsWith("src/main/") || value.startsWith("src/client/")'), "inventory must only admit production source roots");
 assert.ok(!inventory.includes("README.md"), "code-first inventory implementation must not use README evidence");
 
-console.log("Flutter production-root validation passed: Flutter owns Pages root, JS is isolated under /legacy/, and production-code-only inventory is exposed.");
+for (const removed of [
+  "graph-v2.html",
+  "viewer/graph-v2-adapter.js",
+  "viewer/graph-v2-cluster.js",
+  "viewer/graph-v2-cluster-v2.js",
+  "viewer/graph-v2.css",
+  "viewer/local-live.js",
+  "viewer/generated/graph-data.js",
+]) {
+  assert.equal(fs.existsSync(removed), false, `legacy viewer artifact must stay removed: ${removed}`);
+}
+
+console.log("Flutter production-root validation passed: Flutter owns the only Pages viewer surface and production-code-only inventory remains exposed.");

@@ -21,7 +21,7 @@ class TotemWorkspaceApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) => MaterialApp(
         debugShowCheckedModeBanner: false,
-        title: 'TOTEM Architecture Flutter',
+        title: 'TOTEM Workspace',
         theme: ThemeData(
           brightness: Brightness.dark,
           colorScheme: ColorScheme.fromSeed(

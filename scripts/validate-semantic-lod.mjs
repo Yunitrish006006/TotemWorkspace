@@ -9,8 +9,6 @@ const flutterScene = fs.readFileSync("viewer_flutter/lib/model/graph_scene.dart"
 const flutterView = fs.readFileSync("viewer_flutter/lib/widgets/graph_view.dart", "utf8");
 const flutterHost = fs.readFileSync("viewer_flutter/lib/widgets/workspace_graph_host.dart", "utf8");
 const flutterActivityLocation = fs.readFileSync("viewer_flutter/lib/widgets/activity_location.dart", "utf8");
-const legacy = fs.readFileSync("viewer/graph-v2-cluster-v2.js", "utf8");
-const live = fs.readFileSync("viewer/local-live.js", "utf8");
 const plan = fs.readFileSync("docs/ai-development-graph-plan.md", "utf8");
 
 assert.ok(inventory.includes("schemaVersion: 5"), "code inventory schema must expose L3 components");
@@ -78,32 +76,16 @@ assert.ok(flutterHost.includes("_keptOpenActivityLocation ?? _hoveredActivityLoc
 assert.ok(flutterHost.includes("autoExpandAgentFocus: graphFocusLocation != null"),
   "Flutter source-card focus must expand only the explicitly requested semantic path");
 
-for (const fragment of [
-  "var components = DATA.components || []",
-  "var componentMap = new Map",
-  'type: "component"',
-  'type: "implementation"',
-  '"contains-component:"',
-  '"contains-implementation:"',
-  "component.implementationPaths",
-  "function focusActivity",
-  "agentActivity.componentId && byId.has(agentActivity.componentId)",
-]) {
-  assert.ok(legacy.includes(fragment), `legacy semantic LOD is missing: ${fragment}`);
-}
-assert.ok(!legacy.includes('type: "category"'), "legacy module expansion must not fall back to generic code-category nodes");
-
-assert.ok(live.includes('renderer.focusActivity(window.__TOTEM_AGENT_ACTIVITY__, settings.autoExpandAgentFocus !== false)'),
-  "legacy Agent Activity must auto-expand the preserved semantic edit path");
-assert.ok(live.includes("event.componentId || event.featureId || event.moduleId"),
-  "legacy activity target label must prioritize components");
-assert.ok(live.includes("latestLiveSemanticActivity"),
-  "legacy viewer must preserve the latest targeted semantic edit instead of losing focus to targetless activity");
-assert.ok(live.includes("event.type === \"file_edit\" || event.type === \"symbol_edit\" || event.type === \"git_diff_updated\""),
-  "legacy semantic focus must track edits and incremental graph refresh activity");
-
 for (const phrase of ["Progressive semantic LOD", "Component", "Implementation"]) {
   assert.ok(plan.includes(phrase), `AI development plan is missing semantic LOD term: ${phrase}`);
 }
 
-console.log("Semantic LOD validation passed: generic L3 component inference, confidence-gated Feature mapping, controlled L4 implementation, and component Agent Activity are synchronized across Flutter and legacy.");
+for (const removed of [
+  "graph-v2.html",
+  "viewer/graph-v2-cluster-v2.js",
+  "viewer/local-live.js",
+]) {
+  assert.equal(fs.existsSync(removed), false, `legacy viewer artifact must stay removed: ${removed}`);
+}
+
+console.log("Semantic LOD validation passed: generic L3 component inference, confidence-gated Feature mapping, controlled L4 implementation, and Flutter activity focus are synchronized.");
