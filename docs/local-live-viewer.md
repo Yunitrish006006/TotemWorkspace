@@ -1,39 +1,56 @@
-# Local Live 3D Viewer
+# Local Live Flutter Viewer
 
-Run the same standalone 3D architecture viewer against the Totem repositories currently present on this machine.
+Local Bridge 讓 Flutter Viewer 讀取目前機器上的 Totem repositories、Workspace Intelligence、Agent Activity 與 verification/change state。
 
 ```bash
 node scripts/serve-local-viewer.mjs
 ```
 
-Open:
+預設開啟：
 
 ```text
-http://127.0.0.1:8765/
+http://127.0.0.1:18765/
 ```
 
-The server binds to loopback only. Non-loopback hosts are rejected by design.
+Server 只綁定 loopback；非 loopback host 會被拒絕。
 
 ## Live mode
 
-When the viewer detects the local API it shows a `LIVE LOCAL` badge plus:
+Flutter 偵測到 Local Bridge 後會進入 `LIVE LOCAL`，可使用：
 
-- `本機狀態` — branch, short HEAD, dirty state, missing repositories, and snapshot drift for all 11 active Totem modules.
-- `重新整理本機` — incrementally refreshes the local code index, regenerates `viewer/generated/graph-data.js`, then reloads the same 3D viewer.
+- branch、short HEAD、dirty state、missing repositories 與 snapshot drift
+- locale coverage
+- incremental code-index refresh
+- `/api/graph-data` 的即時 graph reload
+- Agent Activity 與 semantic source focus
+- Change Intelligence
+- Verification Graph
+- Development Replay
+- 明確 opt-in 的 Prompt / Codex Agent Adapter
 
-The status badge refreshes every 5 seconds. GitHub Pages uses the same HTML/JS, but the local adapter silently disables itself when the local API is not available.
+`POST /api/refresh` 重新索引後會更新 shared graph model；持久化 Viewer asset 只使用 `viewer_flutter/assets/graph-data.json`。舊 `viewer/generated/graph-data.js` 與 browser JavaScript Viewer 已移除。
 
 ## Local API
+
+主要 endpoints 包括：
 
 - `GET /api/health`
 - `GET /api/workspace-status`
 - `GET /api/graph-data`
 - `POST /api/refresh`
+- `GET /api/viewer-settings`
+- `GET /api/activity`
+- `GET /api/change-intelligence`
+- `GET /api/verification-state`
+- `GET /api/replay`
+- `POST /api/prompt`
 
-`/api/workspace-status` deliberately omits absolute repository paths from the browser response.
+`/api/workspace-status` 不會向 browser response 暴露 absolute repository paths。Prompt 預設關閉，且 Browser 不能指定 executable、cwd、sandbox、model 或 CLI flags。
 
-An alternate loopback port can be selected with:
+可指定其他 loopback port：
 
 ```bash
 node scripts/serve-local-viewer.mjs --port 9000
 ```
+
+不再提供 `/legacy/` 或 `/graph-v2.html` Viewer route；Flutter 是唯一維護中的 UI surface。
