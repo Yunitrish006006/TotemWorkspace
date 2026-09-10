@@ -150,8 +150,6 @@ const flutterLive = fs.readFileSync(new URL("../viewer_flutter/lib/live/workspac
 const flutterHost = fs.readFileSync(new URL("../viewer_flutter/lib/widgets/workspace_graph_host.dart", import.meta.url), "utf8");
 const flutterView = fs.readFileSync(new URL("../viewer_flutter/lib/widgets/graph_view.dart", import.meta.url), "utf8");
 const flutterScene = fs.readFileSync(new URL("../viewer_flutter/lib/model/graph_scene.dart", import.meta.url), "utf8");
-const legacyLive = fs.readFileSync(new URL("../viewer/local-live.js", import.meta.url), "utf8");
-const legacyRenderer = fs.readFileSync(new URL("../viewer/graph-v2-cluster-v2.js", import.meta.url), "utf8");
 assert.ok(serverSource.includes('pathname === "/api/change-intelligence"'), "Phase 3 API endpoint is required");
 assert.ok(serverSource.includes("const beforeGraph = buildGraphViewModel"), "refresh must capture the before semantic graph");
 assert.ok(serverSource.includes("const afterGraph = buildGraphViewModel"), "refresh must capture the after semantic graph");
@@ -202,25 +200,4 @@ assert.match(
 assert.ok(flutterScene.includes("final id = 'implementation:${component.id}:$implementationPath'"),
   "Flutter implementation IDs must be path-stable for semantic diff");
 
-for (const fragment of [
-  'document.getElementById("changeIntelligence")',
-  'fetch(apiUrl("/api/change-intelligence")',
-  "window.__TOTEM_CHANGE_INTELLIGENCE__",
-  "payload.affectedEntityIds",
-  "settings.changeAnimationsEnabled",
-]) {
-  assert.ok(legacyLive.includes(fragment), `legacy Phase 3 live adapter is missing: ${fragment}`);
-}
-for (const fragment of [
-  "window.__TOTEM_CHANGE_INTELLIGENCE__",
-  "changedEntityIds",
-  "impactedModules",
-  "relationChanged(edge, changedEntityIds)",
-  'drawChangeHalo(ctx, p, activityRadius, "change")',
-]) {
-  assert.ok(legacyRenderer.includes(fragment), `legacy Phase 3 renderer is missing: ${fragment}`);
-}
-assert.ok(legacyRenderer.includes('var id = "implementation:" + component.id + ":" + implementationPath'),
-  "legacy implementation IDs must be path-stable for semantic diff");
-
-console.log("Phase 3 change-intelligence validation passed: before/after snapshots, Git mapping, semantic diff, stable implementation identity, impact propagation, persistence, and synchronized Flutter/legacy overlays are present.");
+console.log("Phase 3 change-intelligence validation passed: snapshots, Git mapping, semantic diff, impact propagation, persistence, and Flutter overlays are present.");
