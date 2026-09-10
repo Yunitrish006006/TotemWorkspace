@@ -35,7 +35,7 @@ jobs:
         run: node scripts/validate-core-api-capabilities.mjs
       - name: Validate Flutter production root
         run: node scripts/validate-flutter-root.mjs
-      - name: Validate audited V2 contract endpoints
+      - name: Validate audited contract endpoints
         run: node scripts/validate-contract-audit.mjs
       - name: Validate localhost live viewer
         run: node scripts/validate-local-viewer.mjs
