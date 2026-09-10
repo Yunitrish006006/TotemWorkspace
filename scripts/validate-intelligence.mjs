@@ -9,7 +9,7 @@ import { buildGraphViewModel } from "../intelligence/code-graph.mjs";
 import { buildCodeIndex, refreshCodeIndex, searchCode } from "../intelligence/code-index.mjs";
 import { buildContextPack } from "../intelligence/context-pack.mjs";
 import { graphForModule, knowledgeSummary, loadKnowledge, resolveTask, testPlan } from "../intelligence/workspace-knowledge.mjs";
-import { renderGraphV2 } from "./render-graph-v2.mjs";
+import { renderFlutterGraph } from "./render-flutter-graph.mjs";
 
 const knowledge = loadKnowledge();
 const summary = knowledgeSummary(knowledge);
@@ -69,10 +69,10 @@ function validateIncrementalIndex() {
   }
 }
 
-function validateV2Graph() {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), "totem-v2-"));
-  const one = path.join(root, "graph-data.js");
-  const two = path.join(root, "graph-data-repeat.js");
+function validateFlutterGraphGeneration() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), "totem-flutter-graph-"));
+  const one = path.join(root, "graph-data.json");
+  const two = path.join(root, "graph-data-repeat.json");
   const marker = "SOURCE_BODY_MUST_NEVER_APPEAR_IN_GRAPH_VIEW_MODEL";
   const index = {
     schemaVersion: 2,
@@ -96,41 +96,26 @@ function validateV2Graph() {
     assert.ok(!model.sharedCapabilities.some((c) => c.id === "shared:manual:totem-remnant"));
     assert.ok(!JSON.stringify(model).includes(marker));
 
-    renderGraphV2({ knowledge, index, outputPath: one });
-    renderGraphV2({ knowledge, index, outputPath: two });
+    renderFlutterGraph({ knowledge, index, outputPath: one });
+    renderFlutterGraph({ knowledge, index, outputPath: two });
     const data = fs.readFileSync(one, "utf8");
     assert.equal(data, fs.readFileSync(two, "utf8"));
-    assert.ok(data.startsWith("/* AUTO-GENERATED"));
-    assert.ok(data.includes("window.__TOTEM_GRAPH_DATA__ = "));
+    const parsed = JSON.parse(data);
+    assert.deepEqual([parsed.modules.length, parsed.features.length, parsed.contracts.length], [11, 58, 32]);
     assert.ok(data.includes("shared:manual:totem-automata"));
     assert.ok(!data.includes(marker));
 
-    const html = fs.readFileSync(path.join(knowledge.root, "graph-v2.html"), "utf8");
-    const renderer = fs.readFileSync(path.join(knowledge.root, "viewer", "graph-v2-cluster-v2.js"), "utf8");
-    const adapter = fs.readFileSync(path.join(knowledge.root, "viewer", "graph-v2-adapter.js"), "utf8");
-    const css = fs.readFileSync(path.join(knowledge.root, "viewer", "graph-v2.css"), "utf8");
-    assert.ok(html.includes('src="viewer/generated/graph-data.js"'));
-    assert.ok(html.includes('src="viewer/graph-v2-cluster-v2.js"'));
-    assert.ok(!html.includes('src="viewer/graph-v2.js"'));
-    assert.ok(!fs.existsSync(path.join(knowledge.root, "viewer", "graph-v2.js")));
-    assert.ok(!html.includes('id="mode2d"') && !html.includes('id="pane2d"') && !html.includes('id="graph2d"'));
-    assert.ok(html.includes('href="viewer/graph-v2.css"'));
-    assert.ok(html.includes('id="expandAll3d"'));
-    assert.ok(!html.includes("window.__TOTEM_GRAPH_DATA__"));
-    assert.ok(!html.includes("totem-remnant") && !html.includes("remnant-nexus"));
-    assert.ok(!/<script>([\s\S]*?)<\/script>/i.test(html));
-    assert.ok(!/<(?:script|link)[^>]+(?:src|href)=["']https?:\/\//i.test(html));
-    assert.ok(!/@import\s+["']?https?:\/\/|url\(\s*["']?https?:\/\//i.test(css));
-    assert.ok(css.includes("touch-action:none"));
-    assert.ok(renderer.includes("function drawArrowhead"));
-    assert.ok(renderer.includes("function draw"));
-    assert.ok(renderer.includes("function distance"));
-    assert.ok(renderer.includes("spotlightId"));
-    assert.ok(renderer.includes("function capabilityConsumerEndpoint"));
-    assert.ok(renderer.includes("function showContracts"));
-    assert.ok(renderer.includes('canvas.addEventListener("keydown"'));
-    assert.doesNotThrow(() => new Function(renderer));
-    assert.doesNotThrow(() => new Function(adapter));
+    for (const removed of [
+      "graph-v2.html",
+      "viewer/graph-v2-adapter.js",
+      "viewer/graph-v2-cluster.js",
+      "viewer/graph-v2-cluster-v2.js",
+      "viewer/graph-v2.css",
+      "viewer/local-live.js",
+      "viewer/generated/graph-data.js",
+    ]) {
+      assert.equal(fs.existsSync(path.join(knowledge.root, removed)), false, `legacy browser viewer artifact must stay removed: ${removed}`);
+    }
   } finally {
     fs.rmSync(root, { recursive: true, force: true });
   }
@@ -192,6 +177,6 @@ async function validateMcpServer() {
 }
 
 validateIncrementalIndex();
-validateV2Graph();
+validateFlutterGraphGeneration();
 await validateMcpServer();
-console.log(`Totem workspace intelligence validation passed: ${summary.moduleCount} modules, ${summary.featureCount} features, ${summary.contractCount} contracts; incremental index refresh, shared capability evidence, and data-only V2 viewer generation passed.`);
+console.log(`Totem workspace intelligence validation passed: ${summary.moduleCount} modules, ${summary.featureCount} features, ${summary.contractCount} contracts; incremental index refresh, shared capability evidence, and Flutter graph generation passed.`);
