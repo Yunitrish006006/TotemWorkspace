@@ -8,7 +8,6 @@ import { loadKnowledge } from "../intelligence/workspace-knowledge.mjs";
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const audit = JSON.parse(fs.readFileSync(path.join(root, "data", "relationship-audit.json"), "utf8"));
 const auditDoc = fs.readFileSync(path.join(root, "docs", "relationship-audit-2026-09-03.md"), "utf8");
-const html = fs.readFileSync(path.join(root, "graph-v2.html"), "utf8");
 const knowledge = loadKnowledge(root);
 const byId = knowledge.contractById;
 
@@ -113,12 +112,14 @@ assert.deepEqual([
   grouped["observer-provider"]?.length
 ], [10, 3, 8, 2, 3, 6]);
 
-assert.ok(html.includes('src="viewer/generated/graph-data.js"'));
-assert.ok(html.includes('src="viewer/graph-v2-adapter.js"'));
-assert.ok(html.includes('src="viewer/graph-v2-cluster-v2.js"'));
-assert.ok(!html.includes('src="viewer/graph-v2.js"'));
-assert.ok(!html.includes('id="mode2d"') && !html.includes('id="pane2d"'));
-assert.ok(!html.includes("graph-v2-contract-audit.js"));
 assert.ok(auditDoc.includes("32/32 contracts reviewed"));
+for (const removed of [
+  "graph-v2.html",
+  "viewer/graph-v2-adapter.js",
+  "viewer/graph-v2-cluster-v2.js",
+  "viewer/generated/graph-data.js"
+]) {
+  assert.equal(fs.existsSync(path.join(root, removed)), false, `retired viewer artifact must stay removed: ${removed}`);
+}
 
-console.log("Canonical relationship validation passed: 32 contracts, audited feature endpoints including Core Friendship consumers, metadata-only qualifications, and Nexus Observer v3 are loaded directly by workspace intelligence.");
+console.log("Canonical relationship validation passed: 32 contracts, audited feature endpoints including Core Friendship consumers, metadata-only qualifications, and Nexus Observer v3 are loaded directly by workspace intelligence without a legacy browser renderer dependency.");
