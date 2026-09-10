@@ -33,9 +33,9 @@ jobs:
       - name: Validate localhost live viewer
         run: node scripts/validate-local-viewer.mjs
 
-      - name: Validate maintained viewer parity
+      - name: Validate Flutter development viewer
         run: node scripts/validate-ai-development-viewer.mjs
-      - name: Validate semantic LOD parity
+      - name: Validate semantic LOD
         run: node scripts/validate-semantic-lod.mjs
 
       - name: Clone latest active Totem repositories
@@ -55,13 +55,12 @@ jobs:
             git clone --depth=1 --single-branch --branch "$branch" "$repository" "../$name"
           done < /tmp/totem-modules.tsv
 
-      - name: Build latest code index and graph data
+      - name: Build latest code index and Flutter graph data
         env:
           TOTEM_WORKSPACE_ROOT: ${{ github.workspace }}
           TOTEM_REPOS_ROOT: ${{ github.workspace }}/..
         run: |
           node scripts/totem-intelligence.mjs build-index
-          node scripts/totem-intelligence.mjs render-graph
           node scripts/render-flutter-graph.mjs
 
       - name: Set up Flutter 3.47.0
@@ -85,20 +84,12 @@ jobs:
       - name: Prepare static site
         run: |
           rm -rf _site
-          mkdir -p _site/legacy/viewer/generated
+          mkdir -p _site
 
-          # Flutter is the production root.
+          # Flutter is the only production viewer surface.
           cp -R viewer_flutter/build/web/. _site/
 
-          # Keep the previous standalone JavaScript viewer as a rollback/debug surface.
-          cp graph-v2.html _site/legacy/index.html
-          cp viewer/graph-v2.css _site/legacy/viewer/graph-v2.css
-          cp viewer/graph-v2-adapter.js _site/legacy/viewer/graph-v2-adapter.js
-          cp viewer/graph-v2-cluster-v2.js _site/legacy/viewer/graph-v2-cluster-v2.js
-          cp viewer/local-live.js _site/legacy/viewer/local-live.js
-          cp viewer/generated/graph-data.js _site/legacy/viewer/generated/graph-data.js
-
-          # Keep the curated source available for inspection while code-first inventory is rebuilt.
+          # Keep the curated source available for architecture inspection.
           cp index.html _site/curated.html
           touch _site/.nojekyll
 
