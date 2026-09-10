@@ -4,12 +4,11 @@ on:
   push:
     paths:
       - "viewer_flutter/**"
-      - "viewer/**"
-      - "graph-v2.html"
       - "docs/ai-development-graph-plan.md"
       - "scripts/validate-ai-development-viewer.mjs"
       - "scripts/validate-semantic-lod.mjs"
       - "scripts/render-flutter-graph.mjs"
+      - "scripts/render-graph-v2.mjs"
       - "scripts/serve-local-viewer.mjs"
       - "scripts/validate-local-viewer.mjs"
       - "scripts/flutter-local-build-fingerprint.mjs"
@@ -21,12 +20,11 @@ on:
   pull_request:
     paths:
       - "viewer_flutter/**"
-      - "viewer/**"
-      - "graph-v2.html"
       - "docs/ai-development-graph-plan.md"
       - "scripts/validate-ai-development-viewer.mjs"
       - "scripts/validate-semantic-lod.mjs"
       - "scripts/render-flutter-graph.mjs"
+      - "scripts/render-graph-v2.mjs"
       - "scripts/serve-local-viewer.mjs"
       - "scripts/validate-local-viewer.mjs"
       - "scripts/flutter-local-build-fingerprint.mjs"
@@ -58,9 +56,9 @@ jobs:
       - name: Validate loopback local API
         run: node scripts/validate-local-viewer.mjs
 
-      - name: Validate maintained viewer parity
+      - name: Validate Flutter development viewer
         run: node scripts/validate-ai-development-viewer.mjs
-      - name: Validate semantic LOD parity
+      - name: Validate semantic LOD
         run: node scripts/validate-semantic-lod.mjs
 
       - name: Set up Flutter 3.47.0
