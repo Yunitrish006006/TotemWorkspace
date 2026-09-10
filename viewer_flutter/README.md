@@ -1,22 +1,20 @@
 # TotemWorkspace Flutter Viewer
 
-Flutter migration prototype for the TotemWorkspace architecture viewer. It remains parallel to the production JavaScript viewer until all cutover criteria are proven.
+Flutter is the sole maintained TotemWorkspace architecture viewer for GitHub Pages and the local Bridge UI. The previous browser JavaScript viewer has been retired.
 
 ## Data invariant
 
-`viewer_flutter/assets/graph-data.json` is generated from the same `buildGraphViewModel()` used by the production viewer. Do not hand-maintain a third graph.
+`viewer_flutter/assets/graph-data.json` is generated from the shared `buildGraphViewModel()`. Architecture semantics remain owned by the validated Workspace knowledge layer; Flutter does not maintain a separate dependency graph.
 
 ```bash
 node scripts/render-flutter-graph.mjs
 ```
 
-Run that command from the TotemWorkspace repository root before launching Flutter.
+Run that command from the TotemWorkspace repository root before launching Flutter when graph data needs to be refreshed manually.
 
 ## Web
 
 Flutter 3.47.0 is the validated SDK.
-
-Static / published mode:
 
 ```bash
 cd viewer_flutter
@@ -28,7 +26,7 @@ When the app is not running on loopback, it stays in `PUBLISHED SNAPSHOT` mode.
 
 ### LIVE LOCAL
 
-Start the existing loopback workspace service from the TotemWorkspace root:
+Start the loopback workspace service from the TotemWorkspace root:
 
 ```bash
 node scripts/serve-local-viewer.mjs
@@ -41,16 +39,11 @@ cd viewer_flutter
 flutter run -d chrome
 ```
 
-Flutter running on localhost automatically discovers `http://127.0.0.1:18765`. The local API accepts browser origins only from `localhost`, `127.0.0.1`, or `::1` and the server itself still binds only to loopback.
+Flutter running on localhost automatically discovers `http://127.0.0.1:18765`. The local API accepts browser origins only from loopback and the approved TotemWorkspace GitHub Pages origin; the server itself binds only to loopback.
 
-LIVE LOCAL provides:
+LIVE LOCAL provides workspace branch / HEAD / dirty / snapshot-drift status, locale coverage, incremental code-index refresh, graph reload, Agent Activity, Prompt intake when explicitly enabled, change intelligence, Verification Graph, orchestration state and Development Replay.
 
-- five-second branch / HEAD / dirty / snapshot-drift polling, plus Japanese locale key coverage (the bridge refreshes this status at most every 12 seconds)
-- 11-module workspace status dialog
-- incremental code-index refresh through the existing `/api/refresh`
-- in-place graph reload from `/api/graph-data` after refresh, without reloading the browser page
-
-For a non-default local API port, build or run with:
+For a non-default local API port:
 
 ```bash
 flutter run -d chrome --dart-define=TOTEM_LOCAL_API=http://127.0.0.1:9000
@@ -62,37 +55,28 @@ Wasm production build:
 flutter build web --wasm
 ```
 
-## Current scope — Phases 1–3
+## Architecture surface
 
-- same generated architecture model
-- TotemCore fixed at world origin
-- deterministic peripheral module and external-service layout
-- curated feature clusters
-- Shared Manual / shared-capability endpoints
-- relation-aware weighted junction placement with deterministic slotting
-- expanded module-center suppression
-- seven-family relationship filters
-- spotlight for selected child nodes and related clusters
-- directed contract arrows
-- desktop left-drag rotation, right-drag pan, wheel zoom
-- touch one-finger rotation and two-finger zoom/pan
-- keyboard arrows, Enter/Space, Home, End, Escape
-- responsive desktop/mobile details panel
-- LIVE LOCAL workspace status and incremental graph refresh
-- deterministic layout, architecture-semantic, and live-source regression tests
+The maintained viewer includes:
 
-The old Phase 1-only layout implementation was removed; `lib/model/graph_scene.dart` is the single Flutter scene/layout implementation.
+- deterministic module, feature and semantic-component layout
+- progressive `Module → Feature → Component → Implementation` LOD
+- Shared Manual and shared-capability endpoints
+- relationship filtering and spotlight
+- change-intelligence and verification overlays
+- Agent Activity semantic focus and source-location cards
+- Development Replay timeline
+- desktop, touch and keyboard interaction
+- LIVE LOCAL workspace status and graph refresh
 
-## Pages prototype
+`lib/model/graph_scene.dart` is the single Flutter scene/layout implementation.
 
-GitHub Pages keeps the JavaScript viewer at the site root and publishes Flutter in parallel at:
+## GitHub Pages
+
+GitHub Pages publishes the Flutter Wasm build at the repository root:
 
 ```text
-https://yunitrish006006.github.io/TotemWorkspace/flutter/
+https://yunitrish006006.github.io/TotemWorkspace/
 ```
 
-Pages always uses `PUBLISHED SNAPSHOT` mode; it never probes localhost.
-
-## Next
-
-Remaining pre-cutover work is native desktop workspace access plus generated code-detail category/file/symbol browsing and final parity validation. The JavaScript production viewer is not removed until those cutover criteria are met.
+There is no `/legacy/` viewer surface. `index.html` in the repository remains the curated architecture source and is published separately as `/curated.html` for inspection.
