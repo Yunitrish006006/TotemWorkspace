@@ -22,7 +22,7 @@ The maintained viewer implementation is documented separately in [`../viewer_flu
 These files describe a specific audit/refactor point in time. They are useful evidence, but they are not the current operating specification when newer maintained docs or code disagree.
 
 - [`relationship-audit-2026-09-03.md`](relationship-audit-2026-09-03.md) — reviewed dependency/relationship evidence supporting `data/relationship-audit.json`.
-- [`runtime-refactor-validation.md`](runtime-refactor-validation.md) — validation record for the 2026-09-09 shared runtime refactor.
+- [`history/2026-09-09-runtime-refactor-validation.md`](history/2026-09-09-runtime-refactor-validation.md) — archived validation record for the shared runtime refactor.
 
 ## Source-of-truth hierarchy
 
