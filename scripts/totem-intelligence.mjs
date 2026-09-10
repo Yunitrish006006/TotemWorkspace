@@ -3,7 +3,7 @@ import { buildCodeIndex, refreshCodeIndex, searchCode } from "../intelligence/co
 import { buildContextPack } from "../intelligence/context-pack.mjs";
 import { buildOrchestrationPlan } from "../intelligence/orchestration-plan.mjs";
 import { defaultReposRoot, graphForModule, impactAnalysis, knowledgeSummary, loadKnowledge, resolveTask, testPlan, workspaceStatus } from "../intelligence/workspace-knowledge.mjs";
-import { renderGraphV2 } from "./render-graph-v2.mjs";
+import { renderFlutterGraph } from "./render-flutter-graph.mjs";
 
 function parseList(value) {
   if (!value) return [];
@@ -19,7 +19,7 @@ function safeRenderGraph(index = undefined) {
     return {
       status: "ok",
       regenerated: true,
-      ...renderGraphV2({ knowledge, ...(index ? { index } : {}) })
+      ...renderFlutterGraph({ knowledge, ...(index ? { index } : {}) })
     };
   } catch (error) {
     return {
