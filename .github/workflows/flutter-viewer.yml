@@ -8,7 +8,6 @@ on:
       - "scripts/validate-ai-development-viewer.mjs"
       - "scripts/validate-semantic-lod.mjs"
       - "scripts/render-flutter-graph.mjs"
-      - "scripts/render-graph-v2.mjs"
       - "scripts/serve-local-viewer.mjs"
       - "scripts/validate-local-viewer.mjs"
       - "scripts/flutter-local-build-fingerprint.mjs"
@@ -24,7 +23,6 @@ on:
       - "scripts/validate-ai-development-viewer.mjs"
       - "scripts/validate-semantic-lod.mjs"
       - "scripts/render-flutter-graph.mjs"
-      - "scripts/render-graph-v2.mjs"
       - "scripts/serve-local-viewer.mjs"
       - "scripts/validate-local-viewer.mjs"
       - "scripts/flutter-local-build-fingerprint.mjs"
@@ -58,6 +56,7 @@ jobs:
 
       - name: Validate Flutter development viewer
         run: node scripts/validate-ai-development-viewer.mjs
+
       - name: Validate semantic LOD
         run: node scripts/validate-semantic-lod.mjs
 
