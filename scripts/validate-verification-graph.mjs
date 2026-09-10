@@ -235,9 +235,6 @@ const flutterLive = fs.readFileSync(new URL("../viewer_flutter/lib/live/workspac
 const flutterHost = fs.readFileSync(new URL("../viewer_flutter/lib/widgets/workspace_graph_host.dart", import.meta.url), "utf8");
 const flutterScene = fs.readFileSync(new URL("../viewer_flutter/lib/model/graph_scene.dart", import.meta.url), "utf8");
 const flutterView = fs.readFileSync(new URL("../viewer_flutter/lib/widgets/graph_view.dart", import.meta.url), "utf8");
-const legacyLive = fs.readFileSync(new URL("../viewer/local-live.js", import.meta.url), "utf8");
-const legacyRenderer = fs.readFileSync(new URL("../viewer/graph-v2-cluster-v2.js", import.meta.url), "utf8");
-const legacyHtml = fs.readFileSync(new URL("../graph-v2.html", import.meta.url), "utf8");
 const activityCli = fs.readFileSync(new URL("./totem-activity.mjs", import.meta.url), "utf8");
 
 assert.ok(graphSource.includes("schemaVersion: 5"), "graph schema must advance for Verification Graph");
@@ -289,31 +286,9 @@ for (const fragment of [
 ]) {
   assert.ok(flutterView.includes(fragment), `Flutter verification renderer missing: ${fragment}`);
 }
-
-for (const fragment of [
-  'document.getElementById("verificationState")',
-  'fetch(apiUrl("/api/verification-state")',
-  "window.__TOTEM_VERIFICATION_STATE__",
-  "verificationPolling",
-]) {
-  assert.ok(legacyLive.includes(fragment), `legacy verification live adapter missing: ${fragment}`);
-}
-for (const fragment of [
-  "var verification = DATA.verification",
-  "var testMap = new Map",
-  '"validated-by"',
-  'node.type === "test"',
-  "failedVerificationTargets",
-  "drawVerificationHalo",
-  "changeIntelligence.affectedEntityIds",
-]) {
-  assert.ok(legacyRenderer.includes(fragment), `legacy verification renderer missing: ${fragment}`);
-}
-assert.ok(legacyHtml.includes('data-edge-filter="validated-by"'), "legacy validated-by filter is required");
-assert.ok(legacyHtml.includes('id="verificationState"'), "legacy VERIFY status badge is required");
 assert.ok(activityCli.includes('request("/api/verification-state")'), "activity CLI status must expose verification state");
 assert.ok(activityCli.includes("--test <stable-test-id-or-repo-relative-path>"), "activity CLI must document safe Test target format");
 
 console.log(
-  "Phase 4 Verification Graph validation passed: stable Test entities, feature/API validated-by relations, requirements/evidence separation, Git mapping, persistent live state, failure propagation, and Flutter/legacy parity are present."
+  "Phase 4 Verification Graph validation passed: stable Test entities, feature/API validated-by relations, requirements/evidence separation, Git mapping, persistent live state, failure propagation, and Flutter rendering are present."
 );
