@@ -1,66 +1,69 @@
-# Flutter Viewer Migration Roadmap
+# Flutter Viewer Roadmap
+
+Flutter production cutover is complete. This document now records the completed migration invariants and remaining Flutter-native enhancements.
 
 ## Invariants
 
-1. `intelligence/code-graph.mjs` remains the authoritative graph view model builder.
+1. `intelligence/code-graph.mjs` remains the authoritative graph view-model builder.
 2. Flutter consumes generated data; it does not introduce a hand-maintained relationship graph.
-3. The production JavaScript viewer remains available until Flutter reaches tested feature parity.
+3. Flutter Web/Wasm is the only maintained Viewer surface.
 4. TotemCore remains the world-space origin.
-5. Relationship semantics, RAG, MCP, and contract audits are unchanged by renderer migration.
+5. Relationship semantics, RAG, MCP and contract audits remain independent of renderer implementation.
+6. Node.js remains the Workspace Intelligence / Bridge / runtime layer; it is not a browser rendering surface.
 
 ## Phase 1 — renderer foundation ✅
 
 - Flutter package under `viewer_flutter/`
 - generated JSON asset from `buildGraphViewModel()`
 - module/external 3D projection with `CustomPainter`
-- deterministic positions, directed contract edges, selection, camera interaction
+- deterministic positions, directed contract edges, selection and camera interaction
 - web/Wasm CI
 
-## Phase 2 — 3D architecture parity ✅
+## Phase 2 — architecture and semantic LOD ✅
 
 - curated feature clusters
 - shared capabilities and precise feature endpoints
-- relation-aware weighted junction placement with deterministic slotting
-- line-type filters for the seven architecture relationship families
-- expanded-center suppression: expanded modules never receive fallback contract lines at their center
+- relation-aware deterministic layout
+- relationship-family filters
 - child-node spotlight and related-cluster emphasis
-- module expand/collapse and expand-all controls
-- desktop left-drag rotation, right-drag pan, wheel zoom
-- touch one-finger rotation plus two-finger zoom/pan
-- keyboard node navigation, Enter/Space activation, Home/Core, End, Escape
-- regression tests for endpoint retargeting, center suppression, filters, Shared Manual symmetry, deterministic layout, and multi-relation junction bias
+- module expand/collapse controls
+- desktop, touch and keyboard interaction
+- progressive `Module → Feature → Component → Implementation` LOD
+- production-code-only implementation evidence
+- Verification Graph / Test entities
 
-Phase 2 intentionally covers curated architecture nodes first. Generated code-detail category/file/symbol drill-down remains a later parity item before production cutover.
+## Phase 3 — LIVE LOCAL ✅
 
-## Phase 3 — local live source
+- loopback Local Bridge integration
+- auto-discovery of `127.0.0.1:18765`
+- Git HEAD / branch / dirty / snapshot-drift status
+- locale coverage
+- incremental index refresh through `/api/refresh`
+- in-place `/api/graph-data` reload
+- browser-facing payloads exclude absolute repository paths
+- approved loopback / TotemWorkspace Pages CORS boundaries
+- Prompt remains opt-in and Agent Activity remains independent
 
-### Flutter Web ✅
+## Phase 4 — development intelligence ✅
 
-- consumes the existing loopback local workspace API
-- auto-discovers `127.0.0.1:8765` when Flutter itself is running on loopback
-- five-second Git HEAD / branch / dirty / snapshot-drift polling
-- 11-module LIVE LOCAL status surface
-- incremental index refresh through the existing `/api/refresh`
-- re-fetches `/api/graph-data` in place after refresh without browser reload
-- keeps absolute repository paths out of browser-facing status payloads
-- local server accepts browser CORS only from `localhost`, `127.0.0.1`, or `::1`
-- published Pages builds remain static and never probe localhost
-- Pages publishes Flutter in parallel at `/TotemWorkspace/flutter/`; the JavaScript viewer remains the root production viewer
+- Change Intelligence
+- impact propagation
+- Verification Graph and verification state
+- Agent Activity with semantic source-location focus
+- Prompt / Codex Agent Adapter
+- schema-v2 execution constraints and model policy
+- Development Replay
+- Discord / Flutter shared local conversation and task surfaces
 
-### Native desktop source — remaining
+## Phase 5 — production cutover ✅
 
-- add desktop runner targets when the migration reaches desktop packaging
-- direct native Git/filesystem source for HEAD / branch / dirty / drift
-- reuse the same `WorkspaceLiveStatus` model so Web and desktop UI remain identical
+- Flutter owns the GitHub Pages repository root
+- Flutter owns the Local Bridge UI root
+- old browser JavaScript renderer, live adapter and generated JS graph artifact removed
+- `/legacy/` deployment removed
+- CI no longer requires JavaScript/Flutter viewer parity
+- graph generation targets `viewer_flutter/assets/graph-data.json`
 
-## Phase 4 — developer console
+## Remaining work
 
-- changed files and diffs
-- impact/test-plan panels
-- OpenSpec status
-- MCP/RAG query surface
-- CI/release state
-
-## Phase 5 — production cutover
-
-Before cutover, Flutter must also cover generated code-detail browsing and desktop packaging/live access. Flutter Web replaces the JavaScript Pages viewer only after parity validation. The legacy renderer is removed in a separate, explicit change.
+Future viewer work should be implemented directly in Flutter. Native desktop packaging can be added when useful, but must reuse the same graph/runtime contracts rather than introduce another renderer-specific architecture source.
