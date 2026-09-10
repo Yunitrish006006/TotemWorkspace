@@ -4,7 +4,7 @@ import { buildCodeIndex, loadCodeIndex, refreshCodeIndex, searchCode } from "../
 import { buildContextPack } from "../intelligence/context-pack.mjs";
 import { defaultReposRoot, graphForModule, impactAnalysis, knowledgeSummary, loadKnowledge, resolveTask, testPlan, workspaceStatus } from "../intelligence/workspace-knowledge.mjs";
 import { buildOrchestrationPlan } from "../intelligence/orchestration-plan.mjs";
-import { renderGraphV2 } from "../scripts/render-graph-v2.mjs";
+import { renderFlutterGraph } from "../scripts/render-flutter-graph.mjs";
 
 const SERVER_NAME = "totem-workspace-intelligence";
 const SERVER_VERSION = "0.5.0";
@@ -40,7 +40,7 @@ const TOOLS = Object.freeze([
   },
   {
     name: "search",
-    description: "Search the local code index after graph narrowing. Before searching, the selected modules are checked for source changes and changed file chunks are incrementally refreshed.",
+    description: "Search the local code index after graph narrowing. Before searching, selected modules are checked for source changes and changed file chunks are incrementally refreshed.",
     inputSchema: jsonSchema({
       query: { type: "string", minLength: 1 },
       modules: { type: "array", items: { type: "string" }, default: [] },
@@ -49,7 +49,7 @@ const TOOLS = Object.freeze([
   },
   {
     name: "context_pack",
-    description: "Build a bounded task-specific context pack for coordination, discovery, implementation or verification; audiences never mandate agent roles. Code retrieval automatically refreshes changed chunks in the selected modules.",
+    description: "Build a bounded task-specific context pack for coordination, discovery, implementation or verification; audiences never mandate agent roles. Code retrieval automatically refreshes changed chunks in selected modules.",
     inputSchema: jsonSchema({
       query: { type: "string", minLength: 1 },
       audience: { type: "string", enum: ["primary", "discovery", "implementation", "verification", "explorer", "architect", "worker", "reviewer"], default: "primary" },
@@ -60,7 +60,7 @@ const TOOLS = Object.freeze([
   },
   {
     name: "impact",
-    description: "Analyze changed files/modules against the Totem dependency graph, refresh directly touched code-index chunks, and regenerate the non-authoritative V2 visualization without letting viewer failures block automation.",
+    description: "Analyze changed files/modules against the Totem dependency graph, refresh directly touched code-index chunks, and regenerate non-authoritative Flutter graph data without letting viewer generation failures block automation.",
     inputSchema: jsonSchema({
       changed_files: { type: "array", items: { type: "string" }, default: [] },
       changed_modules: { type: "array", items: { type: "string" }, default: [] }
@@ -82,7 +82,7 @@ const TOOLS = Object.freeze([
   },
   {
     name: "refresh_index",
-    description: "Incrementally refresh selected modules in the local code index, or force a complete rebuild. Successful refreshes also regenerate graph-v2.html; visualization failures are reported but do not fail the index operation.",
+    description: "Incrementally refresh selected modules in the local code index, or force a complete rebuild. Successful refreshes also regenerate the Flutter graph asset; graph-generation failures are reported but do not fail the index operation.",
     inputSchema: jsonSchema({
       modules: { type: "array", items: { type: "string" }, default: [] },
       force_full: { type: "boolean", default: false }
@@ -119,15 +119,17 @@ function graphError(error) {
 
 function safeRenderGraph(knowledge, index = loadCodeIndex({ knowledge })) {
   try {
-    const rendered = renderGraphV2({ knowledge, index });
+    const rendered = renderFlutterGraph({ knowledge, index });
     return Object.freeze({
       status: "ok",
       regenerated: true,
-      output: "graph-v2.html",
+      output: "viewer_flutter/assets/graph-data.json",
       generatedAt: rendered.generatedAt,
-      codeIndexed: rendered.codeIndexed,
-      codeNodes: rendered.codeNodes,
-      codeEdges: rendered.codeEdges
+      modules: rendered.modules,
+      features: rendered.features,
+      contracts: rendered.contracts,
+      sharedCapabilities: rendered.sharedCapabilities,
+      codeNodes: rendered.codeNodes
     });
   } catch (error) {
     return graphError(error);
@@ -163,7 +165,7 @@ function safeRefresh(knowledge, modules) {
       graphPreview: Object.freeze({
         status: "skipped",
         regenerated: false,
-        message: "Code-index refresh failed; V2 graph regeneration was skipped."
+        message: "Code-index refresh failed; Flutter graph regeneration was skipped."
       })
     };
   }
