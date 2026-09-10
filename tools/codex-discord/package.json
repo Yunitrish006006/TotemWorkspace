@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "An allow-listed Discord slash-command bridge for local Codex CLI sessions.",
+  "description": "Allow-listed Discord surface for the shared TotemWorkspace Codex runtime.",
   "engines": {
     "node": ">=20.19.0"
   },
