@@ -96,16 +96,15 @@ jobs:
           audit = json.loads(audit_path.read_text())
           audit['auditedAt'] = '2026-09-11'
           overrides = audit.setdefault('contractOverrides', {})
-          for key in list(overrides):
+          for key, value in list(overrides.items()):
               if key.startswith('vanilla-') and key.endswith('-observer'):
-                  value = overrides.pop(key)
-                  owner = key[len('vanilla-'):-len('-observer')]
                   value['featureIds'] = [
                       'totem-observer.feature-1' if fid == 'totem-vanilla-tweaks.feature-1' else fid
                       for fid in value.get('featureIds', [])
                   ]
-                  value['auditNote'] = (value.get('auditNote', '') + ' Observer session/transport ownership moved from TotemVanillaTweaks to TotemObserver; the owning module still owns its production Screen provider.').strip()
-                  overrides[f'observer-{owner}'] = value
+                  value['from'] = 'totem-observer'
+                  value['source'] = 'TotemObserver'
+                  value['auditNote'] = (value.get('auditNote', '') + ' Observer session/transport ownership moved from TotemVanillaTweaks to TotemObserver; the legacy contract id is retained for curated-snapshot compatibility, while the owning module still owns its production Screen provider.').strip()
           audit_path.write_text(json.dumps(audit, ensure_ascii=False, indent=2) + '\n')
 
           matrix_path = Path('data/test-matrix.json')
@@ -119,6 +118,43 @@ jobs:
               'notes': 'Observer owns session/camera/semantic transport/vanilla adapters. Feature modules own their Screen providers; provider absence must fall back to metadata without framebuffer capture.'
           }
           matrix_path.write_text(json.dumps(matrix, ensure_ascii=False, indent=2) + '\n')
+
+          knowledge_path = Path('intelligence/workspace-knowledge.mjs')
+          knowledge = knowledge_path.read_text()
+          if 'observer: "totem-observer"' not in knowledge:
+              knowledge = knowledge.replace(
+                  '  nexus: "totem-nexus",\n  remnant: "totem-remnant"',
+                  '  nexus: "totem-nexus",\n  observer: "totem-observer",\n  remnant: "totem-remnant"'
+              )
+          knowledge = knowledge.replace('        from: "totem-vanilla-tweaks",\n        to: module.id,\n        providerOwner: module.id,', '        from: "totem-observer",\n        to: module.id,\n        providerOwner: module.id,')
+          fallback_marker = '  return Object.freeze(features);\n}\n\nfunction buildContractRecords'
+          if 'coveredOwnerIds' not in knowledge:
+              fallback = '''  const coveredOwnerIds = new Set(features.map((feature) => feature.ownerId));
+  for (const module of modules) {
+    if (coveredOwnerIds.has(module.id)) continue;
+    const ownerKey = ID_TO_MODULE_KEY[module.id] ?? module.id;
+    for (const [index, summary] of (module.featureGroups ?? []).entries()) {
+      features.push(Object.freeze({
+        id: `${module.id}.feature-${index + 1}`,
+        ownerId: module.id,
+        ownerKey,
+        index: index + 1,
+        title: String(summary).split("：", 1)[0].trim() || `feature-${index + 1}`,
+        summary: String(summary),
+        softContractIds: Object.freeze([]),
+        serviceContractIds: Object.freeze([]),
+        eventContractIds: Object.freeze([])
+      }));
+    }
+  }
+  return Object.freeze(features);
+}
+
+function buildContractRecords'''
+              if fallback_marker not in knowledge:
+                  raise SystemExit('workspace-knowledge feature fallback anchor missing')
+              knowledge = knowledge.replace(fallback_marker, fallback)
+          knowledge_path.write_text(knowledge)
 
           catalog_path = Path('docs/module-catalog.md')
           text = catalog_path.read_text()
@@ -167,7 +203,7 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add data docs viewer_flutter/assets/graph-data.json
+          git add data docs intelligence viewer_flutter/assets/graph-data.json
           git diff --cached --quiet && exit 0
           git commit -m 'docs: register TotemObserver ownership'
           git push origin HEAD:feat/register-totem-observer
