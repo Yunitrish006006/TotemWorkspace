@@ -4,6 +4,7 @@ import { buildContextPack } from "../intelligence/context-pack.mjs";
 import { buildOrchestrationPlan } from "../intelligence/orchestration-plan.mjs";
 import { defaultReposRoot, graphForModule, impactAnalysis, knowledgeSummary, loadKnowledge, resolveTask, testPlan, workspaceStatus } from "../intelligence/workspace-knowledge.mjs";
 import { renderFlutterGraph } from "./render-flutter-graph.mjs";
+import { toolOutput } from "../intelligence/tool-output.mjs";
 
 function parseList(value) {
   if (!value) return [];
@@ -11,7 +12,7 @@ function parseList(value) {
 }
 
 function print(value) {
-  process.stdout.write(`${JSON.stringify(value, null, 2)}\n`);
+  process.stdout.write(`${toolOutput(value, fullOutput ? "full" : "compact").text}\n`);
 }
 
 function safeRenderGraph(index = undefined) {
@@ -30,7 +31,15 @@ function safeRenderGraph(index = undefined) {
   }
 }
 
-const [command, ...args] = process.argv.slice(2);
+const fullOutput = process.argv.includes("--full");
+const argv = process.argv.slice(2).filter((arg) => arg !== "--full");
+const moduleFlag = argv.indexOf("--module");
+const explicitModule = moduleFlag < 0 ? null : argv[moduleFlag + 1];
+if (moduleFlag >= 0) {
+  if (!explicitModule) throw new Error("--module requires a module id");
+  argv.splice(moduleFlag, 2);
+}
+const [command, ...args] = argv;
 const knowledge = loadKnowledge();
 const reposRoot = defaultReposRoot(knowledge.root);
 
@@ -39,13 +48,13 @@ switch (command) {
     print(knowledgeSummary(knowledge));
     break;
   case "resolve":
-    print(resolveTask(args.join(" "), knowledge));
+    print(resolveTask(args.join(" "), knowledge, { moduleId: explicitModule }));
     break;
   case "orchestration-plan":
   case "orchestrate":
     print(buildOrchestrationPlan({
       query: args[0] ?? "",
-      moduleId: args[1] || null,
+      moduleId: explicitModule || args[1] || null,
       changedModules: parseList(args[2]),
       changedFiles: parseList(args[3]),
       knowledge
@@ -66,7 +75,7 @@ switch (command) {
   case "context": {
     const query = args[0] ?? "";
     const audience = args[1] || "primary";
-    const moduleId = args[2] || null;
+    const moduleId = explicitModule || args[2] || null;
     const maxTokens = Number(args[3] || 8_000);
     const pack = buildContextPack(query, { audience, moduleId, maxTokens, knowledge });
     print(pack.codeIndex?.freshness && pack.codeIndex.freshness.mode !== "fresh"
@@ -135,9 +144,9 @@ switch (command) {
     print(safeRenderGraph());
     break;
   default:
-    console.error(`Usage:
+    console.error(`Usage (compact output by default; --full restores diagnostic representations):
   node scripts/totem-intelligence.mjs summary
-  node scripts/totem-intelligence.mjs resolve "<task>"
+  node scripts/totem-intelligence.mjs resolve "<task>" [--module <owner-id>]
   node scripts/totem-intelligence.mjs orchestrate "<task>" [module-id] [changed-modules] [changed-files]
   node scripts/totem-intelligence.mjs graph <totem-module-id> [depth]
   node scripts/totem-intelligence.mjs search "<query>" [module1,module2] [limit]

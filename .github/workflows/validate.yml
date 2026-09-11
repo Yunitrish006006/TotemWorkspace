@@ -29,6 +29,8 @@ jobs:
           node-version: ${{ matrix.node-version }}
       - name: Validate coordination snapshot
         run: node scripts/validate-workspace.mjs
+      - name: Validate compact output, evidence reuse and release preflight
+        run: node scripts/validate-token-efficiency.mjs
       - name: Validate workspace intelligence
         run: node scripts/validate-intelligence.mjs
       - name: Validate production-code-only inventory

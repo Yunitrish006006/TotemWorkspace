@@ -42,5 +42,19 @@
     "同步": ["networking", "packet", "protocol", "server-authoritative"],
     "重複物品": ["duplication", "inventory", "server-authoritative", "container safety"],
     "複製物品": ["duplication", "inventory", "server-authoritative", "container safety"]
+  },
+  "moduleNames": {
+    "totem-core": ["Core", "核心"],
+    "totem-alchemy": ["Alchemy", "煉金", "鍊金"],
+    "totem-automata": ["Automata", "機巧"],
+    "totem-discord-bridge": ["DiscordBridge", "Discord Bridge"],
+    "totem-enchanting": ["Enchanting", "附魔"],
+    "totem-excavation": ["Excavation", "掘進"],
+    "totem-locksmith": ["Locksmith", "鎖匠"],
+    "totem-nexus": ["Nexus", "樞紐"],
+    "totem-observer": ["Observer", "觀察者"],
+    "totem-remnant": ["Remnant", "殘響"],
+    "totem-vanilla-tweaks": ["VanillaTweaks", "Vanilla Tweaks", "原版微調"],
+    "totem-villagers": ["Villagers", "村民"]
   }
 }

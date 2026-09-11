@@ -80,12 +80,10 @@ function clampByApproxTokens(value, maxTokens) {
 }
 
 export function buildContextPack(query, { audience = "primary", moduleId = null, maxTokens = 8_000, includeCode = true, knowledge = loadKnowledge(), orchestrationPlan = null } = {}) {
-  const resolved = resolveTask(query, knowledge);
+  const resolved = resolveTask(query, knowledge, { moduleId });
   const selectedModuleIds = orchestrationPlan
     ? [...new Set((orchestrationPlan.readScope ?? []).map((scope) => scope.moduleId).concat(orchestrationPlan.affectedModules ?? []))]
-    : moduleId
-      ? [...new Set([moduleId, ...resolved.modules.map((module) => module.id)])]
-      : resolved.modules.map((module) => module.id);
+    : resolved.modules.map((module) => module.id);
   const moduleSet = new Set(selectedModuleIds);
 
   const modules = knowledge.modules.filter((module) => moduleSet.has(module.id)).map(compactModule);

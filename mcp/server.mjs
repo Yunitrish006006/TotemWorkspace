@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import readline from "node:readline";
+import { toolOutput } from "../intelligence/tool-output.mjs";
 import { buildCodeIndex, loadCodeIndex, refreshCodeIndex, searchCode } from "../intelligence/code-index.mjs";
 import { buildContextPack } from "../intelligence/context-pack.mjs";
 import { defaultReposRoot, graphForModule, impactAnalysis, knowledgeSummary, loadKnowledge, resolveTask, testPlan, workspaceStatus } from "../intelligence/workspace-knowledge.mjs";
@@ -10,14 +11,21 @@ const SERVER_NAME = "totem-workspace-intelligence";
 const SERVER_VERSION = "0.5.0";
 
 function jsonSchema(properties, required = []) {
-  return { type: "object", additionalProperties: false, properties, required };
+  return { type: "object", additionalProperties: false, properties: {
+    ...properties,
+    response_detail: { type: "string", enum: ["compact", "full"], default: "compact",
+      description: "Compact removes duplicate representations only; full restores legacy diagnostic fields. Constraints and unique evidence are preserved." }
+  }, required };
 }
 
 const TOOLS = Object.freeze([
   {
     name: "resolve_task",
     description: "Resolve a Totem development request to likely modules, feature branches, dependency contracts, risks, and bounded evidence before broad repository reading.",
-    inputSchema: jsonSchema({ query: { type: "string", minLength: 1 } }, ["query"])
+    inputSchema: jsonSchema({ query: { type: "string", minLength: 1 },
+      module_id: { type: ["string", "null"], default: null,
+        description: "Known task owner; limits fuzzy routing while preserving explicitly named module owners and audited impact analysis." }
+    }, ["query"])
   },
   {
     name: "orchestration_plan",
@@ -99,9 +107,9 @@ function load() {
   return loadKnowledge();
 }
 
-function toolResult(value) {
-  const text = typeof value === "string" ? value : JSON.stringify(value, null, 2);
-  return { content: [{ type: "text", text }], structuredContent: value, isError: false };
+function toolResult(value, detail) {
+  const output = toolOutput(value, detail);
+  return { content: [{ type: "text", text: output.text }], structuredContent: output.value, isError: false };
 }
 
 function toolError(error) {
@@ -175,7 +183,7 @@ function callTool(name, args = {}) {
   const knowledge = load();
   switch (name) {
     case "resolve_task":
-      return resolveTask(args.query, knowledge);
+      return resolveTask(args.query, knowledge, { moduleId: args.module_id ?? null });
     case "orchestration_plan":
       return buildOrchestrationPlan({
         query: args.query,
@@ -299,7 +307,9 @@ lines.on("line", (line) => {
     }
     if (method === "tools/call") {
       try {
-        success(id, toolResult(callTool(request.params?.name, request.params?.arguments ?? {})));
+        const args = request.params?.arguments ?? {};
+        if (args.response_detail !== undefined && !["compact", "full"].includes(args.response_detail)) throw new Error("Invalid response_detail");
+        success(id, toolResult(callTool(request.params?.name, args), args.response_detail));
       } catch (error) {
         success(id, toolError(error));
       }

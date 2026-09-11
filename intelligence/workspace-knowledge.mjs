@@ -371,6 +371,7 @@ export function loadKnowledge(workspaceRoot = defaultWorkspaceRoot()) {
     features,
     contracts,
     aliases: Object.freeze(aliasesData.aliases ?? {}),
+    moduleNames: Object.freeze(aliasesData.moduleNames ?? {}),
     testMatrix: Object.freeze(testMatrix),
     moduleById,
     featureById,
@@ -463,10 +464,21 @@ function riskTagsForText(knowledge, text) {
   return [...tags];
 }
 
-export function resolveTask(query, knowledge = loadKnowledge()) {
+export function resolveTask(query, knowledge = loadKnowledge(), { moduleId = null } = {}) {
   if (typeof query !== "string" || !query.trim()) throw new Error("query is required");
+  if (moduleId && moduleId !== "totem-workspace" && !knowledge.moduleById.has(moduleId)) throw new Error(`Unknown Totem module: ${moduleId}`);
+  const directlyMentions = (name) => {
+    const term = normalizeText(name), text = normalizeText(query);
+    if (/[^\x00-\x7f]/.test(term)) return text.includes(term);
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(^|[^a-z0-9])${escaped}($|[^a-z0-9])`).test(text);
+  };
+  const mentions = knowledge.modules.filter((module) => [module.id, module.repoName, module.name,
+    ...(knowledge.moduleNames?.[module.id] ?? [])].filter(Boolean).some(directlyMentions));
+  const toolingWorkflow = mentions.length === 0 && /workflow|github actions|CI\b/i.test(query)
+    && /workspace|agent|token|工作區|驗證分工/i.test(query);
   // Workspace tooling is a separate scope, never the in-game Discord integration.
-  if (/totemworkspace|totem-workspace|codex[ -]discord|agent[ -]runtime|orchestration|local bridge|viewer prompt/i.test(query)) {
+  if (moduleId === "totem-workspace" || toolingWorkflow || /totemworkspace|totem-workspace|codex[ -]discord|agent[ -]runtime|orchestration|local bridge|viewer prompt/i.test(query)) {
     return Object.freeze({ query, expandedQuery: query, snapshot: knowledge.snapshot,
       modules: [{ id: "totem-workspace", name: "TotemWorkspace", role: "development tooling", score: 100 }],
       features: [], contracts: [], risks: /runtime|orchestration|approval|security/i.test(query) ? ["security"] : [],
@@ -509,7 +521,9 @@ export function resolveTask(query, knowledge = loadKnowledge()) {
     }
   }
 
-  const moduleList = [...modules].slice(0, 7);
+  // Explicit focus limits fuzzy matches, while explicitly named owners remain in scope.
+  // Their audited consumers are added to read scope by impact/orchestration, not write scope.
+  const moduleList = moduleId ? [...new Set([moduleId, ...mentions.map((module) => module.id)])] : [...modules].slice(0, 7);
   const relevantContracts = knowledge.contracts.filter((contract) => (
     contractNodes(contract).some((node) => moduleList.includes(node))
     && (rankedContracts.some((entry) => entry.contract.id === contract.id)
@@ -526,7 +540,7 @@ export function resolveTask(query, knowledge = loadKnowledge()) {
       const module = knowledge.moduleById.get(id);
       return Object.freeze({ id, name: module?.name ?? id, role: module?.role ?? null, score: ranked?.score ?? 0 });
     })),
-    features: Object.freeze(rankedFeatures.slice(0, 8).map(({ feature, score }) => Object.freeze({ ...feature, score }))),
+    features: Object.freeze(rankedFeatures.filter(({ feature }) => !moduleId || moduleList.includes(feature.ownerId)).slice(0, 8).map(({ feature, score }) => Object.freeze({ ...feature, score }))),
     contracts: Object.freeze(relevantContracts),
     risks: Object.freeze(risks)
   });

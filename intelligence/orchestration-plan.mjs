@@ -16,7 +16,7 @@ export const EXECUTION_OPTIMIZATION = Object.freeze({
 // This is a work contract. The executor chooses its internal agent topology.
 export function buildOrchestrationPlan({ query, moduleId = null, featureId = null, changedModules = [], changedFiles = [], knowledge = loadKnowledge() } = {}) {
   if (typeof query !== "string" || !query.trim()) throw new Error("orchestration plan requires a query");
-  const resolved = resolveTask(query, knowledge);
+  const resolved = resolveTask(query, knowledge, { moduleId });
   const valid = (id) => id === "totem-workspace" || knowledge.moduleById.has(id);
   // A sibling starting directory is transport context, not an extra game-module write target for tooling work.
   const focus = resolved.modules.some((entry) => entry.id === "totem-workspace")

@@ -54,15 +54,9 @@ Correctness comes first, total model tokens second and latency last. Reuse bound
 
 ## Validation ownership and reuse
 
-- Before running checks, inspect the owning GitHub workflows and assign each required check one primary executor. Deterministic validation belongs in checked-in scripts invoked by GitHub Actions: compilation, unit tests, server/client GameTests, migration, permissions, persistence, protocol/privacy checks, localization consistency, artifact metadata and release read-back.
-- Use local checks only for the smallest feedback needed to develop or diagnose a change, or when CI cannot run the required check. Do not run a full local suite merely because CI will run it later. Record the reason before repeating a successful check.
-- Reuse successful CI evidence for the exact source commit, dependency revisions, toolchain/configuration and required test scope. Record run/job links once. Missing, skipped, cancelled, stale or differently scoped checks are not passes. A source/configuration change, failure or concrete new concern invalidates only the relevant evidence.
-- Prefer one immutable release JAR built and verified by CI, then pass that artifact and its SHA-512 to the publisher. Validate artifact provenance and the required CI run before publishing; never select an arbitrary latest artifact. If an existing publisher still rebuilds, record that limitation and migrate its artifact handoff when touching that workflow; do not silently remove its checks.
-- The publisher owns automated Modrinth metadata/hash read-back. A successful exact-run verification and matching publication record are sufficient; do not repeat downloads, rebuilds or API checks manually without conflicting evidence. Build dependency/version/metadata preflight into scripts and batch related fixes before pushing.
-- Automate screenshot capture, dimensions and semantic/input/privacy assertions too. Reserve human/model visual review for appearance, readability, clipping and art direction that existing assertions cannot judge; review changed/relevant screenshots once. Required independent review remains independent and reuses test evidence instead of rerunning tests.
-- Read concise workflow summaries first, inspect failed-job logs only when needed, and monitor an existing run instead of triggering another. Preserve required platform/runtime matrices and approval boundaries. Deterministic requirements are not a mandate to repeat local and CI execution.
+Follow [docs/validation-ownership.md](docs/validation-ownership.md) for CI ownership, evidence reuse and release artifact verification. Read it once when planning validation; do not duplicate its checklist here or rerun successful checks without changed inputs or concrete new evidence.
 
-See `docs/validation-ownership.md` for workflow ownership and evidence boundaries.
+Use compact intelligence output and an explicit task owner when known. For multi-step work, reuse a current local task-evidence record within its listed scope; stale notes are discovery hints, never proof of validation or authorization.
 
 ## Viewer and graph rules
 

@@ -33,3 +33,5 @@ CI 完整矩陣保留不同平台、JDK、Node 或 runtime 拓撲的必要覆蓋
 ## 修改與觀察
 
 先讀現有 workflows，選最小本機檢查，集中完成版本與發布設定修正後再推送。正常情況只讀一次精簡 workflow 結論；執行中沿用同一 run，不重新觸發。失敗才讀該 job 的 log，修正後重跑必要部分。不要為本次政策／文件調整而重建所有 Minecraft 模組。
+
+固定工具操作與任務摘要格式見 [token-efficiency.md](token-efficiency.md)。

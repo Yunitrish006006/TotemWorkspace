@@ -1,0 +1,59 @@
+name: Release source preflight
+
+on:
+  workflow_dispatch:
+    inputs:
+      module_id:
+        description: Active module ID from data/modules.json
+        required: true
+        type: string
+      source_sha:
+        description: Exact 40-character source commit to inspect
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve registered module
+        id: module
+        env:
+          MODULE_ID: ${{ inputs.module_id }}
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          python3 - <<'PY'
+          import json, os, re
+          from pathlib import Path
+          module = next((m for m in json.loads(Path('data/modules.json').read_text())['modules'] if m['id'] == os.environ['MODULE_ID'] and m.get('active')), None)
+          if module is None or not re.fullmatch(r'[0-9a-fA-F]{40}', os.environ['SOURCE_SHA']):
+              raise SystemExit('Expected an active registered module and exact source SHA')
+          url = module['repository']
+          match = re.fullmatch(r'https://github.com/([A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+?)(?:\.git)?/?', url)
+          if not match:
+              raise SystemExit('Expected a registered GitHub repository')
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('repository=' + match.group(1) + '\n')
+          PY
+      - uses: actions/checkout@v4
+        with:
+          repository: ${{ steps.module.outputs.repository }}
+          ref: ${{ inputs.source_sha }}
+          path: .preflight-source
+          persist-credentials: false
+      - name: Inspect version, dependencies, changelog and translations
+        env:
+          EXPECTED_MODULE: ${{ inputs.module_id }}
+        run: python3 scripts/release-preflight.py .preflight-source --expected-module "$EXPECTED_MODULE" --report release-preflight.json
+      - name: Preserve preflight result
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-source-preflight
+          path: release-preflight.json
+          if-no-files-found: warn
+          retention-days: 14
