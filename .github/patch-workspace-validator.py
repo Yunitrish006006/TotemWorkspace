@@ -30,3 +30,30 @@ audit_path = Path("data/relationship-audit.json")
 audit = json.loads(audit_path.read_text())
 audit["contractCount"] = 33
 audit_path.write_text(json.dumps(audit, ensure_ascii=False, indent=2) + "\n")
+
+intelligence_path = Path("scripts/validate-intelligence.mjs")
+intelligence = intelligence_path.read_text()
+intelligence_replacements = {
+    'assert.deepEqual([summary.moduleCount, summary.featureCount, summary.contractCount], [11, 58, 32]);':
+        'assert.deepEqual([summary.moduleCount, summary.featureCount, summary.contractCount], [12, 64, 33]);',
+    '], [10, 3, 8, 2, 3, 6]);':
+        '], [11, 3, 8, 2, 3, 6]);',
+    'assert.equal(graphForModule("totem-core", { depth: 1, knowledge }).modules.length, 11);':
+        'assert.equal(graphForModule("totem-core", { depth: 1, knowledge }).modules.length, 12);',
+    'assert.deepEqual([model.modules.length, model.features.length, model.contracts.length], [11, 58, 32]);':
+        'assert.deepEqual([model.modules.length, model.features.length, model.contracts.length], [12, 64, 33]);',
+    'assert.deepEqual([parsed.modules.length, parsed.features.length, parsed.contracts.length], [11, 58, 32]);':
+        'assert.deepEqual([parsed.modules.length, parsed.features.length, parsed.contracts.length], [12, 64, 33]);',
+}
+for old, new in intelligence_replacements.items():
+    if old not in intelligence:
+        raise SystemExit(f"intelligence validator patch anchor missing: {old[:100]}")
+    intelligence = intelligence.replace(old, new)
+
+observer_assertion_anchor = 'assert.ok(observerPlan.validationCategories.includes("privacy-redaction"));'
+if 'totem-observer' not in intelligence.split(observer_assertion_anchor, 1)[1][:500]:
+    intelligence = intelligence.replace(
+        observer_assertion_anchor,
+        observer_assertion_anchor + '\nassert.ok(resolveTask("修改 Observer Screen provider protocol", knowledge).modules.some((m) => m.id === "totem-observer"));\nassert.ok(knowledge.contracts.filter((c) => c.type === "observer-provider").every((c) => c.from === "totem-observer"));'
+    )
+intelligence_path.write_text(intelligence)
