@@ -12,14 +12,14 @@ const knowledge = loadKnowledge(root);
 const byId = knowledge.contractById;
 
 assert.equal(audit.schemaVersion, 1);
-assert.equal(audit.auditedAt, "2026-09-03");
-assert.equal(audit.contractCount, 32);
-assert.equal(knowledge.contracts.length, 32);
-assert.equal(knowledge.features.length, 58);
+assert.equal(audit.auditedAt, "2026-09-11");
+assert.equal(audit.contractCount, 33);
+assert.equal(knowledge.contracts.length, 33);
+assert.equal(knowledge.features.length, 64);
 
 const hardIds = [
   "totem-alchemy", "totem-enchanting", "totem-discord-bridge", "totem-automata", "totem-vanilla-tweaks",
-  "totem-excavation", "totem-villagers", "totem-locksmith", "totem-nexus", "totem-remnant"
+  "totem-excavation", "totem-villagers", "totem-locksmith", "totem-nexus", "totem-observer", "totem-remnant"
 ].map((id) => `hard:${id}:totem-core`);
 const hardFeatureEndpoints = new Map([
   ["hard:totem-locksmith:totem-core", ["totem-locksmith.feature-2", "totem-core.feature-3"]],
@@ -68,9 +68,10 @@ assert.deepEqual(Array.from(byId.get("event-remnant-death").featureIds), [
 ]);
 
 assert.deepEqual(Array.from(byId.get("vanilla-nexus-observer").featureIds), [
-  "totem-vanilla-tweaks.feature-1", "totem-nexus.feature-1", "totem-nexus.feature-2",
+  "totem-observer.feature-1", "totem-nexus.feature-1", "totem-nexus.feature-2",
   "totem-nexus.feature-4", "totem-nexus.feature-5"
 ]);
+assert.equal(byId.get("vanilla-nexus-observer").from, "totem-observer");
 assert.equal(byId.get("vanilla-nexus-observer").protocol, 3);
 assert.ok(!byId.get("vanilla-nexus-observer").featureIds.includes("totem-nexus.feature-6"));
 
@@ -110,7 +111,7 @@ assert.deepEqual([
   grouped["external-service"]?.length,
   grouped.eventbus?.length,
   grouped["observer-provider"]?.length
-], [10, 3, 8, 2, 3, 6]);
+], [11, 3, 8, 2, 3, 6]);
 
 assert.ok(auditDoc.includes("32/32 contracts reviewed"));
 for (const removed of [
@@ -122,4 +123,4 @@ for (const removed of [
   assert.equal(fs.existsSync(path.join(root, removed)), false, `retired viewer artifact must stay removed: ${removed}`);
 }
 
-console.log("Canonical relationship validation passed: 32 contracts, audited feature endpoints including Core Friendship consumers, metadata-only qualifications, and Nexus Observer v3 are loaded directly by workspace intelligence without a legacy browser renderer dependency.");
+console.log("Canonical relationship validation passed: 33 active contracts, including TotemObserver ownership, audited feature endpoints, metadata-only qualifications, and Nexus Observer v3; the 2026-09-03 audit document remains a historical 32-contract record.");

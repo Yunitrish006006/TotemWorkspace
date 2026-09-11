@@ -37,14 +37,15 @@ function evaluateLiteral(source, label) {
 const expectedModules = [
   ["totem-alchemy", "TotemAlchemy", "0.1.41", "main", "0056a0096dcdb06f03f870edbc9f6b56259a466d", "TotemAlchemy", ">=0.7.15 <0.8.0"],
   ["totem-automata", "TotemAutomata", "0.1.21", "master", "8c9b90bbffb64f4058ffc7978bad1798e8944779", "TotemAutomata", ">=0.7.14 <0.8.0"],
-  ["totem-core", "TotemCore", "0.7.16", "master", "b0b57bc98a98140a1c12a660a33952ea61167278", "TotemCore", null],
+  ["totem-core", "TotemCore", "0.7.19", "master", "21217505fa1d1100a00336d657f07fdd3505868b", "TotemCore", null],
   ["totem-discord-bridge", "TotemDiscordBridge", "0.1.8", "master", "6ef67ed58ebe3a6b9ee9a4d328c668ab93c17453", "TotemDiscordBridge", ">=0.7.0 <0.8.0"],
   ["totem-enchanting", "TotemEnchanting", "0.1.9", "main", "17719ec20eed31938107aa069986c32e5ce5b053", "TotemEnchanting", ">=0.7.0 <0.8.0"],
   ["totem-excavation", "TotemExcavation", "0.1.10", "master", "646f82e5961255dc1b28aee1f800463b55f70002", "TotemExcavation", ">=0.7.13 <0.8.0"],
   ["totem-locksmith", "TotemLocksmith", "0.1.8", "main", "d73112169e73e717f02ef4a068e5cbd2782eb5e7", "TotemLocksmith", ">=0.7.15 <0.8.0"],
   ["totem-nexus", "TotemNexus", "0.3.12", "master", "41ba0b2e11b0a5745f8b7ffb9c6d71e45d9288f7", "TotemNexus", ">=0.7.16 <0.8.0"],
+  ["totem-observer", "TotemObserver", "0.1.0", "main", "51e1507564de9a58016977b16798ec1dd143a41d", "TotemObserver", ">=0.7.18 <0.8.0"],
   ["totem-remnant", "TotemRemnant", "0.2.18", "master", "c828f42cee767b98a69d2bebd532b63f322c3b0e", "TotemRemnant", ">=0.7.15 <0.8.0"],
-  ["totem-vanilla-tweaks", "TotemVanillaTweaks", "0.1.21", "main", "5d2d352453ef6abd9f59ddac8b203d7d5c5d87af", "TotemVanillaTweaks", ">=0.7.14 <0.8.0"],
+  ["totem-vanilla-tweaks", "TotemVanillaTweaks", "0.1.28", "main", "0360c3f513fe1247f1c4fd96c7d3af7e22365803", "TotemVanillaTweaks", ">=0.7.18 <0.8.0"],
   ["totem-villagers", "TotemVillagers", "0.1.34", "main", "9798ee3578affc2624edfcfb2343ec7aa95405df", "TotemVillagers", ">=0.7.12 <0.8.0"]
 ].map(([id, name, version, branch, commit, repositoryName, coreDependency]) => ({
   id,
@@ -85,7 +86,7 @@ check(releaseChecklist.includes("Modrinth API 回讀"), "發布檢查表必須�
 
 if (data) {
   check(data.schemaVersion === 1, "modules.json schemaVersion 必須是 1");
-  check(data.snapshot?.date === "2026-09-02", "快照日期必須是 2026-09-02");
+  check(data.snapshot?.date === "2026-09-11", "active registry 快照日期必須是 2026-09-11");
   check(data.snapshot?.minecraft === "26.2", "Minecraft 基線必須是 26.2");
   check(data.snapshot?.java === 25, "Java 基線必須是 25");
   check(data.snapshot?.publicationStateInferred === false, "不得從原始碼快照推論發布狀態");
@@ -137,11 +138,11 @@ if (data) {
     "automata-remnant",
     "automata-locksmith",
     "remnant-nexus",
-    "vanillatweaks-remnant-observer",
-    "vanillatweaks-automata-observer",
-    "vanillatweaks-nexus-observer",
-    "vanillatweaks-locksmith-observer",
-    "vanillatweaks-villagers-observer"
+    "observer-remnant",
+    "observer-automata",
+    "observer-nexus",
+    "observer-locksmith",
+    "observer-villagers"
   ];
   const serviceIds = ["discordbridge-cloudflare-discord", "automata-openai-compatible"];
 
@@ -232,7 +233,7 @@ if (fs.existsSync(indexPath)) {
     const details = evaluateLiteral(detailMatch[1], "index.html moduleDetails");
     const activeIds = evaluateLiteral(activeMatch[1], "index.html activeModuleIds");
     if (details && activeIds) {
-      check(activeIds.length === expectedModules.length && new Set(activeIds).size === activeIds.length, "curated index.html 必須保留目前已稽核基線模組；新增 registry 模組可先由 generated viewers 自動呈現");
+      check(activeIds.length === 11 && new Set(activeIds).size === activeIds.length, "curated index.html 必須保留 2026-09-02 的 11-module 歷史基線；新增 registry 模組由 generated viewers 自動呈現");
       const branchCount = activeIds.reduce((total, id) => total + (details[id]?.branches?.length ?? 0), 0);
       check(branchCount === 58, "index.html 必須包含 58 個功能分支");
       check(details.core?.version === "0.7.16" && details.core.branches.some((branch) => branch.startsWith("世界輪廓 API：")), "index.html TotemCore 版本或世界輪廓分支不正確");

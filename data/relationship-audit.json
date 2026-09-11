@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "auditedAt": "2026-09-03",
-  "contractCount": 32,
+  "auditedAt": "2026-09-11",
+  "contractCount": 33,
   "moduleOverrides": {
     "totem-nexus": {
       "observerProviders": [
@@ -22,7 +22,9 @@
         {
           "family": "nexus_death_node_admin",
           "protocol": 1,
-          "variants": [""]
+          "variants": [
+            ""
+          ]
         }
       ]
     }
@@ -105,15 +107,18 @@
     "vanilla-automata-observer": {
       "channel": "soft",
       "featureIds": [
-        "totem-vanilla-tweaks.feature-1",
+        "totem-observer.feature-1",
         "totem-automata.feature-7"
       ],
-      "auditStatus": "verified"
+      "auditStatus": "verified",
+      "from": "totem-observer",
+      "source": "TotemObserver",
+      "auditNote": "Observer session/transport ownership moved from TotemVanillaTweaks to TotemObserver; the legacy contract id is retained for curated-snapshot compatibility, while the owning module still owns its production Screen provider."
     },
     "vanilla-nexus-observer": {
       "channel": "soft",
       "featureIds": [
-        "totem-vanilla-tweaks.feature-1",
+        "totem-observer.feature-1",
         "totem-nexus.feature-1",
         "totem-nexus.feature-2",
         "totem-nexus.feature-4",
@@ -122,32 +127,42 @@
       "protocol": 3,
       "feature": "Observer nexus@3",
       "auditStatus": "verified",
-      "auditNote": "Generic Nexus Observer covers compass/map/management, legacy map, friends, and registration. Death-node admin remains a separate provider."
+      "auditNote": "Generic Nexus Observer covers compass/map/management, legacy map, friends, and registration. Death-node admin remains a separate provider. Observer session/transport ownership moved from TotemVanillaTweaks to TotemObserver; the legacy contract id is retained for curated-snapshot compatibility, while the owning module still owns its production Screen provider.",
+      "from": "totem-observer",
+      "source": "TotemObserver"
     },
     "vanilla-locksmith-observer": {
       "channel": "soft",
       "featureIds": [
-        "totem-vanilla-tweaks.feature-1",
+        "totem-observer.feature-1",
         "totem-locksmith.feature-5"
       ],
-      "auditStatus": "verified"
+      "auditStatus": "verified",
+      "from": "totem-observer",
+      "source": "TotemObserver",
+      "auditNote": "Observer session/transport ownership moved from TotemVanillaTweaks to TotemObserver; the legacy contract id is retained for curated-snapshot compatibility, while the owning module still owns its production Screen provider."
     },
     "vanilla-villagers-observer": {
       "channel": "soft",
       "featureIds": [
-        "totem-vanilla-tweaks.feature-1",
+        "totem-observer.feature-1",
         "totem-villagers.feature-3"
       ],
-      "auditStatus": "verified"
+      "auditStatus": "verified",
+      "from": "totem-observer",
+      "source": "TotemObserver",
+      "auditNote": "Observer session/transport ownership moved from TotemVanillaTweaks to TotemObserver; the legacy contract id is retained for curated-snapshot compatibility, while the owning module still owns its production Screen provider."
     },
     "vanilla-remnant-observer": {
       "channel": "soft",
       "featureIds": [
-        "totem-vanilla-tweaks.feature-1",
+        "totem-observer.feature-1",
         "totem-remnant.feature-3"
       ],
       "auditStatus": "verified",
-      "auditNote": "The current curated feature vocabulary has no standalone Remnant backpack GUI/Observer feature; the inventory sidebar remains the closest UI-owned endpoint."
+      "auditNote": "The current curated feature vocabulary has no standalone Remnant backpack GUI/Observer feature; the inventory sidebar remains the closest UI-owned endpoint. Observer session/transport ownership moved from TotemVanillaTweaks to TotemObserver; the legacy contract id is retained for curated-snapshot compatibility, while the owning module still owns its production Screen provider.",
+      "from": "totem-observer",
+      "source": "TotemObserver"
     },
     "discord-worker": {
       "channel": "service",

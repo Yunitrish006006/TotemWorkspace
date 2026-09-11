@@ -13,7 +13,7 @@ import { renderFlutterGraph } from "./render-flutter-graph.mjs";
 
 const knowledge = loadKnowledge();
 const summary = knowledgeSummary(knowledge);
-assert.deepEqual([summary.moduleCount, summary.featureCount, summary.contractCount], [11, 58, 32]);
+assert.deepEqual([summary.moduleCount, summary.featureCount, summary.contractCount], [12, 64, 33]);
 
 const grouped = knowledge.contracts.reduce((out, c) => ((out[c.type] ??= []).push(c), out), {});
 assert.deepEqual([
@@ -23,7 +23,7 @@ assert.deepEqual([
   grouped["external-service"]?.length,
   grouped.eventbus?.length,
   grouped["observer-provider"]?.length
-], [10, 3, 8, 2, 3, 6]);
+], [11, 3, 8, 2, 3, 6]);
 
 const death = resolveTask("死亡背包跟 Nexus 死亡節點同步有問題", knowledge);
 assert.ok(death.modules.some((m) => m.id === "totem-remnant"));
@@ -33,10 +33,12 @@ const nesting = resolveTask("銅魁儡把 Remnant 背包塞進另一個背包，
 assert.ok(nesting.modules.some((m) => m.id === "totem-automata"));
 assert.ok(nesting.modules.some((m) => m.id === "totem-remnant"));
 assert.ok(nesting.contracts.some((c) => c.id === "automata-remnant"));
-assert.equal(graphForModule("totem-core", { depth: 1, knowledge }).modules.length, 11);
+assert.equal(graphForModule("totem-core", { depth: 1, knowledge }).modules.length, 12);
 const observerPlan = testPlan({ query: "修改 Observer Screen provider protocol" }, knowledge);
 assert.ok(observerPlan.validationCategories.includes("client-gametest"));
 assert.ok(observerPlan.validationCategories.includes("privacy-redaction"));
+assert.ok(resolveTask("修改 Observer Screen provider protocol", knowledge).modules.some((m) => m.id === "totem-observer"));
+assert.ok(knowledge.contracts.filter((c) => c.type === "observer-provider").every((c) => c.from === "totem-observer"));
 const pack = buildContextPack("死亡背包跟 Nexus 同步有問題", { audience: "primary", maxTokens: 4000, knowledge });
 assert.ok(pack.modules.some((m) => m.id === "totem-remnant"));
 assert.ok(pack.rendered.length > 0);
@@ -89,7 +91,7 @@ function validateFlutterGraphGeneration() {
   };
   try {
     const model = buildGraphViewModel({ knowledge, index });
-    assert.deepEqual([model.modules.length, model.features.length, model.contracts.length], [11, 58, 32]);
+    assert.deepEqual([model.modules.length, model.features.length, model.contracts.length], [12, 64, 33]);
     assert.ok(model.code.nodes.some((n) => n.type === "code-file" && n.path.endsWith("GeneratedGraphProbeApi.java")));
     assert.ok(model.code.nodes.some((n) => n.type === "code-symbol" && n.label === "GeneratedGraphProbeApi"));
     assert.ok(model.sharedCapabilities.some((c) => c.id === "shared:manual:totem-automata" && c.providerModuleId === "totem-core"));
@@ -101,7 +103,7 @@ function validateFlutterGraphGeneration() {
     const data = fs.readFileSync(one, "utf8");
     assert.equal(data, fs.readFileSync(two, "utf8"));
     const parsed = JSON.parse(data);
-    assert.deepEqual([parsed.modules.length, parsed.features.length, parsed.contracts.length], [11, 58, 32]);
+    assert.deepEqual([parsed.modules.length, parsed.features.length, parsed.contracts.length], [12, 64, 33]);
     assert.ok(data.includes("shared:manual:totem-automata"));
     assert.ok(!data.includes(marker));
 
