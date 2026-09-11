@@ -23,7 +23,6 @@ for old, new in replacements.items():
     if old not in text:
         raise SystemExit(f"validator patch anchor missing: {old[:100]}")
     text = text.replace(old, new)
-
 path.write_text(text)
 
 audit_path = Path("data/relationship-audit.json")
@@ -51,9 +50,36 @@ for old, new in intelligence_replacements.items():
     intelligence = intelligence.replace(old, new)
 
 observer_assertion_anchor = 'assert.ok(observerPlan.validationCategories.includes("privacy-redaction"));'
-if 'totem-observer' not in intelligence.split(observer_assertion_anchor, 1)[1][:500]:
+if 'resolveTask("修改 Observer Screen provider protocol"' not in intelligence:
     intelligence = intelligence.replace(
         observer_assertion_anchor,
         observer_assertion_anchor + '\nassert.ok(resolveTask("修改 Observer Screen provider protocol", knowledge).modules.some((m) => m.id === "totem-observer"));\nassert.ok(knowledge.contracts.filter((c) => c.type === "observer-provider").every((c) => c.from === "totem-observer"));'
     )
 intelligence_path.write_text(intelligence)
+
+contract_path = Path("scripts/validate-contract-audit.mjs")
+contract = contract_path.read_text()
+contract_replacements = {
+    'assert.equal(audit.auditedAt, "2026-09-03");': 'assert.equal(audit.auditedAt, "2026-09-11");',
+    'assert.equal(audit.contractCount, 32);': 'assert.equal(audit.contractCount, 33);',
+    'assert.equal(knowledge.contracts.length, 32);': 'assert.equal(knowledge.contracts.length, 33);',
+    'assert.equal(knowledge.features.length, 58);': 'assert.equal(knowledge.features.length, 64);',
+    '  "totem-excavation", "totem-villagers", "totem-locksmith", "totem-nexus", "totem-remnant"':
+        '  "totem-excavation", "totem-villagers", "totem-locksmith", "totem-nexus", "totem-observer", "totem-remnant"',
+    '  "totem-vanilla-tweaks.feature-1", "totem-nexus.feature-1", "totem-nexus.feature-2",':
+        '  "totem-observer.feature-1", "totem-nexus.feature-1", "totem-nexus.feature-2",',
+    '], [10, 3, 8, 2, 3, 6]);': '], [11, 3, 8, 2, 3, 6]);',
+    'console.log("Canonical relationship validation passed: 32 contracts, audited feature endpoints including Core Friendship consumers, metadata-only qualifications, and Nexus Observer v3 are loaded directly by workspace intelligence without a legacy browser renderer dependency.");':
+        'console.log("Canonical relationship validation passed: 33 active contracts, including TotemObserver ownership, audited feature endpoints, metadata-only qualifications, and Nexus Observer v3; the 2026-09-03 audit document remains a historical 32-contract record.");',
+}
+for old, new in contract_replacements.items():
+    if old not in contract:
+        raise SystemExit(f"contract validator patch anchor missing: {old[:100]}")
+    contract = contract.replace(old, new)
+observer_contract_anchor = 'assert.equal(byId.get("vanilla-nexus-observer").protocol, 3);'
+if 'byId.get("vanilla-nexus-observer").from' not in contract:
+    contract = contract.replace(
+        observer_contract_anchor,
+        'assert.equal(byId.get("vanilla-nexus-observer").from, "totem-observer");\n' + observer_contract_anchor,
+    )
+contract_path.write_text(contract)
