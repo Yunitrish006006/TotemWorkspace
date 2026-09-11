@@ -1,4 +1,5 @@
 from pathlib import Path
+import json
 
 path = Path("scripts/validate-workspace.mjs")
 text = path.read_text()
@@ -24,3 +25,8 @@ for old, new in replacements.items():
     text = text.replace(old, new)
 
 path.write_text(text)
+
+audit_path = Path("data/relationship-audit.json")
+audit = json.loads(audit_path.read_text())
+audit["contractCount"] = 33
+audit_path.write_text(json.dumps(audit, ensure_ascii=False, indent=2) + "\n")
