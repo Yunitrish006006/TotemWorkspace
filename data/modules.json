@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "snapshot": {
-    "date": "2026-09-02",
+    "date": "2026-09-11",
     "minecraft": "26.2",
     "java": 25,
     "fabricLoader": ">=0.19.3",
@@ -20,7 +20,13 @@
       "repository": "https://github.com/Yunitrish006006/TotemAlchemy",
       "coreDependency": ">=0.7.15 <0.8.0",
       "role": "資料驅動的生存煉金、材料自動登錄、研究手冊與模糊火候回饋。",
-      "featureGroups": ["機率與多效果釀造", "營火煉藥鍋", "材料自動登錄與研究手冊", "配方取得進度", "資料包材料／基底"],
+      "featureGroups": [
+        "機率與多效果釀造",
+        "營火煉藥鍋",
+        "材料自動登錄與研究手冊",
+        "配方取得進度",
+        "資料包材料／基底"
+      ],
       "declaredSuggests": [],
       "runtimeOptionalIntegrationIds": [],
       "observerProviders": []
@@ -35,22 +41,47 @@
       "repository": "https://github.com/Yunitrish006006/TotemAutomata",
       "coreDependency": ">=0.7.14 <0.8.0",
       "role": "伺服器授權、具預算與退避機制的銅魁儡分類及採集工作。",
-      "featureGroups": ["分類與安全退回", "可產出結果的熔爐路由", "採集工作區與共享背包", "深度遮擋工作區與容器連線", "選配 LLM 規則"],
-      "declaredSuggests": ["automata-excavation"],
-      "runtimeOptionalIntegrationIds": ["automata-remnant", "automata-locksmith"],
-      "observerProviders": [{"family": "automata_copper_golem", "protocol": 1, "variants": [""]}]
+      "featureGroups": [
+        "分類與安全退回",
+        "可產出結果的熔爐路由",
+        "採集工作區與共享背包",
+        "深度遮擋工作區與容器連線",
+        "選配 LLM 規則"
+      ],
+      "declaredSuggests": [
+        "automata-excavation"
+      ],
+      "runtimeOptionalIntegrationIds": [
+        "automata-remnant",
+        "automata-locksmith"
+      ],
+      "observerProviders": [
+        {
+          "family": "automata_copper_golem",
+          "protocol": 1,
+          "variants": [
+            ""
+          ]
+        }
+      ]
     },
     {
       "id": "totem-core",
       "name": "TotemCore",
       "active": true,
-      "version": "0.7.16",
+      "version": "0.7.19",
       "defaultBranch": "master",
-      "commit": "b0b57bc98a98140a1c12a660a33952ea61167278",
+      "commit": "21217505fa1d1100a00336d657f07fdd3505868b",
       "repository": "https://github.com/Yunitrish006006/TotemCore",
       "coreDependency": null,
-      "role": "共用 API、事件、手冊、好友、遷移、Observer 與世界輪廓契約。",
-      "featureGroups": ["版本化 API 與遷移", "Manual Registry", "Friendship", "Observer provider API", "無狀態世界輪廓 API"],
+      "role": "共用 API、事件、手冊、好友、遷移、Observer provider 與世界輪廓契約。",
+      "featureGroups": [
+        "版本化 API 與遷移",
+        "Manual Registry",
+        "Friendship",
+        "Observer provider API",
+        "無狀態世界輪廓 API"
+      ],
       "declaredSuggests": [],
       "runtimeOptionalIntegrationIds": [],
       "observerProviders": []
@@ -65,7 +96,12 @@
       "repository": "https://github.com/Yunitrish006006/TotemDiscordBridge",
       "coreDependency": ">=0.7.0 <0.8.0",
       "role": "將聊天、狀態與公開稽核事件安全轉送至外部 Discord relay。",
-      "featureGroups": ["聊天與玩家事件", "狀態與 Presence", "管理設定", "隱私與權限邊界"],
+      "featureGroups": [
+        "聊天與玩家事件",
+        "狀態與 Presence",
+        "管理設定",
+        "隱私與權限邊界"
+      ],
       "declaredSuggests": [],
       "runtimeOptionalIntegrationIds": [],
       "observerProviders": []
@@ -80,7 +116,12 @@
       "repository": "https://github.com/Yunitrish006006/TotemEnchanting",
       "coreDependency": ">=0.7.0 <0.8.0",
       "role": "依實際書本內容計算雕紋書櫃附魔力並擴充附魔品質。",
-      "featureGroups": ["雕紋書櫃權重", "30–64 品質曲線", "粒子回饋", "節肢剋星目標擴充"],
+      "featureGroups": [
+        "雕紋書櫃權重",
+        "30–64 品質曲線",
+        "粒子回饋",
+        "節肢剋星目標擴充"
+      ],
       "declaredSuggests": [],
       "runtimeOptionalIntegrationIds": [],
       "observerProviders": []
@@ -95,7 +136,13 @@
       "repository": "https://github.com/Yunitrish006006/TotemExcavation",
       "coreDependency": ">=0.7.13 <0.8.0",
       "role": "主手槌保存雙角選區的伺服器授權範圍挖掘。",
-      "featureGroups": ["七階槌", "兩次蹲下左鍵選區", "深度遮擋選區輪廓", "bounded 範圍挖掘", "重型戰鬥屬性"],
+      "featureGroups": [
+        "七階槌",
+        "兩次蹲下左鍵選區",
+        "深度遮擋選區輪廓",
+        "bounded 範圍挖掘",
+        "重型戰鬥屬性"
+      ],
       "declaredSuggests": [],
       "runtimeOptionalIntegrationIds": [],
       "observerProviders": []
@@ -110,10 +157,23 @@
       "repository": "https://github.com/Yunitrish006006/TotemLocksmith",
       "coreDependency": ">=0.7.15 <0.8.0",
       "role": "保護固定容器與漏斗儲存網路的伺服器授權鎖具系統。",
-      "featureGroups": ["Root 網路拓撲", "玩家與鑰匙權限", "自動化邊界", "破壞稽核"],
+      "featureGroups": [
+        "Root 網路拓撲",
+        "玩家與鑰匙權限",
+        "自動化邊界",
+        "破壞稽核"
+      ],
       "declaredSuggests": [],
       "runtimeOptionalIntegrationIds": [],
-      "observerProviders": [{"family": "locksmith_management", "protocol": 1, "variants": [""]}]
+      "observerProviders": [
+        {
+          "family": "locksmith_management",
+          "protocol": 1,
+          "variants": [
+            ""
+          ]
+        }
+      ]
     },
     {
       "id": "totem-nexus",
@@ -125,13 +185,64 @@
       "repository": "https://github.com/Yunitrish006006/TotemNexus",
       "coreDependency": ">=0.7.16 <0.8.0",
       "role": "磁石 Space Unit 的探索、材料能力、權限、安全傳送與死亡節點。",
-      "featureGroups": ["Space Unit 註冊與探索", "伺服器報價與傳送", "材料 profile", "傳送陣方塊診斷", "好友與死亡節點"],
+      "featureGroups": [
+        "Space Unit 註冊與探索",
+        "伺服器報價與傳送",
+        "材料 profile",
+        "傳送陣方塊診斷",
+        "好友與死亡節點"
+      ],
       "declaredSuggests": [],
       "runtimeOptionalIntegrationIds": [],
       "observerProviders": [
-        {"family": "nexus", "protocol": 2, "variants": ["map", "map_legacy", "friends", "friends_legacy", "registration", "registration_legacy"]},
-        {"family": "nexus_death_node_admin", "protocol": 1, "variants": [""]}
+        {
+          "family": "nexus",
+          "protocol": 2,
+          "variants": [
+            "map",
+            "map_legacy",
+            "friends",
+            "friends_legacy",
+            "registration",
+            "registration_legacy"
+          ]
+        },
+        {
+          "family": "nexus_death_node_admin",
+          "protocol": 1,
+          "variants": [
+            ""
+          ]
+        }
       ]
+    },
+    {
+      "id": "totem-observer",
+      "name": "TotemObserver",
+      "active": true,
+      "version": "0.1.0",
+      "defaultBranch": "main",
+      "commit": "51e1507564de9a58016977b16798ec1dd143a41d",
+      "repository": "https://github.com/Yunitrish006006/TotemObserver",
+      "coreDependency": ">=0.7.18 <0.8.0",
+      "role": "伺服器授權的 Spectator Observer View runtime；負責 session、camera、語意 relay、vanilla Screen adapters、provider negotiation、privacy/redaction 與 3-JVM E2E。",
+      "featureGroups": [
+        "Observer View runtime",
+        "/observeui 與 session lifecycle",
+        "Spectator camera",
+        "語意 HUD／Screen relay",
+        "Vanilla Screen adapters",
+        "Provider negotiation 與隱私邊界"
+      ],
+      "declaredSuggests": [],
+      "runtimeOptionalIntegrationIds": [
+        "observer-automata",
+        "observer-nexus",
+        "observer-remnant",
+        "observer-locksmith",
+        "observer-villagers"
+      ],
+      "observerProviders": []
     },
     {
       "id": "totem-remnant",
@@ -143,24 +254,50 @@
       "repository": "https://github.com/Yunitrish006006/TotemRemnant",
       "coreDependency": ">=0.7.15 <0.8.0",
       "role": "分級背包、擴充、回聲碎片結晶、原版物品欄側欄與死亡背包回收。",
-      "featureGroups": ["四階背包", "十種擴充", "回聲碎片結晶", "配方取得進度", "真實格位側欄", "死亡背包", "防巢狀容器安全"],
-      "declaredSuggests": ["remnant-trinkets"],
-      "runtimeOptionalIntegrationIds": ["remnant-nexus"],
-      "observerProviders": [{"family": "remnant_backpack", "protocol": 1, "variants": [""]}]
+      "featureGroups": [
+        "四階背包",
+        "十種擴充",
+        "回聲碎片結晶",
+        "配方取得進度",
+        "真實格位側欄",
+        "死亡背包",
+        "防巢狀容器安全"
+      ],
+      "declaredSuggests": [
+        "remnant-trinkets"
+      ],
+      "runtimeOptionalIntegrationIds": [
+        "remnant-nexus"
+      ],
+      "observerProviders": [
+        {
+          "family": "remnant_backpack",
+          "protocol": 1,
+          "variants": [
+            ""
+          ]
+        }
+      ]
     },
     {
       "id": "totem-vanilla-tweaks",
       "name": "TotemVanillaTweaks",
       "active": true,
-      "version": "0.1.21",
+      "version": "0.1.28",
       "defaultBranch": "main",
-      "commit": "5d2d352453ef6abd9f59ddac8b203d7d5c5d87af",
+      "commit": "0360c3f513fe1247f1c4fd96c7d3af7e22365803",
       "repository": "https://github.com/Yunitrish006006/TotemVanillaTweaks",
-      "coreDependency": ">=0.7.14 <0.8.0",
-      "role": "原版向玩法修正與 framebuffer-free、語意化的 Observer View relay。",
-      "featureGroups": ["Observer View", "容器整理", "講台與書櫃", "混凝土粉末", "熔爐與漏斗經驗"],
+      "coreDependency": ">=0.7.18 <0.8.0",
+      "role": "原版向玩法修正：容器整理、講台／書櫃、混凝土、熔爐／漏斗經驗與骷髏玩法調整。",
+      "featureGroups": [
+        "容器整理",
+        "講台與書櫃",
+        "混凝土粉末",
+        "熔爐與漏斗經驗",
+        "骷髏彈藥與難度縮放"
+      ],
       "declaredSuggests": [],
-      "runtimeOptionalIntegrationIds": ["vanillatweaks-remnant-observer", "vanillatweaks-automata-observer", "vanillatweaks-nexus-observer", "vanillatweaks-locksmith-observer", "vanillatweaks-villagers-observer"],
+      "runtimeOptionalIntegrationIds": [],
       "observerProviders": []
     },
     {
@@ -173,10 +310,26 @@
       "repository": "https://github.com/Yunitrish006006/TotemVillagers",
       "coreDependency": ">=0.7.12 <0.8.0",
       "role": "由實際工作與持久化庫存支撐的伺服器授權村民經濟。",
-      "featureGroups": ["實體庫存交易", "專職工作區", "Woodcutter", "村莊物流", "建築與安全"],
-      "declaredSuggests": ["villagers-remnant"],
+      "featureGroups": [
+        "實體庫存交易",
+        "專職工作區",
+        "Woodcutter",
+        "村莊物流",
+        "建築與安全"
+      ],
+      "declaredSuggests": [
+        "villagers-remnant"
+      ],
       "runtimeOptionalIntegrationIds": [],
-      "observerProviders": [{"family": "villagers_woodcutter", "protocol": 1, "variants": [""]}]
+      "observerProviders": [
+        {
+          "family": "villagers_woodcutter",
+          "protocol": 1,
+          "variants": [
+            ""
+          ]
+        }
+      ]
     }
   ],
   "dependencyAudit": {
@@ -232,44 +385,44 @@
         "fallback": "不建立 Nexus 死亡節點、不保留 Nexus 傳送介面；死亡背包仍獨立運作。"
       },
       {
-        "id": "vanillatweaks-remnant-observer",
-        "from": "totem-vanilla-tweaks",
-        "to": "totem-remnant",
-        "kind": "observer-provider",
-        "families": [{"family": "remnant_backpack", "protocol": 1}],
-        "fallback": "只報告 unsupported metadata，不建立替代 UI。"
-      },
-      {
-        "id": "vanillatweaks-automata-observer",
-        "from": "totem-vanilla-tweaks",
+        "id": "observer-automata",
+        "from": "totem-observer",
         "to": "totem-automata",
         "kind": "observer-provider",
-        "families": [{"family": "automata_copper_golem", "protocol": 1}],
-        "fallback": "只報告 unsupported metadata，不建立替代 UI。"
+        "feature": "Automata-owned Copper Golem Screen provider 透過 TotemCore ObserverScreenProvider 契約被 TotemObserver 動態發現與 relay。",
+        "fallback": "provider 不存在或 family/protocol 未協商成功時只顯示 unsupported metadata，不合成鏡像 Screen。"
       },
       {
-        "id": "vanillatweaks-nexus-observer",
-        "from": "totem-vanilla-tweaks",
+        "id": "observer-nexus",
+        "from": "totem-observer",
         "to": "totem-nexus",
         "kind": "observer-provider",
-        "families": [{"family": "nexus", "protocol": 2}, {"family": "nexus_death_node_admin", "protocol": 1}],
-        "fallback": "只報告 unsupported metadata，不建立替代 UI。"
+        "feature": "Nexus-owned Screen providers 透過 TotemCore ObserverScreenProvider 契約被 TotemObserver 動態發現與 relay。",
+        "fallback": "provider 不存在或 family/protocol 未協商成功時只顯示 unsupported metadata，不合成鏡像 Screen。"
       },
       {
-        "id": "vanillatweaks-locksmith-observer",
-        "from": "totem-vanilla-tweaks",
+        "id": "observer-remnant",
+        "from": "totem-observer",
+        "to": "totem-remnant",
+        "kind": "observer-provider",
+        "feature": "Remnant-owned backpack Screen provider 透過 TotemCore ObserverScreenProvider 契約被 TotemObserver 動態發現與 relay。",
+        "fallback": "provider 不存在或 family/protocol 未協商成功時只顯示 unsupported metadata，不合成鏡像 Screen。"
+      },
+      {
+        "id": "observer-locksmith",
+        "from": "totem-observer",
         "to": "totem-locksmith",
         "kind": "observer-provider",
-        "families": [{"family": "locksmith_management", "protocol": 1}],
-        "fallback": "只報告 unsupported metadata，不建立替代 UI。"
+        "feature": "Locksmith-owned management Screen provider 透過 TotemCore ObserverScreenProvider 契約被 TotemObserver 動態發現與 relay。",
+        "fallback": "provider 不存在或 family/protocol 未協商成功時只顯示 unsupported metadata，不合成鏡像 Screen。"
       },
       {
-        "id": "vanillatweaks-villagers-observer",
-        "from": "totem-vanilla-tweaks",
+        "id": "observer-villagers",
+        "from": "totem-observer",
         "to": "totem-villagers",
         "kind": "observer-provider",
-        "families": [{"family": "villagers_woodcutter", "protocol": 1}],
-        "fallback": "只報告 unsupported metadata，不建立替代 UI。"
+        "feature": "Villagers-owned Woodcutter Screen provider 透過 TotemCore ObserverScreenProvider 契約被 TotemObserver 動態發現與 relay。",
+        "fallback": "provider 不存在或 family/protocol 未協商成功時只顯示 unsupported metadata，不合成鏡像 Screen。"
       }
     ],
     "externalOptionalServices": [
@@ -289,9 +442,30 @@
       }
     ],
     "eventBusOptionalSubscribers": [
-      {"publisher": "totem-remnant", "subscriber": "totem-discord-bridge", "events": ["死亡背包建立", "死亡背包回收"]},
-      {"publisher": "totem-nexus", "subscriber": "totem-discord-bridge", "events": ["公開 Space Unit 更新", "死亡回收", "管理稽核"]},
-      {"publisher": "totem-locksmith", "subscriber": "totem-discord-bridge", "events": ["LockedContainerNetworkBrokenEvent"]}
+      {
+        "publisher": "totem-remnant",
+        "subscriber": "totem-discord-bridge",
+        "events": [
+          "死亡背包建立",
+          "死亡背包回收"
+        ]
+      },
+      {
+        "publisher": "totem-nexus",
+        "subscriber": "totem-discord-bridge",
+        "events": [
+          "公開 Space Unit 更新",
+          "死亡回收",
+          "管理稽核"
+        ]
+      },
+      {
+        "publisher": "totem-locksmith",
+        "subscriber": "totem-discord-bridge",
+        "events": [
+          "LockedContainerNetworkBrokenEvent"
+        ]
+      }
     ],
     "legacyCompatibility": {
       "name": "DeadRecall",

@@ -17,6 +17,7 @@ export const MODULE_KEY_TO_ID = Object.freeze({
   villagers: "totem-villagers",
   locksmith: "totem-locksmith",
   nexus: "totem-nexus",
+  observer: "totem-observer",
   remnant: "totem-remnant"
 });
 
@@ -189,6 +190,24 @@ function buildFeatureRecords({ modules, moduleDetails, activeModuleIds, featureB
       }));
     });
   }
+  const coveredOwnerIds = new Set(features.map((feature) => feature.ownerId));
+  for (const module of modules) {
+    if (coveredOwnerIds.has(module.id)) continue;
+    const ownerKey = ID_TO_MODULE_KEY[module.id] ?? module.id;
+    for (const [index, summary] of (module.featureGroups ?? []).entries()) {
+      features.push(Object.freeze({
+        id: `${module.id}.feature-${index + 1}`,
+        ownerId: module.id,
+        ownerKey,
+        index: index + 1,
+        title: String(summary).split("：", 1)[0].trim() || `feature-${index + 1}`,
+        summary: String(summary),
+        softContractIds: Object.freeze([]),
+        serviceContractIds: Object.freeze([]),
+        eventContractIds: Object.freeze([])
+      }));
+    }
+  }
   return Object.freeze(features);
 }
 
@@ -264,7 +283,7 @@ function buildContractRecords({ modulesData, softDependencyAudit, externalServic
       contracts.push(Object.freeze({
         id: `observer:${module.id}:${provider.family}@${provider.protocol}`,
         type: "observer-provider",
-        from: "totem-vanilla-tweaks",
+        from: "totem-observer",
         to: module.id,
         providerOwner: module.id,
         family: provider.family,
