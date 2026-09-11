@@ -16,7 +16,7 @@ TotemWorkspace is the public coordination, architecture-knowledge and developmen
 
 - Verify the owning repository's actual Minecraft version, Fabric Loader/API and mappings. Use its Gradle wrapper, preserve dedicated-server safety and inspect consumers before changing shared APIs.
 - **Java 25 is mandatory** for every Gradle, compile, test, GameTest, runtime probe, remap, and release operation in an active Totem module. Before the first Gradle command, select JDK 25 through `JAVA_HOME` and verify both `java -version` and `./gradlew -version` report JVM 25.
-- When a module release is explicitly authorized, record a new version; run real Java-25 build/tests; inspect the remapped artifact; commit and push the exact source/version change; confirm required GitHub Actions checks; then use that module's owned Modrinth publish workflow and verify the published version by API read-back, including project/version compatibility, primary JAR and SHA-512.
+- When a module release is explicitly authorized, record a new version; commit and push the exact source/version change; have CI run real Java-25 build/tests and inspect the production artifact; confirm required GitHub Actions checks; then use that module's owned Modrinth publish workflow and verify the published version by API read-back in that workflow, including project/version compatibility, primary JAR and SHA-512. Reuse those workflow results instead of repeating them locally.
 - Keep source commit, remote CI result, Modrinth version and any publication marker consistent. Update the TotemWorkspace snapshot only from verified release evidence.
 - Public release is an external action. Do not infer authorization from an edit-only request, and do not report a release complete while push, CI, publication or read-back verification is pending.
 
@@ -52,6 +52,18 @@ An `independentReviewRequired` constraint requires actual independent review evi
 
 Correctness comes first, total model tokens second and latency last. Reuse bounded context and compact findings. Prefer lightweight execution when sufficient; escalate reasoning for ambiguous shared API/protocol design, conflicting evidence, high-risk persistence/networking or non-local failures. Model hints are preferences; only runtime evidence establishes actual lifecycle, selected models, usage and validation outcomes.
 
+## Validation ownership and reuse
+
+- Before running checks, inspect the owning GitHub workflows and assign each required check one primary executor. Deterministic validation belongs in checked-in scripts invoked by GitHub Actions: compilation, unit tests, server/client GameTests, migration, permissions, persistence, protocol/privacy checks, localization consistency, artifact metadata and release read-back.
+- Use local checks only for the smallest feedback needed to develop or diagnose a change, or when CI cannot run the required check. Do not run a full local suite merely because CI will run it later. Record the reason before repeating a successful check.
+- Reuse successful CI evidence for the exact source commit, dependency revisions, toolchain/configuration and required test scope. Record run/job links once. Missing, skipped, cancelled, stale or differently scoped checks are not passes. A source/configuration change, failure or concrete new concern invalidates only the relevant evidence.
+- Prefer one immutable release JAR built and verified by CI, then pass that artifact and its SHA-512 to the publisher. Validate artifact provenance and the required CI run before publishing; never select an arbitrary latest artifact. If an existing publisher still rebuilds, record that limitation and migrate its artifact handoff when touching that workflow; do not silently remove its checks.
+- The publisher owns automated Modrinth metadata/hash read-back. A successful exact-run verification and matching publication record are sufficient; do not repeat downloads, rebuilds or API checks manually without conflicting evidence. Build dependency/version/metadata preflight into scripts and batch related fixes before pushing.
+- Automate screenshot capture, dimensions and semantic/input/privacy assertions too. Reserve human/model visual review for appearance, readability, clipping and art direction that existing assertions cannot judge; review changed/relevant screenshots once. Required independent review remains independent and reuses test evidence instead of rerunning tests.
+- Read concise workflow summaries first, inspect failed-job logs only when needed, and monitor an existing run instead of triggering another. Preserve required platform/runtime matrices and approval boundaries. Deterministic requirements are not a mandate to repeat local and CI execution.
+
+See `docs/validation-ownership.md` for workflow ownership and evidence boundaries.
+
 ## Viewer and graph rules
 
 - Flutter Web/Wasm under `viewer_flutter/` is the only maintained viewer surface.
@@ -83,7 +95,7 @@ Correctness comes first, total model tokens second and latency last. Reuse bound
 
 ## Required repository validation
 
-For changes affecting workspace knowledge, graph data, aliases, retrieval, MCP, viewer or runtime behavior, run the relevant Node validators and Flutter validation. At minimum preserve:
+For changes affecting workspace knowledge, graph data, aliases, retrieval, MCP, viewer or runtime behavior, require the relevant Node validators and Flutter validation through their owning GitHub Actions workflows. Use local execution only for targeted development feedback or unavailable CI coverage; a documentation/workflow edit does not require the full suite locally. Preserve coverage for:
 
 ```sh
 node scripts/validate-workspace.mjs

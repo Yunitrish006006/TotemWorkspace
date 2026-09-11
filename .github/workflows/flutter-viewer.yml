@@ -36,6 +36,11 @@ on:
 permissions:
   contents: read
 
+# Node validators belong to validate.yml; this workflow owns Flutter execution.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   flutter-web:
     runs-on: ubuntu-latest
@@ -50,15 +55,6 @@ jobs:
 
       - name: Generate shared graph asset
         run: node scripts/render-flutter-graph.mjs
-
-      - name: Validate loopback local API
-        run: node scripts/validate-local-viewer.mjs
-
-      - name: Validate Flutter development viewer
-        run: node scripts/validate-ai-development-viewer.mjs
-
-      - name: Validate semantic LOD
-        run: node scripts/validate-semantic-lod.mjs
 
       - name: Set up Flutter 3.47.0
         uses: subosito/flutter-action@v2
