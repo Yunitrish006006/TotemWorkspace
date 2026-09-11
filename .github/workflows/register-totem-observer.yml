@@ -23,7 +23,9 @@ jobs:
         with:
           node-version: '22'
       - name: Register TotemObserver ownership
-        run: python3 .github/register-totem-observer.py
+        run: |
+          python3 .github/register-totem-observer.py
+          python3 .github/patch-workspace-validator.py
       - name: Render Flutter graph data
         run: node scripts/render-flutter-graph.mjs
       - name: Validate workspace snapshot
@@ -51,7 +53,7 @@ jobs:
           set -euo pipefail
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add data docs intelligence viewer_flutter/assets/graph-data.json
+          git add data docs intelligence scripts viewer_flutter/assets/graph-data.json
           git diff --cached --quiet && exit 0
           git commit -m 'docs: register TotemObserver ownership'
           git push origin HEAD:feat/register-totem-observer
