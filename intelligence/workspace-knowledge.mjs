@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
+import { taskIntent } from "./task-intent.mjs";
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const DEFAULT_ROOT = path.resolve(HERE, "..");
@@ -523,13 +524,17 @@ export function resolveTask(query, knowledge = loadKnowledge(), { moduleId = nul
 
   // Explicit focus limits fuzzy matches, while explicitly named owners remain in scope.
   // Their audited consumers are added to read scope by impact/orchestration, not write scope.
-  const moduleList = moduleId ? [...new Set([moduleId, ...mentions.map((module) => module.id)])] : [...modules].slice(0, 7);
+  const boundedIntent = taskIntent(query);
+  const moduleList = moduleId || mentions.length && (boundedIntent.documentationOnly || boundedIntent.readOnly)
+    ? [...new Set([moduleId, ...mentions.map((module) => module.id)].filter(Boolean))]
+    : boundedIntent.documentationOnly ? [] : [...modules].slice(0, 7);
   const relevantContracts = knowledge.contracts.filter((contract) => (
     contractNodes(contract).some((node) => moduleList.includes(node))
     && (rankedContracts.some((entry) => entry.contract.id === contract.id)
       || contract.featureIds?.some((id) => rankedFeatures.some((entry) => entry.feature.id === id)))
   )).slice(0, 12);
-  const risks = riskTagsForText(knowledge, [query, ...rankedFeatures.map((entry) => entry.feature.summary)].join(" "));
+  const scopedFeatures = rankedFeatures.filter(({ feature }) => moduleList.includes(feature.ownerId));
+  const risks = riskTagsForText(knowledge, query);
 
   return Object.freeze({
     query,
@@ -540,7 +545,7 @@ export function resolveTask(query, knowledge = loadKnowledge(), { moduleId = nul
       const module = knowledge.moduleById.get(id);
       return Object.freeze({ id, name: module?.name ?? id, role: module?.role ?? null, score: ranked?.score ?? 0 });
     })),
-    features: Object.freeze(rankedFeatures.filter(({ feature }) => !moduleId || moduleList.includes(feature.ownerId)).slice(0, 8).map(({ feature, score }) => Object.freeze({ ...feature, score }))),
+    features: Object.freeze(scopedFeatures.slice(0, 8).map(({ feature, score }) => Object.freeze({ ...feature, score }))),
     contracts: Object.freeze(relevantContracts),
     risks: Object.freeze(risks)
   });

@@ -2,6 +2,17 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { applyUsagePresence, approvalComponents, commandDefinition, createProgressReporter, formatQuestionResult, formatUsageResult, imageUrlsForAttachments, isReplyToActiveStatus, modelAutocompleteChoices, reasoningAutocompleteChoices, safeStatusChunks, statusChunks, usagePresenceText } from "../src/bot.mjs";
 
+test('usage summary distinguishes observed tools and requested effort from model turns', () => {
+  const text = formatQuestionResult('bounded task', { exitCode: 0, message: 'done', usageSummary: {
+    observedToolCalls: 2, firstContext: 100, peakContext: 200, threadInputTokens: 300,
+    threadOutputTokens: 10, reportedModel: null, requestedEffort: 'medium'
+  } });
+  assert.match(text, /工具 2 次/);
+  assert.match(text, /回報模型 未知/);
+  assert.match(text, /要求 effort medium/);
+  assert.match(text, /非逐輪分佈/);
+});
+
 test("progress cards show sanitized CLI-style activity as Discord subtext", async () => {
   const edits = [];
   const progress = createProgressReporter({

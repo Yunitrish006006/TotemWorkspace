@@ -62,7 +62,7 @@ const TOOLS = Object.freeze([
       query: { type: "string", minLength: 1 },
       audience: { type: "string", enum: ["primary", "discovery", "implementation", "verification", "explorer", "architect", "worker", "reviewer"], default: "primary" },
       module_id: { type: ["string", "null"], default: null },
-      max_tokens: { type: "integer", minimum: 1000, maximum: 40000, default: 8000 },
+      max_tokens: { type: "integer", minimum: 1000, maximum: 40000, default: 3000 },
       include_code: { type: "boolean", default: true }
     }, ["query"])
   },
@@ -109,7 +109,7 @@ function load() {
 
 function toolResult(value, detail) {
   const output = toolOutput(value, detail);
-  return { content: [{ type: "text", text: output.text }], structuredContent: output.value, isError: false };
+  return { content: [{ type: "text", text: "Result available in structuredContent." }], structuredContent: output.value, isError: false };
 }
 
 function toolError(error) {
@@ -207,7 +207,7 @@ function callTool(name, args = {}) {
         knowledge,
         audience: args.audience ?? "primary",
         moduleId: args.module_id ?? null,
-        maxTokens: args.max_tokens ?? 8000,
+        maxTokens: args.max_tokens ?? 3000,
         includeCode: args.include_code !== false
       });
       if (pack.codeIndex?.freshness && pack.codeIndex.freshness.mode !== "fresh") {

@@ -19,6 +19,7 @@ const usage = (general, spark, checkedAt = now) => ({ checkedAt, rateLimitsByLim
 const policy = values => resolveModelPolicy({ plan, models, usage: usage(10, 10), now, ...values });
 assert.equal(policy().coordinator.model, SPARK_MODEL);
 assert.equal(policy().mode, 'lightweight-preferred');
+assert.equal(policy({ requestedEffort: 'xhigh' }).coordinator.effort, 'medium');
 assert.equal(policy().routing[1].model, DEFAULT_STRONG_MODEL);
 assert.equal(policy({ usage: usage(100, 1) }).mode, 'spark-only');
 assert.equal(policy({ usage: usage(100, 100) }).mode, 'blocked');
@@ -33,7 +34,8 @@ assert.equal(policy({ escalation: 'non-local-failure' }).coordinator.model, DEFA
 assert.equal(policy({ escalation: 'non-local-failure', usage: usage(100, 1) }).mode, 'blocked');
 assert.equal(policy({ usage: usage(100, 1, now + 1) }).quotaEvidence.general.status, 'unknown');
 assert.equal(policy({ usage: usage(100, 1, now - QUOTA_MAX_AGE_MS - 1) }).quotaEvidence.general.status, 'unknown');
-assert.equal(policy({ requestedEffort: 'high' }).coordinator.effort, 'high');
+assert.equal(policy({ requestedEffort: 'high' }).coordinator.effort, 'medium');
+assert.equal(policy({ requestedModel: DEFAULT_STRONG_MODEL, requestedEffort: 'high' }).coordinator.effort, 'high');
 assert.equal(policy({ requestedEffort: 'ultra' }).coordinator.effort, 'medium');
 assert.ok(isLightweightModel({ id: 'bounded-coder', capabilities: { lightweight: true } }));
 assert.equal(policy({ contextTokens: 5000, models: [{ ...models[1], contextWindow: 4000 }, models[0]] }).coordinator.model, DEFAULT_STRONG_MODEL);

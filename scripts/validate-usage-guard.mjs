@@ -1,0 +1,45 @@
+import assert from 'node:assert/strict';
+import { createUsageGuard } from '../intelligence/agent-runtime/usage-guard.mjs';
+import { buildDeveloperInstructions } from '../intelligence/agent-runtime/runtime-policy.mjs';
+import { buildOrchestrationPlan } from '../intelligence/orchestration-plan.mjs';
+import { taskIntent } from '../intelligence/task-intent.mjs';
+
+const guard = createUsageGuard({ maxToolCalls: 4 });
+const tool = id => ({ method: 'item/started', params: { item: { id, type: 'mcpToolCall' } } });
+assert.equal(guard.observe(tool('one')), null);
+assert.equal(guard.observe(tool('one')), null);
+assert.equal(guard.observe(tool('two')).action, 'checkpoint');
+assert.equal(guard.observe(tool('three')), null);
+assert.equal(guard.observe(tool('four')).action, 'stop');
+assert.equal(guard.observe(tool('four')), null);
+assert.equal(guard.snapshot().observedToolCalls, 4);
+assert.equal(guard.snapshot().modelTurns, null);
+const contextGuard = createUsageGuard();
+const event = { method: 'thread/tokenUsage/updated', params: { tokenUsage: {
+  last: { inputTokens: 65000 }, total: { inputTokens: 1000000, cachedInputTokens: 900000, outputTokens: 5000 }
+} } };
+assert.equal(contextGuard.observe(event).action, 'stop');
+assert.equal(contextGuard.snapshot().threadInputTokens, 1000000);
+assert.equal(contextGuard.observe(event), null);
+assert.equal(contextGuard.snapshot().threadInputTokens, 1000000);
+const plan = buildOrchestrationPlan({ query: 'Fix README typo', moduleId: 'totem-remnant' });
+assert.deepEqual(plan.affectedModules, ['totem-remnant']);
+assert.equal(plan.waves.length, 1);
+assert.equal(plan.execution.sharedContractStabilizationRequired, false);
+assert.equal(plan.contextHints.modelPreference, 'lightweight-preferred');
+const unknown = buildOrchestrationPlan({ query: 'typo in README' });
+assert.equal(unknown.writeScope.length, 0);
+const readOnly = buildOrchestrationPlan({ query: 'Show TotemCore configuration' });
+assert.deepEqual(readOnly.affectedModules, ['totem-core']);
+assert.equal(readOnly.writeScope.length, 0);
+assert.ok(readOnly.waves.every(wave => !wave.writeAllowed));
+assert.equal(taskIntent('fix README typo and delete implementation').documentationOnly, false);
+assert.ok(buildOrchestrationPlan({ query: 'fix TotemCore README typo and delete implementation' }).writeScope.some(scope => scope.moduleId === 'totem-core'));
+const production = buildOrchestrationPlan({ query: 'Fix README typo', moduleId: 'totem-core', changedFiles: ['TotemCore/src/main/Api.java'] });
+assert.ok(production.execution.sharedContractStabilizationRequired);
+const instructions = buildDeveloperInstructions({ plan: { ...plan, query: 'DO_NOT_DUPLICATE_QUERY', rationale: { redundant: 'x'.repeat(10000) } } });
+assert.ok(!instructions.includes('DO_NOT_DUPLICATE_QUERY'));
+assert.ok(!instructions.includes('x'.repeat(10000)));
+assert.ok(instructions.includes('TotemRemnant/**'));
+assert.ok(instructions.includes('fork_turns="none"'));
+console.log('Usage guard, bounded routing and compact runtime instructions passed.');

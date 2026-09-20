@@ -104,13 +104,13 @@ assert.equal(small.contextHints.modelPreference, "lightweight-preferred");
 assert.equal(small.execution.sharedContractStabilizationRequired, false);
 assert.equal(small.independentReviewRequired, false); // Merely having consumers does not mean a local typo changes their contract.
 assert.ok(small.writeScope.every((scope) => scope.moduleId === "totem-alpha"));
-assert.ok(small.readScope.some((scope) => scope.moduleId === "totem-beta"));
+assert.ok(small.readScope.some(scope => scope.moduleId === 'totem-beta'));
 
 const isolatedKnowledge = { ...knowledge, contracts: [], contractById: new Map(), features: [], featureById: new Map() };
 const isolated = buildOrchestrationPlan({ query: "small typo", moduleId: "totem-alpha", knowledge: isolatedKnowledge });
 assert.equal(isolated.contextHints.modelPreference, "lightweight-preferred");
 assert.equal(isolated.independentReviewRequired, false);
-assert.equal(isolated.waves.length, 3);
+assert.equal(isolated.waves.length, 1);
 assert.ok(isolated.waves.every((wave) => wave.contextBudget <= 8000));
 const medium = buildOrchestrationPlan({ query: "module-local rendering fix", moduleId: "totem-beta", knowledge: isolatedKnowledge });
 assert.deepEqual(medium.writeScope.map((entry) => entry.moduleId), ["totem-beta"]);

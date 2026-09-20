@@ -62,8 +62,11 @@ export function resolveModelPolicy({ plan, models, usage, requestedModel, reques
   if (strongNeeded) reasons.add(escalation ? 'escalation-required' : 'strong-reasoning-required');
   if (!selected) reasons.add(strongNeeded ? 'required-reasoning-unavailable' : 'no-capable-model-available');
   const effort = (entry, preferred = 'medium') => {
+    preferred ??= 'medium';
+    if (isLightweightModel(entry) && !['low', 'medium'].includes(preferred)) preferred = 'medium';
     const supported = entry?.supportedReasoningEfforts?.map(value => typeof value === 'string' ? value : value.reasoningEffort);
-    if (!supported?.length) return entry?.defaultReasoningEffort ?? null;
+    if (!supported?.length) return isLightweightModel(entry) ? null : entry?.defaultReasoningEffort ?? null;
+    if (isLightweightModel(entry)) return supported.includes(preferred) ? preferred : supported.includes('medium') ? 'medium' : supported.includes('low') ? 'low' : null;
     return supported.includes(preferred) ? preferred : supported.includes(entry?.defaultReasoningEffort)
       ? entry.defaultReasoningEffort : supported.includes('medium') ? 'medium' : supported[0];
   };

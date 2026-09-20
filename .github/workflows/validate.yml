@@ -30,7 +30,7 @@ jobs:
       - name: Validate coordination snapshot
         run: node scripts/validate-workspace.mjs
       - name: Validate compact output, evidence reuse and release preflight
-        run: node scripts/validate-token-efficiency.mjs
+        run: node scripts/validate-token-efficiency.mjs && node scripts/validate-usage-guard.mjs
       - name: Validate workspace intelligence
         run: node scripts/validate-intelligence.mjs
       - name: Validate production-code-only inventory

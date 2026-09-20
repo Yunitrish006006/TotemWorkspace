@@ -274,6 +274,31 @@ test("an expired saved thread is replaced when its next turn cannot start", asyn
   assert.deepEqual(requestedImageUrls, ["https://cdn.discordapp.com/attachments/1/2/screenshot.png"]);
 });
 
+test('usage context limit interrupts without claiming completion or replaying', async () => {
+  let interrupted = 0;
+  const child = new FakeAppServer((request, respond, notify) => {
+    if (request.method === 'initialize') respond({ id: request.id, result: {} });
+    else if (request.method === 'thread/start') respond({ id: request.id, result: { thread: { id: 'budget-thread' } } });
+    else if (request.method === 'turn/start') {
+      respond({ id: request.id, result: { turn: { id: 'budget-turn' } } });
+      notify({ method: 'thread/tokenUsage/updated', params: { threadId: 'budget-thread', tokenUsage: {
+        last: { inputTokens: 65000 }, total: { inputTokens: 100000, outputTokens: 1000 }
+      } } });
+    } else if (request.method === 'turn/interrupt') {
+      interrupted += 1;
+      respond({ id: request.id, result: {} });
+      notify({ method: 'turn/completed', params: { turn: { status: 'interrupted', items: [] } } });
+    }
+  });
+  const runner = new CodexRunner({ leaseDirectory, probeRuntime: fakeRuntime, planImpl: () => ({ waves: [] }), maxRuntimeMs: 5000, spawnImpl: () => child });
+  const result = await runner.execute({ key: 'budget-test', workspace: '/srv/nexus', prompt: 'Inspect bounded files' });
+  assert.equal(interrupted, 1);
+  assert.equal(result.exitCode, 1);
+  assert.equal(result.usageSummary.stopped, true);
+  assert.equal(result.usageSummary.modelTurns, null);
+  assert.match(result.message, /paused, not completed/);
+});
+
 test("zero max runtime leaves a Codex task running until it completes", async () => {
   const child = new FakeAppServer((request, respond, notify) => {
     if (request.method === "initialize") respond({ id: request.id, result: {} });

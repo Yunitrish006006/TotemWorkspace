@@ -60,7 +60,7 @@ function pruneCodeResults(results, audience) {
 }
 
 function clampByApproxTokens(value, maxTokens) {
-  const maxChars = Math.max(2_000, Math.min(Number(maxTokens) || 8_000, 40_000) * 4);
+  const maxChars = Math.max(2_000, Math.min(Number(maxTokens) || 3_000, 40_000) * 4);
   let text = JSON.stringify(value, null, 2);
   if (text.length <= maxChars) return { text, truncated: false };
 
@@ -79,7 +79,7 @@ function clampByApproxTokens(value, maxTokens) {
   return { text, truncated: true };
 }
 
-export function buildContextPack(query, { audience = "primary", moduleId = null, maxTokens = 8_000, includeCode = true, knowledge = loadKnowledge(), orchestrationPlan = null } = {}) {
+export function buildContextPack(query, { audience = "primary", moduleId = null, maxTokens = 3_000, includeCode = true, knowledge = loadKnowledge(), orchestrationPlan = null } = {}) {
   const resolved = resolveTask(query, knowledge, { moduleId });
   const selectedModuleIds = orchestrationPlan
     ? [...new Set((orchestrationPlan.readScope ?? []).map((scope) => scope.moduleId).concat(orchestrationPlan.affectedModules ?? []))]
@@ -153,10 +153,17 @@ export function buildContextPack(query, { audience = "primary", moduleId = null,
     ]
   };
 
+  const budget = Math.max(1000, Math.min(Number(maxTokens) || 3000, 40000)) * 4;
+  let pruned = false;
+  while (pack.codeResults.length && JSON.stringify(pack).length > budget) {
+    pack.codeResults.pop();
+    pruned = true;
+  }
   const rendered = clampByApproxTokens(pack, maxTokens);
   return Object.freeze({
     ...pack,
     rendered: rendered.text,
-    truncated: rendered.truncated
+    truncated: pruned || rendered.truncated,
+    constraintsExceedBudget: JSON.stringify(pack).length > budget
   });
 }

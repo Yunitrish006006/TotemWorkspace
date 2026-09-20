@@ -2,9 +2,11 @@
 
 ## 1. 工具輸出
 
-MCP 預設 `response_detail: "compact"`，CLI 預設 compact；移除 context pack 的重複 `rendered` 表示及 orchestration 的相同 `executionWaves` 別名，並縮排壓縮。保留 `waves`、全部執行／安全／發布約束、風險、驗證與獨有證據。MCP 的文字與 structuredContent 仍提供相同內容，兼容兩類客戶端。
+MCP 預設 `response_detail: "compact"`，CLI 預設 compact；移除 context pack 的重複 `rendered` 表示及 orchestration 的相同 `executionWaves` 別名，並縮排壓縮。保留 `waves`、全部執行／安全／發布約束、風險、驗證與獨有證據。MCP 的資料只放在 `structuredContent`；文字僅提示資料位置，不再重複整包 JSON。客戶端必須讀取 structuredContent；純文字需求使用 CLI。
 
 需要舊診斷欄位時，MCP 使用 `response_detail: "full"`，CLI 加 `--full`。這是傳輸層變更，既有 Bridge／runtime 使用的核心物件不因精簡而丟失欄位。已啟動的 MCP server 要重新載入程式才會使用新格式。
+
+Context pack 預設 3,000 近似 tokens；先減少程式碼檢索片段，不截斷結構化安全／執行約束。必要約束超過預算時以 `constraintsExceedBudget` 明示；這是目標預算，不是假稱的硬上限。Runtime developer instructions 只攜帶必要約束和本次模型選擇，不嵌入完整 plan、rationale、catalog 或 quota 明細；完整證據仍可按需取得。
 
 ## 2. 限定檢索
 
@@ -16,6 +18,24 @@ node scripts/totem-intelligence.mjs context "調整 CI 驗證輸出" primary --m
 ```
 
 明確 focus 限制模糊命中；明確提到的其他模組仍保留，之後由既有 impact 加入受影響消費者與必要約束。Workspace tooling 不需要刷新整套遊戲模組索引。沒有足夠資訊時維持原本自動解析，不能為省 token 猜測縮小風險範圍。
+
+README 錯字與有界唯讀查詢不因全域模組描述而升級成全套變更。單模組低風險任務用一個 bounded-task 階段；階段不是代理。未知 README 擁有者不猜整個 workspace，先確認目標。功能／契約／安全變更及混合請求保留 impact、必要驗證與獨立審查；來源檔案變更不能冒充文件修改。
+
+## 用量護欄與工作方式
+
+- 合併同一批唯讀查詢；工具只輸出必要欄位，完整 log 留在檔案。等待同一個 CI run，不反覆讀取沒有變動的結果；失敗才取該步驟 log。
+- 主線保留整合決策；只在輸入、檔案、驗收條件可界定、工作可隔離且節省超過啟動成本時委派。必要獨立審查例外，但仍只帶有界上下文，不繼承整段對話。
+- 共用 runtime 在觀察到 40 次工具操作或 48K input context 時發出 checkpoint；80 次或 64K 時中斷並回報未完成，不自動重播。CLI 直跑由 AGENTS 工作規則約束，不宣稱有同樣的程式硬限制。
+- Input/output 比超過 100 且 input 至少 20K 時一次告警；不以比值單獨判定失敗。token totals 採 runtime 回報的 thread 累計值，不把逐次累計再相加。重複工具 ID 不重算。
+- `usageSummary` 區分觀察到的工具次數、未知的模型輪數、回報模型與要求 effort。Discord 顯示摘要；沒有 turn_context 證據就不輸出逐輪模型分佈。快取 token 不是零成本的證據，token 也不是帳單金額。
+- 輕量模型在 catalog 宣告支援時使用 low／medium；不延續舊的 xhigh 偏好。實際跨模組契約、安全或證據衝突才升級。Spark 不在可用清單時不得硬編不存在的模型；本機已列出的 Luna 可作替代，但不能宣稱使用 Spark 獨立配額。
+- 不因省 token 降低 sandbox、寫入／外部動作核准或發布驗證。`approval_mode="approve"` 不等於已證明每次詢問；未重現前不改權限。設定欄位依 [官方 MCP 文件](https://developers.openai.com/codex/mcp) 核對。
+
+## Session 保存與生效邊界
+
+`node scripts/session-storage-report.mjs` 只讀檔案大小／時間，報告總量與超過 90 天的數量，不讀對話內容、不刪除檔案。保留最近 90 天的輪替僅為待核准政策；先備份並排除仍在使用的 session，再另行授權清理，不部署自動刪除 timer。
+
+目前 source 修改需重新啟動相關 MCP／Discord runtime 才生效；不得為此打斷進行中的任務。全域 Codex 預設模型僅影響後續選擇，不代表既有對話已切換模型。服務重啟、push 與任何模組上架都不包含在本次最佳化內。
 
 ## 3. 任務證據摘要
 

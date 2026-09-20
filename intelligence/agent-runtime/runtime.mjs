@@ -2,6 +2,7 @@ import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import path from "node:path";
 import { buildDeveloperInstructions } from "./runtime-policy.mjs";
+import { createUsageGuard } from "./usage-guard.mjs";
 import { boundedRuntimeContext, constrainedWriteRoots, executionWorkspace } from "./orchestration-context.mjs";
 import { acquireRuntimeWriteLease } from "./write-leases.mjs";
 import { buildOrchestrationPlan } from "../orchestration-plan.mjs";
@@ -650,6 +651,7 @@ export class CodexRunner {
       let lastAgentMessage = "";
       let actualModel = null;
       let usage = null;
+      const usageGuard = createUsageGuard();
       const outputImagePaths = new Set();
       let lastError = "";
       let stderr = "";
@@ -751,6 +753,11 @@ export class CodexRunner {
       };
       const finish = async (result) => {
         if (settled) return;
+        result.usageSummary = { ...usageGuard.snapshot(), reportedModel: actualModel, requestedEffort: safeReasoningEffort };
+        if (result.usageSummary.stopped) {
+          result.exitCode = 1;
+          result.message = 'Usage limit reached; task paused, not completed. Preserve changes and continue with a bounded task after reviewing evidence.\n' + (result.message ?? '');
+        }
         settled = true;
         clearTimeout(timer);
         this.#runs.delete(key);
@@ -937,6 +944,10 @@ export class CodexRunner {
           return;
         }
         if (typeof message?.method === "string") {
+          const guardEvent = !message.params?.threadId || message.params.threadId === threadId
+            ? usageGuard.observe(message) : null;
+          if (guardEvent) safeProgress({ method: 'bridge/usageGuard', params: guardEvent });
+          if (guardEvent?.action === 'stop') cancel();
           if (message.method === "thread/tokenUsage/updated") usage = message.params?.tokenUsage ?? usage;
           if (message.method === "thread/started" || message.method === "turn/started") {
             actualModel = message.params?.turn?.model ?? message.params?.thread?.model ?? actualModel;

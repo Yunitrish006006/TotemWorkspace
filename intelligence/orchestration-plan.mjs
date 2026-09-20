@@ -1,4 +1,5 @@
 import { impactAnalysis, loadKnowledge, resolveTask, testPlan } from "./workspace-knowledge.mjs";
+import { taskIntent } from "./task-intent.mjs";
 
 const unique = (values) => [...new Set((values ?? []).filter(Boolean))].sort();
 const criticalTypes = new Set(["hard-core", "runtime-optional", "observer-provider", "eventbus"]);
@@ -17,6 +18,8 @@ export const EXECUTION_OPTIMIZATION = Object.freeze({
 export function buildOrchestrationPlan({ query, moduleId = null, featureId = null, changedModules = [], changedFiles = [], knowledge = loadKnowledge() } = {}) {
   if (typeof query !== "string" || !query.trim()) throw new Error("orchestration plan requires a query");
   const resolved = resolveTask(query, knowledge, { moduleId });
+  const intent = taskIntent(query);
+  if (changedFiles.some(file => !/\.(md|txt|rst)$/i.test(file))) intent.documentationOnly = false;
   const valid = (id) => id === "totem-workspace" || knowledge.moduleById.has(id);
   // A sibling starting directory is transport context, not an extra game-module write target for tooling work.
   const focus = resolved.modules.some((entry) => entry.id === "totem-workspace")
@@ -28,20 +31,22 @@ export function buildOrchestrationPlan({ query, moduleId = null, featureId = nul
     ...changedModules.filter(valid)
   ]);
   let impact = null;
-  if (writeModules.length || changedFiles.length) impact = impactAnalysis({ changedModules: writeModules, changedFiles }, knowledge);
+  if (!intent.documentationOnly && !intent.readOnly && (writeModules.length || changedFiles.length)) impact = impactAnalysis({ changedModules: writeModules, changedFiles }, knowledge);
   for (const id of impact?.touchedModules ?? []) if (!writeModules.includes(id)) writeModules.push(id);
   writeModules.sort();
   const affectedModules = unique([...writeModules, ...(impact?.impactedModules ?? [])]);
-  const contracts = unique([...(resolved.contracts ?? []).map((entry) => entry.id), ...(impact?.contracts ?? []).map((entry) => entry.id)])
+  const contracts = unique([...(intent.documentationOnly ? [] : resolved.contracts ?? []).map((entry) => entry.id), ...(impact?.contracts ?? []).map((entry) => entry.id)])
     .map((id) => knowledge.contractById.get(id)).filter(Boolean);
-  const requiredValidation = testPlan({ query, changedModules: affectedModules, changedFiles }, knowledge);
-  const sharedChangeIntent = writeModules.includes("totem-core") || writeModules.length > 1
-    || /shared|contract|\bapi\b|protocol|observer|persistence|network|共享|協議|契約/i.test(query);
+  const requiredValidation = intent.documentationOnly
+    ? { modules: affectedModules, risks: [], validationCategories: ['documentation-consistency'], notes: [] }
+    : testPlan({ query, changedModules: affectedModules, changedFiles }, knowledge);
+  const sharedChangeIntent = !intent.documentationOnly && !intent.readOnly && (writeModules.includes("totem-core")
+    || /shared|contract|\bapi\b|protocol|observer|共享|協議|契約/i.test(query));
   const risks = unique([...resolved.risks, ...(sharedChangeIntent ? impact?.risks ?? [] : []), ...requiredValidation.risks,
     ...(/persist|storage|database|network|protocol|security|credential/i.test(query) ? ["high-risk-behavior"] : [])]);
   const critical = contracts.filter((entry) => criticalTypes.has(entry.type));
   const highRisks = risks.filter((risk) => highRiskTags.has(risk) || risk === "high-risk-behavior");
-  const sharedContractStabilizationRequired = (critical.length > 0 && sharedChangeIntent) || writeModules.includes("totem-core");
+  const sharedContractStabilizationRequired = sharedChangeIntent && (critical.length > 0 || writeModules.includes("totem-core"));
   const independentReviewRequired = writeModules.length > 1 || sharedContractStabilizationRequired || highRisks.length > 0
     || /refactor|runtime|orchestration|重構/i.test(query);
   const maxConcurrentWrites = sharedContractStabilizationRequired || highRisks.length ? 1 : Math.max(1, Math.min(2, writeModules.length));
@@ -49,9 +54,9 @@ export function buildOrchestrationPlan({ query, moduleId = null, featureId = nul
     .filter((id) => writeModules.includes(id)));
   if (writeModules.includes("totem-core") && !ownerModules.includes("totem-core")) ownerModules.unshift("totem-core");
   const wave = (id, modules, writeAllowed, dependsOn, goals, modelHint = "lightweight-preferred") => ({
-    id, phase: id, modules, writeAllowed, dependsOn, goals, required: true,
+    id, phase: id, modules, writeAllowed: writeAllowed && !intent.readOnly, dependsOn, goals, required: true,
     parallelizable: !writeAllowed || (maxConcurrentWrites > 1 && modules.length > 1),
-    maxConcurrentWrites: writeAllowed ? maxConcurrentWrites : 0,
+    maxConcurrentWrites: writeAllowed && !intent.readOnly ? maxConcurrentWrites : 0,
     modelHint, contextBudget: modelHint === "strong-reasoning-preferred" ? 12000 : 6000,
     parallelismBenefit: writeAllowed && maxConcurrentWrites > 1 ? "conditional-on-low-context-duplication" : "low"
   });
@@ -66,11 +71,15 @@ export function buildOrchestrationPlan({ query, moduleId = null, featureId = nul
   if (independentReviewRequired) waves.push(wave("independent-review", affectedModules, false, ["verification"],
     ["Obtain an actually independent review and record evidence; the executor chooses the mechanism."], highRisks.length ? "strong-reasoning-preferred" : "lightweight-preferred"));
   const scope = (ids) => ids.map((id) => ({ moduleId: id, paths: [`${id === "totem-workspace" ? "TotemWorkspace" : knowledge.moduleById.get(id)?.repoName ?? id}/**`] }));
+  if (!independentReviewRequired && !sharedContractStabilizationRequired && writeModules.length <= 1) {
+    waves.splice(0, waves.length, wave('bounded-task', affectedModules, !intent.readOnly && writeModules.length > 0, [],
+      ['Inspect bounded inputs, execute the task, and validate changed inputs; ask for ownership when unresolved.']));
+  }
   const scoreFactors = { moduleSpan: Math.max(0, affectedModules.length - 1) * 2, contractSurface: contracts.length, highRisk: highRisks.length * 2 };
   return Object.freeze({
     schemaVersion: 2, query: query.trim().replace(/\s+/g, " "),
     affectedModules, affectedFeatures: unique(resolved.features.map((feature) => feature.id)),
-    affectedComponents: resolved.components ?? [], contracts, readScope: scope(affectedModules), writeScope: scope(writeModules),
+    affectedComponents: resolved.components ?? [], contracts, readScope: scope(affectedModules), writeScope: intent.readOnly ? [] : scope(writeModules),
     impactedConsumers: affectedModules.filter((id) => !ownerModules.includes(id) && (!writeModules.includes(id) || sharedContractStabilizationRequired)),
     execution: { parallelismAllowed: true, maxConcurrentWrites, sharedContractStabilizationRequired, moduleOwnershipRequired: true, overlappingWritesAllowed: false },
     dependencyOrdering: waves.flatMap((entry) => entry.dependsOn.map((dependency) => ({ before: dependency, after: entry.id }))),

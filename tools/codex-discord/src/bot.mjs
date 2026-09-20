@@ -427,6 +427,10 @@ export function formatQuestionResult(task, result, progressLines = []) {
     "**Codex 回覆**",
     `${resultPrefix(result)}${result.message}`
   );
+  if (result.usageSummary) {
+    const summary = result.usageSummary;
+    lines.push('', `用量：工具 ${summary.observedToolCalls} 次｜context ${summary.firstContext ?? '?'}→${summary.peakContext}｜thread input/output ${summary.threadInputTokens ?? '?'}/${summary.threadOutputTokens ?? '?'}｜回報模型 ${summary.reportedModel ?? '未知'}｜要求 effort ${summary.requestedEffort ?? '預設'}（非逐輪分佈）`);
+  }
   return lines.join("\n");
 }
 
@@ -682,6 +686,9 @@ export function createProgressReporter({ workspaceName, task, model, reasoningEf
       activity = "正在整理最終回覆…";
     } else if (method === "bridge/sessionReset") {
       activity = "舊工作階段無法恢復，正在建立新的工作階段…";
+    } else if (method === "bridge/usageGuard") {
+      activity = params.action === 'stop' ? '已達用量上限，正在暫停；任務尚未完成。' : '用量提醒：請收斂工作並保存檢查點。';
+      setCliProgress('usage-guard', activity, 'append');
     } else if (method === "bridge/gradleAutoApproved") {
       activity = "已自動同意 Gradle 編譯／測試，正在繼續…";
     } else if (method === "bridge/allPermissionsAutoApproved") {

@@ -45,7 +45,7 @@ assert.ok(output[0].result.tools.every(t => t.inputSchema.properties.response_de
 assert.equal(output[1].result.isError, false);
 assert.equal(output[1].result.structuredContent.rendered, undefined);
 assert.ok(output[2].result.structuredContent.rendered);
-assert.deepEqual(JSON.parse(output[1].result.content[0].text), output[1].result.structuredContent);
+assert.equal(output[1].result.content[0].text, 'Result available in structuredContent.');
 assert.deepEqual(output[1].result.structuredContent.routing, output[2].result.structuredContent.routing);
 
 const temp = fs.mkdtempSync(path.join(os.tmpdir(),'totem-token-efficiency-'));
