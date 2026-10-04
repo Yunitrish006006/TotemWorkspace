@@ -8,7 +8,7 @@ const config = loadConfig();
 await mkdir(config.stateDir, { recursive: true, mode: 0o700 });
 const sessions = new SessionStore(config.stateDir);
 await sessions.load();
-const runner = new CodexRunner({ stateDir: config.stateDir, maxRuntimeMs: config.maxRuntimeMs });
+const runner = new CodexRunner({ stateDir: config.stateDir, maxRuntimeMs: config.maxRuntimeMs, usageGuardMode: config.usageGuardMode });
 const catalogWorkspace = config.workspaces.values().next().value;
 const models = await runner.listModels({ workspace: catalogWorkspace.path });
 if (models.length === 0) throw new Error("Codex did not report any picker-visible models for this login");

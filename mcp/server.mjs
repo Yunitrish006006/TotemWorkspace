@@ -5,6 +5,7 @@ import { buildCodeIndex, loadCodeIndex, refreshCodeIndex, searchCode } from "../
 import { buildContextPack } from "../intelligence/context-pack.mjs";
 import { defaultReposRoot, graphForModule, impactAnalysis, knowledgeSummary, loadKnowledge, resolveTask, testPlan, workspaceStatus } from "../intelligence/workspace-knowledge.mjs";
 import { buildOrchestrationPlan } from "../intelligence/orchestration-plan.mjs";
+import { createNativeAllocation } from "../intelligence/native-allocation.mjs";
 import { renderFlutterGraph } from "../scripts/render-flutter-graph.mjs";
 
 const SERVER_NAME = "totem-workspace-intelligence";
@@ -19,6 +20,35 @@ function jsonSchema(properties, required = []) {
 }
 
 const TOOLS = Object.freeze([
+  {
+    name: "allocation_start",
+    description: "Start a native Codex conversation task record and return an advisory model allocation card using the live catalog and comparable reported outcomes. Does not start model execution or switch the host model. Task text is never persisted.",
+    inputSchema: jsonSchema({
+      query: { type: "string", minLength: 1, maxLength: 120000 },
+      module_id: { type: ["string", "null"], default: null },
+      requested_model: { type: ["string", "null"], default: null },
+      requested_effort: { type: ["string", "null"], enum: [null, "low", "medium", "high", "xhigh", "max", "ultra"], default: null }
+    }, ["query"])
+  },
+  {
+    name: "allocation_status",
+    description: "Read a native task allocation/progress/result card, or update its session-reported stage. Stage reports are not proof of dependency completion or validation.",
+    inputSchema: jsonSchema({
+      task_id: { type: "string", pattern: "^[a-f0-9-]{36}$" },
+      reported_stage: { type: ["string", "null"], enum: [null, "discovery", "implementation", "verification", "independent-review"], default: null }
+    }, ["task_id"])
+  },
+  {
+    name: "allocation_feedback",
+    description: "Record one immutable native task outcome. Separate quality failures from infrastructure/cancel/quota outcomes. All caller-supplied evidence is session-reported, never authenticated model telemetry or a verified completion. Only advisory upward suggestions can learn from these reports.",
+    inputSchema: jsonSchema({
+      task_id: { type: "string", pattern: "^[a-f0-9-]{36}$" },
+      outcome: { type: "string", enum: ["success", "quality-failure", "infrastructure-failure", "cancelled", "quota-exhausted", "incomplete"] },
+      reported_model: { type: ["string", "null"], default: null },
+      validation: { type: "string", enum: ["unknown", "passed", "failed", "not-required"], default: "unknown" },
+      review: { type: "string", enum: ["unknown", "passed", "failed", "not-required"], default: "unknown" }
+    }, ["task_id", "outcome"])
+  },
   {
     name: "resolve_task",
     description: "Resolve a Totem development request to likely modules, feature branches, dependency contracts, risks, and bounded evidence before broad repository reading.",
@@ -107,6 +137,11 @@ function load() {
   return loadKnowledge();
 }
 
+let nativeAllocation;
+function native() {
+  return nativeAllocation ??= createNativeAllocation({ knowledge: load() });
+}
+
 function toolResult(value, detail) {
   const output = toolOutput(value, detail);
   return { content: [{ type: "text", text: "Result available in structuredContent." }], structuredContent: output.value, isError: false };
@@ -180,6 +215,9 @@ function safeRefresh(knowledge, modules) {
 }
 
 function callTool(name, args = {}) {
+  if (name === "allocation_start") return native().start(args);
+  if (name === "allocation_status") return native().status(args);
+  if (name === "allocation_feedback") return native().feedback(args);
   const knowledge = load();
   switch (name) {
     case "resolve_task":
@@ -275,7 +313,7 @@ function failure(id, code, message, data = undefined) {
 }
 
 const lines = readline.createInterface({ input: process.stdin, crlfDelay: Infinity });
-lines.on("line", (line) => {
+lines.on("line", async (line) => {
   if (!line.trim()) return;
   let request;
   try {
@@ -309,7 +347,7 @@ lines.on("line", (line) => {
       try {
         const args = request.params?.arguments ?? {};
         if (args.response_detail !== undefined && !["compact", "full"].includes(args.response_detail)) throw new Error("Invalid response_detail");
-        success(id, toolResult(callTool(request.params?.name, args), args.response_detail));
+        success(id, toolResult(await callTool(request.params?.name, args), args.response_detail));
       } catch (error) {
         success(id, toolError(error));
       }

@@ -1,6 +1,7 @@
 import { spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import path from 'node:path';
+import { routingStateFromThread } from './agent-runtime/turn-routing.mjs';
 import { isLightweightModel, isStrongReasoningModel } from './model-policy.mjs';
 
 const cleanId = value => typeof value === 'string' && /^[a-zA-Z0-9_.:/-]{1,100}$/.test(value) ? value : null;
@@ -31,13 +32,13 @@ function cleanModel(model) {
     available: model.available !== false,
     ...(Number.isFinite(model.contextWindow) ? { contextWindow: model.contextWindow } : {}),
     ...(Number.isFinite(model.costPerToken) ? { costPerToken: model.costPerToken } : {}),
-    capabilities: { lightweight: model.capabilities?.lightweight === true, strongReasoning: model.capabilities?.strongReasoning === true },
+    capabilities: { lightweight: model.capabilities?.lightweight === true, balanced: model.capabilities?.balanced === true, strongReasoning: model.capabilities?.strongReasoning === true },
     defaultReasoningEffort: cleanId(model.defaultReasoningEffort), supportedReasoningEfforts,
     inputModalities: (model.inputModalities ?? []).filter(value => ['text', 'image'].includes(value)) };
 }
 
 /** Read-only app-server discovery: never starts a thread or a model turn. */
-export async function probeCodexRuntime({ codexBin = 'codex', cwd, env = process.env, spawnImpl = spawn, spawnSyncImpl = spawnSync, timeoutMs = 15000 } = {}) {
+export async function probeCodexRuntime({ codexBin = 'codex', cwd, env = process.env, spawnImpl = spawn, spawnSyncImpl = spawnSync, timeoutMs = 15000, threadId = null } = {}) {
   const checkedAt = Date.now();
   let child;
   let timer;
@@ -78,7 +79,7 @@ export async function probeCodexRuntime({ codexBin = 'codex', cwd, env = process
     child.stderr.on('data', () => {}); // Drain diagnostics, never expose credentials/raw error text.
     child.stdout.on('data', chunk => {
       bytes += Buffer.byteLength(chunk);
-      if (bytes > 2 * 1024 * 1024) { fail(); return; }
+      if (bytes > (threadId ? 32 : 2) * 1024 * 1024) { fail(); return; }
       buffer += chunk.toString();
       let end;
       while ((end = buffer.indexOf('\n')) >= 0) {
@@ -136,13 +137,20 @@ export async function probeCodexRuntime({ codexBin = 'codex', cwd, env = process
       }
       return false;
     };
-    const [modelResult, usageResult, mcpResult] = await Promise.allSettled([readModels(), request('account/rateLimits/read'), readMcp()]);
+    const [modelResult, usageResult, mcpResult, threadResult] = await Promise.allSettled([
+      readModels(), request('account/rateLimits/read'), readMcp(),
+      threadId ? request('thread/read', { threadId, includeTurns: true }).then(result => {
+        if (result?.thread?.id !== threadId || !Array.isArray(result.thread.turns)) throw new Error('Thread history unavailable');
+        return routingStateFromThread(result.thread);
+      }) : Promise.resolve(null)
+    ]);
     const models = modelResult.status === 'fulfilled' ? modelResult.value : [];
     capabilities.modelCatalogAvailable = modelResult.status === 'fulfilled';
     capabilities.astraAvailable = models.some(model => !model.hidden && model.available && isStrongReasoningModel(model));
     capabilities.lightweightAvailable = models.some(model => !model.hidden && model.available && isLightweightModel(model));
     capabilities.mcpAvailable = mcpResult.status === 'fulfilled' && mcpResult.value;
     return { models, capabilities,
+      ...(threadId ? { threadRoutingState: threadResult.status === 'fulfilled' ? threadResult.value : null } : {}),
       usage: cleanUsage(usageResult.status === 'fulfilled' ? usageResult.value : null, checkedAt), checkedAt };
   } catch {
     return empty();

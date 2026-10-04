@@ -2,12 +2,13 @@ import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 import path from "node:path";
 import { buildDeveloperInstructions } from "./runtime-policy.mjs";
-import { createUsageGuard } from "./usage-guard.mjs";
+import { userInputFromRequest, userInputResponse } from "./user-input.mjs";
+import { createUsageGuard, validateUsageGuardMode } from "./usage-guard.mjs";
 import { boundedRuntimeContext, constrainedWriteRoots, executionWorkspace } from "./orchestration-context.mjs";
 import { acquireRuntimeWriteLease } from "./write-leases.mjs";
 import { buildOrchestrationPlan } from "../orchestration-plan.mjs";
 import { loadKnowledge } from "../workspace-knowledge.mjs";
-import { resolveModelPolicy } from "../model-policy.mjs";
+import { prepareTurnRouting, selectTurnPolicy } from "./turn-routing.mjs";
 import { probeCodexRuntime } from "../codex-runtime-probe.mjs";
 
 const MAX_PROMPT_LENGTH = 120_000;
@@ -76,20 +77,20 @@ export function imageInputs(imageUrls = []) {
   });
 }
 
-export function threadStartParams({ workspace, model = null, modelPolicy = null, orchestrationPlan = null, writableRoots = [workspace], readOnly = false }) {
+export function threadStartParams({ workspace, model = null, modelPolicy = null, orchestrationPlan = null, writableRoots = [workspace], readOnly = false, usageGuardMode = 'enforce' }) {
   return compactObject({
     cwd: workspace,
     approvalPolicy: "on-request",
     approvalsReviewer: "user",
     sandbox: readOnly ? "read-only" : "workspace-write",
-    developerInstructions: buildDeveloperInstructions({ modelPolicy, plan: orchestrationPlan }),
+    developerInstructions: buildDeveloperInstructions({ modelPolicy, plan: orchestrationPlan, usageGuardMode }),
     model
   });
 }
 
-export function threadResumeParams({ threadId, workspace, model = null, modelPolicy = null, orchestrationPlan = null, writableRoots = [workspace], readOnly = false }) {
+export function threadResumeParams({ threadId, workspace, model = null, modelPolicy = null, orchestrationPlan = null, writableRoots = [workspace], readOnly = false, usageGuardMode = 'enforce' }) {
   if (typeof threadId !== "string" || !threadId.trim()) throw new Error("Saved Codex session ID is invalid");
-  return compactObject({ threadId, ...threadStartParams({ workspace, model, modelPolicy, orchestrationPlan, writableRoots, readOnly }) });
+  return compactObject({ threadId, ...threadStartParams({ workspace, model, modelPolicy, orchestrationPlan, writableRoots, readOnly, usageGuardMode }) });
 }
 
 export function turnStartParams({ threadId, workspace, prompt, model = null, reasoningEffort = null, imageUrls = [], writableRoots = [workspace], readOnly = false }) {
@@ -261,8 +262,10 @@ export class CodexRunner {
   #env;
   #defaultPlanning;
   #leaseDirectory;
+  #usageGuardMode;
 
-  constructor({ maxRuntimeMs, spawnImpl = spawn, probeRuntime = probeCodexRuntime, planImpl = workspacePlan, codexBin = "codex", env = process.env, leaseDirectory } = {}) {
+  constructor({ maxRuntimeMs, spawnImpl = spawn, probeRuntime = probeCodexRuntime, planImpl = workspacePlan, codexBin = "codex", env = process.env, leaseDirectory, usageGuardMode = 'enforce' } = {}) {
+    this.#usageGuardMode = validateUsageGuardMode(usageGuardMode);
     this.#maxRuntimeMs = maxRuntimeMs;
     this.#spawn = spawnImpl;
     this.#probeRuntime = probeRuntime;
@@ -289,6 +292,10 @@ export class CodexRunner {
   approve(key, requestId, choice) {
     const run = this.#runs.get(key);
     return run?.approve(requestId, choice) ?? false;
+  }
+
+  answerUserInput(key, requestId, answers) {
+    return this.#runs.get(key)?.answerUserInput(requestId, answers) ?? false;
   }
 
   approveAll(key, requestId) {
@@ -582,18 +589,14 @@ export class CodexRunner {
     });
   }
 
-  async execute({ key, workspace, prompt, model = null, reasoningEffort = null, imageUrls = [], resumeSessionId = null, onSessionId = () => {}, onProgress = () => {}, onApproval = () => {}, onModelPolicy = () => {}, orchestrationPlan = null, modelPolicy = null, boundedContext = null, writableRoots = null, readOnly = false, autoApproveGradle = true }) {
+  async execute({ key, workspace, prompt, model = null, reasoningEffort = null, imageUrls = [], resumeSessionId = null, onSessionId = () => {}, onProgress = () => {}, onApproval = () => {}, onUserInput = null, onModelPolicy = () => {}, orchestrationPlan = null, modelPolicy = null, boundedContext = null, writableRoots = null, readOnly = false, autoApproveGradle = true }) {
     if (this.isRunning(key)) throw new Error("A Codex task is already running for this workspace session");
     const safePrompt = validatePrompt(prompt);
     let safeModel = validateModel(model);
     let safeReasoningEffort = validateReasoningEffort(reasoningEffort);
     const safeImageUrls = imageInputs(imageUrls).map((image) => image.url);
-    const plan = orchestrationPlan ?? this.#plan({ prompt: safePrompt, workspace });
-    if (!writableRoots) writableRoots = Array.isArray(plan?.writeScope) ? constrainedWriteRoots(plan) : this.#defaultPlanning ? [] : [workspace];
-    if (!writableRoots.length) readOnly = true;
-    if (!orchestrationPlan && this.#defaultPlanning && !boundedContext) boundedContext = boundedRuntimeContext(safePrompt, plan);
-    workspace = executionWorkspace(workspace, writableRoots, readOnly);
-    const releaseWriteLease = acquireRuntimeWriteLease(readOnly ? [] : writableRoots, { owner: key, lockDirectory: this.#leaseDirectory });
+    let plan;
+    let releaseWriteLease = () => {};
     let childStarted = false;
     let childClosed = false;
     let leaseReleaseError = null;
@@ -603,10 +606,22 @@ export class CodexRunner {
     this.#preflights.set(key, preflight);
     let policy;
     try {
-      const runtime = modelPolicy ? null : await this.#probeRuntime({ codexBin: this.#codexBin, cwd: workspace, env: this.#env, spawnImpl: this.#spawn });
-      policy = freezeDecision(modelPolicy ?? resolveModelPolicy({ plan, models: runtime.models, usage: runtime.usage,
-        requestedModel: safeModel, requestedEffort: safeReasoningEffort, hasImages: safeImageUrls.length > 0,
-        contextTokens: Math.ceil((safePrompt.length + buildDeveloperInstructions({ plan }).length
+      const runtime = modelPolicy && !resumeSessionId ? null : await this.#probeRuntime({
+        codexBin: this.#codexBin, cwd: workspace, env: this.#env, spawnImpl: this.#spawn, threadId: resumeSessionId });
+      if (resumeSessionId && !runtime?.threadRoutingState)
+        throw new Error("Cannot recover the previous task scope and capabilities. Retry history recovery or start a new session; no work was started.");
+      const routing = prepareTurnRouting({ text: safePrompt, newImages: safeImageUrls.length > 0,
+        state: { ...runtime?.threadRoutingState, resumed: Boolean(resumeSessionId) } });
+      if (resumeSessionId && this.#defaultPlanning && !orchestrationPlan && routing.unknownContinuation)
+        throw new Error("Cannot recover the previous task scope. Restate the task before resuming; no work was started.");
+      plan = orchestrationPlan ?? this.#plan({ prompt: routing.query, workspace });
+      if (!writableRoots) writableRoots = Array.isArray(plan?.writeScope) ? constrainedWriteRoots(plan) : this.#defaultPlanning ? [] : [workspace];
+      if (!writableRoots.length) readOnly = true;
+      if (!orchestrationPlan && this.#defaultPlanning && !boundedContext) boundedContext = boundedRuntimeContext(routing.query, plan);
+      workspace = executionWorkspace(workspace, writableRoots, readOnly);
+      policy = freezeDecision(modelPolicy ?? selectTurnPolicy({ routing, plan, models: runtime.models, usage: runtime.usage,
+        model: safeModel, effort: safeReasoningEffort,
+        extraContextTokens: Math.ceil((buildDeveloperInstructions({ plan, usageGuardMode: this.#usageGuardMode }).length
           + (typeof boundedContext === "string" ? boundedContext.length : boundedContext ? JSON.stringify(boundedContext).length : 0)) / 4) }));
       try { await onModelPolicy(policy); } catch { /* Status sinks must not change execution. */ }
       try { await onProgress({ method: "bridge/modelPolicy", params: policy }); } catch { /* Best-effort status. */ }
@@ -617,6 +632,7 @@ export class CodexRunner {
         error.modelPolicy = policy;
         throw error;
       }
+      releaseWriteLease = acquireRuntimeWriteLease(readOnly ? [] : writableRoots, { owner: key, lockDirectory: this.#leaseDirectory });
       safeModel = validateModel(policy.coordinator.model);
       safeReasoningEffort = validateReasoningEffort(policy.coordinator.effort);
     } catch (error) {
@@ -651,7 +667,11 @@ export class CodexRunner {
       let lastAgentMessage = "";
       let actualModel = null;
       let usage = null;
-      const usageGuard = createUsageGuard();
+      const usageGuard = createUsageGuard({ mode: this.#usageGuardMode });
+      const pendingGuardEvents = [];
+      const pendingCompletions = [];
+      let turnStartPending = false;
+      let guardTurnId = null;
       const outputImagePaths = new Set();
       let lastError = "";
       let stderr = "";
@@ -659,6 +679,7 @@ export class CodexRunner {
       let nextRequestId = 0;
       const requests = new Map();
       const pendingApprovals = new Map();
+      const pendingUserInputs = new Map();
       const sessionWrites = [];
       const pendingSteers = [];
       let steeringInFlight = false;
@@ -756,7 +777,11 @@ export class CodexRunner {
         result.usageSummary = { ...usageGuard.snapshot(), reportedModel: actualModel, requestedEffort: safeReasoningEffort };
         if (result.usageSummary.stopped) {
           result.exitCode = 1;
-          result.message = 'Usage limit reached; task paused, not completed. Preserve changes and continue with a bounded task after reviewing evidence.\n' + (result.message ?? '');
+          const state = result.usageSummary;
+          const detail = state.stopReason === 'context-limit'
+            ? `Active-turn context ${state.peakContext} reached the local ${state.maxContextTokens}-token limit.`
+            : `This task reached the local ${state.maxToolCalls}-tool-call limit.`;
+          result.message = `Local task budget reached; task paused, not completed. ${detail} This is not an account quota error. Preserve changes and continue with a bounded task after reviewing evidence.\n` + (result.message ?? '');
         }
         settled = true;
         clearTimeout(timer);
@@ -785,6 +810,7 @@ export class CodexRunner {
         if (threadId !== resumeSessionId) {
           sessionWrites.push(Promise.resolve(onSessionId(threadId)));
         }
+        turnStartPending = true;
         request("turn/start", turnStartParams({
           threadId,
           workspace,
@@ -796,6 +822,9 @@ export class CodexRunner {
           readOnly
         }), (message) => {
           if (message.error) {
+            turnStartPending = false;
+            pendingGuardEvents.length = 0;
+            pendingCompletions.length = 0;
             if (fromSavedSession && !resetSavedSession && !turnId && !workStarted && expiredSession(message)) {
               resetSavedSession = true;
               safeProgress({ method: "bridge/sessionReset", params: { reason: "The saved session expired before its turn could start." } });
@@ -811,11 +840,17 @@ export class CodexRunner {
             return;
           }
           turnId = resolvedTurnId;
+          guardTurnId = resolvedTurnId;
+          turnStartPending = false;
+          for (const event of pendingGuardEvents.splice(0)) observeActiveTurnUsage(event);
+          for (const event of pendingCompletions.splice(0)) {
+            if (event.params?.turn?.id === guardTurnId) completeConfirmedTurn(event);
+          }
           flushSteers();
         });
       };
       const startNewThread = () => {
-        request("thread/start", threadStartParams({ workspace, model: safeModel, modelPolicy: policy, orchestrationPlan: plan, writableRoots, readOnly }), (message) => {
+        request("thread/start", threadStartParams({ workspace, model: safeModel, modelPolicy: policy, orchestrationPlan: plan, writableRoots, readOnly, usageGuardMode: this.#usageGuardMode }), (message) => {
           if (message.error) {
             fail(rpcError(message));
             return;
@@ -834,7 +869,7 @@ export class CodexRunner {
           startNewThread();
           return;
         }
-        request("thread/resume", threadResumeParams({ threadId: resumeSessionId, workspace, model: safeModel, modelPolicy: policy, orchestrationPlan: plan, writableRoots, readOnly }), (message) => {
+        request("thread/resume", threadResumeParams({ threadId: resumeSessionId, workspace, model: safeModel, modelPolicy: policy, orchestrationPlan: plan, writableRoots, readOnly, usageGuardMode: this.#usageGuardMode }), (message) => {
           if (message.error) {
             if (!expiredSession(message)) { fail(rpcError(message)); return; }
             resetSavedSession = true;
@@ -850,6 +885,15 @@ export class CodexRunner {
           }
           startTurn(resolvedThreadId, true);
         });
+      };
+      const answerUserInput = (requestId, answers) => {
+        const pending = pendingUserInputs.get(String(requestId));
+        if (!pending || settled || cancelled) return false;
+        let result;
+        try { result = userInputResponse(pending.input, answers); } catch { return false; }
+        if (!send({ id: pending.rpcId, result })) return false;
+        pendingUserInputs.delete(String(requestId));
+        return true;
       };
       const respondApproval = (requestId, choice) => {
         const approval = pendingApprovals.get(String(requestId));
@@ -899,7 +943,43 @@ export class CodexRunner {
           void terminateChild().catch(fail);
         }
       };
-      const run = { modelPolicy: policy, cancel, approve: respondApproval, approveAll: enableAutoApproval, steer: enqueueSteer };
+      const observeActiveTurnUsage = (event) => {
+        if (settled) return;
+        const params = event.params ?? {};
+        if (params.threadId && params.threadId !== threadId) return;
+        // A resume replays old token usage before turn/start, and may deliver it late.
+        // Only the turn/start response establishes the identity of this invocation.
+        if (!guardTurnId) {
+          if (turnStartPending && (event.method === 'thread/tokenUsage/updated' || event.method === 'item/started')) {
+            if (pendingGuardEvents.length >= 256) { void fail(new Error('Too many unconfirmed turn usage events')); return; }
+            pendingGuardEvents.push(event);
+          }
+          return;
+        }
+        if (event.method === 'thread/tokenUsage/updated' || event.method === 'item/started') {
+          // Both IDs are required by the App Server usage/item notification contracts.
+          if (params.threadId !== threadId || params.turnId !== guardTurnId) return;
+          if (event.method === 'thread/tokenUsage/updated') usage = params.tokenUsage ?? usage;
+        } else if (params.turnId && params.turnId !== guardTurnId) return;
+        const guardEvent = usageGuard.observe(event);
+        if (guardEvent) safeProgress({ method: 'bridge/usageGuard', params: guardEvent });
+        if (guardEvent?.action === 'stop') cancel();
+      };
+      const completeConfirmedTurn = (message) => {
+        if (!guardTurnId || settled) return;
+        const turn = message.params?.turn;
+        if ((message.params?.threadId && message.params.threadId !== threadId)
+            || (turn?.id && turn.id !== guardTurnId)) return;
+        const messageText = finalAgentMessage(turn) || lastAgentMessage || turn?.error?.message || lastError;
+        generatedImagePaths(turn).forEach((imagePath) => outputImagePaths.add(imagePath));
+        void finish({
+          exitCode: turn?.status === 'completed' ? 0 : 1,
+          signal: null, timedOut, sessionId: threadId,
+          message: messageText || (cancelled ? 'Codex task stopped.' : 'Codex returned no final message.'),
+          imagePaths: [...outputImagePaths], usage, model: actualModel
+        });
+      };
+      const run = { modelPolicy: policy, answerUserInput, cancel, approve: respondApproval, approveAll: enableAutoApproval, steer: enqueueSteer };
       this.#runs.set(key, run);
       this.#preflights.delete(key);
       releasePreflight();
@@ -919,6 +999,24 @@ export class CodexRunner {
           return;
         }
         if (isServerRequest(message)) {
+          if (message.method === "item/tool/requestUserInput" || message.method === "tool/requestUserInput") {
+            try {
+              const input = userInputFromRequest(message);
+              if (input.threadId !== threadId || input.turnId !== turnId || !onUserInput)
+                throw new Error("User input is unavailable on this surface or turn");
+              if (pendingUserInputs.size >= 8 || pendingUserInputs.has(input.requestId)) throw new Error("Too many pending questions");
+              pendingUserInputs.set(input.requestId, { input, rpcId: message.id });
+              Promise.resolve().then(() => {
+                if (!settled && pendingUserInputs.has(input.requestId)) return onUserInput(input);
+              }).catch(() => {
+                if (!pendingUserInputs.delete(input.requestId) || settled) return;
+                send({ id: message.id, error: { code: -32000, message: "This surface cannot present the requested input; no answer was selected." } });
+              });
+            } catch {
+              send({ id: message.id, error: { code: -32602, message: "User input is unavailable or invalid; no answer was selected." } });
+            }
+            return;
+          }
           const approval = approvalFromRequest(message);
           if (approval) {
             pendingApprovals.set(approval.requestId, approval);
@@ -944,11 +1042,17 @@ export class CodexRunner {
           return;
         }
         if (typeof message?.method === "string") {
-          const guardEvent = !message.params?.threadId || message.params.threadId === threadId
-            ? usageGuard.observe(message) : null;
-          if (guardEvent) safeProgress({ method: 'bridge/usageGuard', params: guardEvent });
-          if (guardEvent?.action === 'stop') cancel();
-          if (message.method === "thread/tokenUsage/updated") usage = message.params?.tokenUsage ?? usage;
+          if (message.method === 'turn/completed' && !guardTurnId) {
+            if (turnStartPending && (!message.params?.threadId || message.params.threadId === threadId)) {
+              if (pendingCompletions.length >= 16) { void fail(new Error('Too many unconfirmed turn completions')); return; }
+              pendingCompletions.push(message);
+            }
+            return;
+          }
+          if (message.method === "serverRequest/resolved") pendingUserInputs.delete(String(message.params?.requestId));
+          observeActiveTurnUsage(message);
+          if (message.method === 'thread/tokenUsage/updated'
+              && (!guardTurnId || message.params?.threadId !== threadId || message.params?.turnId !== guardTurnId)) return;
           if (message.method === "thread/started" || message.method === "turn/started") {
             actualModel = message.params?.turn?.model ?? message.params?.thread?.model ?? actualModel;
           }
@@ -971,18 +1075,7 @@ export class CodexRunner {
           }
           if (message.method === "error") lastError = message.params?.error?.message ?? lastError;
           if (message.method === "turn/completed") {
-            const turn = message.params?.turn;
-            const messageText = finalAgentMessage(turn) || lastAgentMessage || turn?.error?.message || lastError;
-            generatedImagePaths(turn).forEach((imagePath) => outputImagePaths.add(imagePath));
-            finish({
-              exitCode: turn?.status === "completed" ? 0 : 1,
-              signal: null,
-              timedOut,
-              sessionId: threadId,
-              message: messageText || (cancelled ? "Codex task stopped." : "Codex returned no final message."),
-              imagePaths: [...outputImagePaths],
-              usage, model: actualModel
-            });
+            completeConfirmedTurn(message);
           }
           return;
         }

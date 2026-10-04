@@ -1,0 +1,16 @@
+{
+  "name": "totem-codex-auto",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Native Codex terminal UI with per-turn TotemWorkspace model routing.",
+  "engines": {
+    "node": ">=20.19.0"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs"
+  },
+  "dependencies": {
+    "ws": "8.22.0"
+  }
+}

@@ -12,6 +12,7 @@ This directory separates maintained operating documentation from point-in-time a
 | [`development-guidelines.md`](development-guidelines.md) | Minecraft/Fabric development and integration rules. |
 | [`release-checklist.md`](release-checklist.md) | Java 25, GitHub CI, Modrinth publish and read-back release gate. |
 | [`codex-intelligence.md`](codex-intelligence.md) | Workspace Intelligence, MCP, indexing and runtime usage. |
+| [`native-codex-auto-routing.md`](native-codex-auto-routing.md) | Native Codex terminal UI with per-turn automatic model selection. |
 | [`ai-development-graph-plan.md`](ai-development-graph-plan.md) | Current AI-development graph architecture plus future Symbol Intelligence scope. |
 | [`local-live-viewer.md`](local-live-viewer.md) | Flutter Local Bridge operation and API boundary. |
 

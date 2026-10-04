@@ -1,3 +1,8 @@
+import { validateUsageGuardMode } from './usage-guard.mjs';
+
+const ENFORCED_USAGE_POLICY = 'At 40 tool calls or 48K observed input context, checkpoint completed work, evidence and remaining steps; at 80 calls or 64K stop and request a bounded continuation.';
+const OBSERVED_USAGE_POLICY = 'The host owner selected warning-only local task budgets for this session. At 40 tool calls or 48K observed input context, checkpoint completed work, evidence and remaining steps, then continue the task. Do not stop solely at 80 calls or 64K context. This overrides only local work-budget stop instructions in workspace guidance; account quotas, model context capacity, user cancellation, sandbox, approvals, validation and release gates remain in force.';
+
 /** Shared engineering policy for every transport and externally hosted Codex session. */
 export const CORE_DEVELOPER_INSTRUCTIONS = `Use TotemWorkspace execution constraints as authoritative.
 TotemWorkspace constrains the work. It does not prescribe your internal agent topology.
@@ -17,8 +22,11 @@ Edits are not releases. Commit/push only when authorized; publish only with expl
 Record only real runtime lifecycle/model/usage/delegation evidence. Planned waves, parallelism and model hints are not spawned agents or measured token usage. Never automatically replay a failed turn after work began.
 Keep final responses concise: result, affected components, actual validation and material remaining risks.`;
 
-export function buildDeveloperInstructions({ plan = null, modelPolicy = null } = {}) {
-  const sections = [CORE_DEVELOPER_INSTRUCTIONS];
+export function buildDeveloperInstructions({ plan = null, modelPolicy = null, usageGuardMode = 'enforce' } = {}) {
+  validateUsageGuardMode(usageGuardMode);
+  const sections = [usageGuardMode === 'observe'
+    ? CORE_DEVELOPER_INSTRUCTIONS.replace(ENFORCED_USAGE_POLICY, OBSERVED_USAGE_POLICY)
+    : CORE_DEVELOPER_INSTRUCTIONS];
   if (plan) {
     const constraints = Object.fromEntries(['schemaVersion', 'affectedModules', 'readScope', 'writeScope', 'execution',
       'dependencyOrdering', 'impactedConsumers', 'independentReviewRequired', 'riskConstraints', 'releaseConstraints',

@@ -10,10 +10,26 @@ import { buildCodeIndex, refreshCodeIndex, searchCode } from "../intelligence/co
 import { buildContextPack } from "../intelligence/context-pack.mjs";
 import { graphForModule, knowledgeSummary, loadKnowledge, resolveTask, testPlan } from "../intelligence/workspace-knowledge.mjs";
 import { renderFlutterGraph } from "./render-flutter-graph.mjs";
+import { taskIntent } from "../intelligence/task-intent.mjs";
 
 const knowledge = loadKnowledge();
 const summary = knowledgeSummary(knowledge);
-assert.deepEqual([summary.moduleCount, summary.featureCount, summary.contractCount], [12, 64, 33]);
+assert.deepEqual([summary.moduleCount, summary.featureCount, summary.contractCount], [13, 70, 33]);
+
+for (const query of ["幫我看看totem lumen模組開發進度", "查看 TotemLumen 開發進度", "Inspect Totem Lumen status"]) {
+  assert.deepEqual(resolveTask(query, knowledge).modules.map((module) => module.id), ["totem-lumen"]);
+}
+const lumenGraph = graphForModule("totem-lumen", { knowledge });
+assert.equal(taskIntent("查看 TotemLumen 開發進度").readOnly, true);
+assert.equal(taskIntent("查看 TotemLumen 開發進度後繼續開發").readOnly, false);
+assert.equal(taskIntent("查看 TotemLumen 開發進度並修復關閉崩潰").readOnly, false);
+assert.deepEqual(lumenGraph.modules.map((module) => module.id), ["totem-lumen"]);
+assert.equal(lumenGraph.contracts.length, 0, "Lumen must not acquire invented Core or Observer contracts");
+assert.equal(knowledge.features.filter((feature) => feature.ownerId === "totem-lumen").length, 6);
+assert.equal(knowledge.moduleById.get("totem-lumen").snapshot.minecraft, "26.3");
+const lumenPlan = testPlan({ changedModules: ["totem-lumen"] }, knowledge);
+assert.ok(lumenPlan.validationCategories.includes("apple-silicon-moltenvk"));
+assert.ok(lumenPlan.validationCategories.includes("dedicated-server-load-check"));
 
 const grouped = knowledge.contracts.reduce((out, c) => ((out[c.type] ??= []).push(c), out), {});
 assert.deepEqual([
@@ -91,7 +107,9 @@ function validateFlutterGraphGeneration() {
   };
   try {
     const model = buildGraphViewModel({ knowledge, index });
-    assert.deepEqual([model.modules.length, model.features.length, model.contracts.length], [12, 64, 33]);
+    assert.deepEqual([model.modules.length, model.features.length, model.contracts.length], [13, 70, 33]);
+    assert.ok(model.modules.some((module) => module.id === "totem-lumen"));
+    assert.equal(model.features.filter((feature) => feature.ownerId === "totem-lumen").length, 6);
     assert.ok(model.code.nodes.some((n) => n.type === "code-file" && n.path.endsWith("GeneratedGraphProbeApi.java")));
     assert.ok(model.code.nodes.some((n) => n.type === "code-symbol" && n.label === "GeneratedGraphProbeApi"));
     assert.ok(model.sharedCapabilities.some((c) => c.id === "shared:manual:totem-automata" && c.providerModuleId === "totem-core"));
@@ -103,7 +121,7 @@ function validateFlutterGraphGeneration() {
     const data = fs.readFileSync(one, "utf8");
     assert.equal(data, fs.readFileSync(two, "utf8"));
     const parsed = JSON.parse(data);
-    assert.deepEqual([parsed.modules.length, parsed.features.length, parsed.contracts.length], [12, 64, 33]);
+    assert.deepEqual([parsed.modules.length, parsed.features.length, parsed.contracts.length], [13, 70, 33]);
     assert.ok(data.includes("shared:manual:totem-automata"));
     assert.ok(!data.includes(marker));
 

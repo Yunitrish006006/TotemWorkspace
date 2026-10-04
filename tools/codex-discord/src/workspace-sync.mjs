@@ -1,153 +1,60 @@
-const MAX_DISCORD_CONTENT = 1_850;
-const DRAFT_EDIT_INTERVAL_MS = 2_500;
-const STATUS_EDIT_INTERVAL_MS = 1_200;
-
-function clippedText(value, maxLength = MAX_DISCORD_CONTENT) {
-  const text = String(value ?? "").trim();
-  if (!text) return "—";
-  return text.length <= maxLength ? text : `${text.slice(0, maxLength - 1)}…`;
-}
-
-function statusKey(entry) {
-  return entry.conversationId ?? entry.taskId ?? `conversation:${entry.revision}`;
-}
-
-function entryLabel(entry) {
-  if (entry.kind === "prompt") return entry.source === "discord" ? "Discord Prompt" : "網頁 Prompt";
-  if (entry.status === "failed") return "Codex 失敗";
-  if (entry.status === "busy") return "Codex 忙碌中";
-  return "Codex 處理中";
-}
-
-/** Formats only the explicit conversation contract, never raw tool/command output. */
-export function workspaceConversationCard(entry) {
-  const label = entryLabel(entry);
-  const suffix = entry.kind === "prompt" ? "\n\n-# 已送到 TotemWorkspace 的單一 Codex 執行佇列。" : "";
-  return `**${label}**\n${clippedText(entry.text)}${suffix}`;
-}
-
+import { CONVERSATION_MIRROR_EVENTS } from '../../../intelligence/conversation-sync.mjs';
+/** Display-only projection. Codex execution, approvals and sessions stay in the local runtime. */
 export function isWorkspaceSyncEnabled(config, workspaceName) {
   return Boolean(config.workspaceSync && config.workspaceSync.workspaceName === workspaceName);
 }
 
-export function createWorkspaceSync({ config, fetchImpl = globalThis.fetch, now = () => Date.now(), log = console.warn } = {}) {
-  const settings = config?.workspaceSync ?? null;
-  let client = null;
-  let pollTimer = null;
-  let latestRevision = 0;
-  let draftMessage = null;
-  let renderedDraft = null;
-  let lastDraftEditAt = 0;
-  const statusMessages = new Map();
 
-  async function request(path, { method = "GET", body = null } = {}) {
-    if (!settings) throw new Error("Workspace conversation sync is not configured");
-    const response = await fetchImpl(new URL(path, settings.url), {
-      method,
-      headers: {
-        authorization: `Bearer ${settings.token}`,
-        ...(body == null ? {} : { "content-type": "application/json" })
-      },
-      ...(body == null ? {} : { body: JSON.stringify(body) })
-    });
-    const payload = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(payload.error || `Workspace conversation request failed: HTTP ${response.status}`);
-    return payload;
-  }
-
-  async function syncChannel() {
-    if (!client || !settings) return null;
-    const channel = await client.channels.fetch(settings.channelId);
-    return channel && typeof channel.send === "function" ? channel : null;
-  }
-
-  async function mirrorDraft(draft) {
-    const text = draft?.text?.trim() ?? "";
-    if (text === renderedDraft) return;
-    const elapsed = now() - lastDraftEditAt;
-    if (elapsed < DRAFT_EDIT_INTERVAL_MS) return;
-    const channel = await syncChannel();
-    if (!channel) return;
-    const content = text
-      ? `📝 **網頁草稿（未送出）**\n${clippedText(text)}`
-      : "📝 **網頁草稿已清除**";
-    if (draftMessage && typeof draftMessage.edit === "function") draftMessage = await draftMessage.edit({ content, allowedMentions: { parse: [] } });
-    else draftMessage = await channel.send({ content, allowedMentions: { parse: [] } });
-    renderedDraft = text;
-    lastDraftEditAt = now();
-  }
-
-  async function flushStatus(state) {
-    state.timer = null;
-    const content = state.pending;
-    if (!content || content === state.rendered) return;
-    const channel = await syncChannel();
-    if (!channel) return;
-    if (state.message && typeof state.message.edit === "function") state.message = await state.message.edit({ content, allowedMentions: { parse: [] } });
-    else state.message = await channel.send({ content, allowedMentions: { parse: [] } });
-    state.lastEditAt = now();
-    state.rendered = content;
-  }
-
-  async function mirrorEntry(entry) {
-    const key = statusKey(entry);
-    const state = statusMessages.get(key) ?? { message: null, lastEditAt: 0, rendered: null, pending: null, timer: null };
-    state.pending = workspaceConversationCard(entry);
-    statusMessages.set(key, state);
-    if (state.pending === state.rendered || state.timer) return;
-    const delay = Math.max(0, STATUS_EDIT_INTERVAL_MS - (now() - state.lastEditAt));
-    if (delay === 0) {
-      await flushStatus(state);
-      return;
+export function createWorkspaceSync({ config, fetchImpl = globalThis.fetch, log = console.warn } = {}) {
+  const settings = config?.workspaceSync;
+  const runs = new Map();
+  const finished = new Set();
+  let stopped = false;
+  async function pump(runId, state) {
+    while (!stopped && state.pending.length) {
+      const entry = state.pending.shift();
+      try {
+        const response = await fetchImpl(new URL('/api/conversation/mirror', settings.url), {
+          method: 'POST', signal: AbortSignal.timeout(5000),
+          headers: { authorization: `Bearer ${settings.token}`, 'content-type': 'application/json' },
+          body: JSON.stringify(entry)
+        });
+        if (!response.ok) throw new Error('Mirror unavailable');
+        await response.body?.cancel();
+      } catch { log('Viewer display sync unavailable; Codex execution continues locally.'); }
     }
-    state.timer = setTimeout(() => { void flushStatus(state); }, delay);
-    state.timer.unref?.();
+    runs.delete(runId);
   }
-
-  async function poll() {
-    if (!settings) return;
-    try {
-      const snapshot = await request(`/api/conversation?after=${encodeURIComponent(latestRevision)}`);
-      latestRevision = Math.max(latestRevision, Number(snapshot.latestRevision) || 0);
-      await mirrorDraft(snapshot.draft);
-      for (const entry of Array.isArray(snapshot.entries) ? snapshot.entries : []) await mirrorEntry(entry);
-    } catch (error) {
-      log(`Workspace conversation sync poll failed: ${error.message}`);
+  function record(workspace, entry) {
+    if (stopped || !isWorkspaceSyncEnabled(config, workspace) || finished.has(entry.runId)) return;
+    if (!/^[a-zA-Z0-9:_-]{1,128}$/.test(entry.runId) || !Object.hasOwn(CONVERSATION_MIRROR_EVENTS, entry.event)) return;
+    const value = { runId: entry.runId, event: entry.event };
+    let state = runs.get(entry.runId);
+    if (!state) {
+      if (runs.size >= 64) return;
+      state = { pending: [], promise: null };
+      runs.set(entry.runId, state);
     }
+    if (CONVERSATION_MIRROR_EVENTS[value.event][0] === 'progress')
+      state.pending = state.pending.filter(item => CONVERSATION_MIRROR_EVENTS[item.event][0] !== 'progress');
+    if (state.pending.length >= 3) return;
+    state.pending.push(value);
+    if (value.event === 'completed' || value.event === 'failed') {
+      finished.add(entry.runId);
+      if (finished.size > 128) finished.delete(finished.values().next().value);
+    }
+    if (!state.promise) state.promise = pump(entry.runId, state);
   }
-
   return Object.freeze({
-    enabled: Boolean(settings),
-    handlesWorkspace: (workspaceName) => isWorkspaceSyncEnabled(config, workspaceName),
-    async start(discordClient) {
-      if (!settings || pollTimer) return;
-      client = discordClient;
-      await poll();
-      pollTimer = setInterval(() => { void poll(); }, 1_000);
-      pollTimer.unref?.();
+    enabled: Boolean(settings), record,
+    progress(workspace, runId, event) {
+      const type = event.params?.item?.type;
+      const code = event.method === 'bridge/modelPolicy' ? 'preparing'
+        : event.method === 'item/started' ? ({ commandExecution: 'command', fileChange: 'files',
+          mcpToolCall: 'tool', collabAgentToolCall: 'collaboration' }[type]) : null;
+      if (code) record(workspace, { runId, event: code });
     },
-    stop() {
-      if (pollTimer) clearInterval(pollTimer);
-      pollTimer = null;
-      for (const state of statusMessages.values()) {
-        if (state.timer) clearTimeout(state.timer);
-      }
-      client = null;
-    },
-    async submitPrompt({ prompt, clientMessageId }) {
-      if (!settings) throw new Error("Workspace conversation sync is not configured");
-      return request("/api/conversation/prompt", {
-        method: "POST",
-        body: { prompt, clientMessageId }
-      });
-    },
-    async cancel() {
-      if (!settings) throw new Error("Workspace conversation sync is not configured");
-      return request("/api/conversation/cancel", { method: "POST", body: {} });
-    },
-    async status() {
-      if (!settings) throw new Error("Workspace conversation sync is not configured");
-      return request("/api/conversation/status");
-    }
+    drain: () => Promise.all([...runs.values()].map(state => state.promise)),
+    stop() { stopped = true; for (const state of runs.values()) state.pending.length = 0; }
   });
 }

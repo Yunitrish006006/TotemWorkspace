@@ -43,7 +43,7 @@ assert.equal(JSON.stringify(plan), unchanged);
 assert.ok(!('assignments' in policy()));
 assert.equal(policy().optimization.secondaryGoal, 'minimize-total-model-tokens');
 
-function fakeRuntime({ timeout = false, rpcError = false, malformed = false } = {}) {
+function fakeRuntime({ timeout = false, rpcError = false, malformed = false, thread = null } = {}) {
   const messages = [];
   const kills = [];
   const child = new EventEmitter();
@@ -59,6 +59,7 @@ function fakeRuntime({ timeout = false, rpcError = false, malformed = false } = 
       if (message.method === 'model/list') result = message.params.cursor
         ? { data: [{ model: SPARK_MODEL, description: 'secret-token', supportedReasoningEfforts: [{ reasoningEffort: 'medium' }] }], nextCursor: null }
         : { data: [{ model: DEFAULT_STRONG_MODEL }], nextCursor: 'page2' };
+      if (message.method === 'thread/read') result = { thread };
       if (message.method === 'account/rateLimits/read') result = { ...usage(4, 5), privateToken: 'secret-token' };
       child.stdout.emit('data', JSON.stringify(rpcError ? { id: message.id, error: { message: 'secret-token' } } : { id: message.id, result }) + '\n');
     });
@@ -87,3 +88,19 @@ const failedSpawn = await probeCodexRuntime({ spawnImpl: () => { throw new Error
 assert.deepEqual(failedSpawn.models, []);
 assert.ok(!JSON.stringify(failedSpawn).includes('secret-token'));
 console.log('Model policy and read-only runtime probe validation passed.');
+
+const restored = fakeRuntime({ thread: { id: 'saved', turns: [{ items: [{ type: 'userMessage', content: [
+  { type: 'text', text: 'Review security contracts\n\nBounded context evidence:\nGENERATED_CONTEXT' },
+  { type: 'image', url: 'private-image' }
+] }] }] } });
+const restoredResult = await probeCodexRuntime({ threadId: 'saved', spawnImpl: restored.spawnImpl });
+assert.equal(restoredResult.threadRoutingState.query, 'Review security contracts');
+assert.equal(restoredResult.threadRoutingState.hasImages, true);
+assert.ok(restoredResult.threadRoutingState.contextTokens > 0);
+assert.ok(!JSON.stringify(restoredResult).includes('GENERATED_CONTEXT'));
+assert.ok(!JSON.stringify(restoredResult).includes('private-image'));
+assert.deepEqual(restored.messages.find(message => message.method === 'thread/read').params, { threadId: 'saved', includeTurns: true });
+assert.ok(restored.messages.every(message => !['thread/start', 'thread/resume', 'turn/start'].includes(message.method)));
+const mismatch = fakeRuntime({ thread: { id: 'wrong', turns: [] } });
+assert.equal((await probeCodexRuntime({ threadId: 'saved', spawnImpl: mismatch.spawnImpl })).threadRoutingState, null);
+console.log('Resume routing probe passed without starting a model turn.');

@@ -8,6 +8,10 @@ export function isLightweightModel(entry) {
 export function isStrongReasoningModel(entry) {
   return entry?.capabilities?.strongReasoning === true || /astra/i.test(modelId(entry) ?? '');
 }
+export function isBalancedModel(entry) {
+  return !isLightweightModel(entry) && !isStrongReasoningModel(entry)
+    && (entry?.capabilities?.balanced === true || entry?.modelClass === 'balanced' || /(?:^|-)sol(?:$|-)/i.test(modelId(entry) ?? ''));
+}
 function quota(usage, id, now) {
   const snapshot = usage?.rateLimitsByLimitId?.[id]
     ?? (usage?.rateLimits?.limitId === id ? usage.rateLimits : null);
@@ -29,7 +33,7 @@ function quota(usage, id, now) {
 
 
 export function resolveModelPolicy({ plan, models, usage, requestedModel, requestedEffort,
-  hasImages = false, contextTokens = 0, escalation = null, now = Date.now() } = {}) {
+  hasImages = false, contextTokens = 0, escalation = null, advisoryPreference = null, now = Date.now() } = {}) {
   const catalog = (Array.isArray(models) ? models : models?.data ?? [])
     .filter(entry => modelId(entry) && entry?.hidden !== true && entry?.available !== false);
   const quotaEvidence = { general: quota(usage, 'codex', now), spark: quota(usage, 'codex_bengalfox', now) };
@@ -45,7 +49,10 @@ export function resolveModelPolicy({ plan, models, usage, requestedModel, reques
   const usable = catalog.filter(entry => supportsInput(entry) && hasCapacity(entry) && quotaReady(entry));
   const byCost = (a, b) => (Number(a?.costPerToken ?? Infinity) - Number(b?.costPerToken ?? Infinity)) || String(modelId(a)).localeCompare(String(modelId(b)));
   const lightweight = usable.filter(isLightweightModel).sort(byCost)[0];
-  const strong = usable.find(isStrongReasoningModel) ?? usable.find(entry => !isLightweightModel(entry) && entry?.isDefault)
+  // Prefer the latest available member within a tier; never invent catalog entries or prices.
+  const balanced = usable.filter(isBalancedModel).sort((a, b) => String(modelId(b)).localeCompare(String(modelId(a)), 'en', { numeric: true }))[0];
+  const strong = usable.find(isStrongReasoningModel);
+  const fallback = usable.find(entry => !isLightweightModel(entry) && entry?.isDefault)
     ?? usable.find(entry => !isLightweightModel(entry));
   const strongNeeded = Boolean(escalation) || plan?.modelHint === 'strong-reasoning-preferred'
     || plan?.contextHints?.modelPreference === 'strong-reasoning-preferred'
@@ -57,8 +64,12 @@ export function resolveModelPolicy({ plan, models, usage, requestedModel, reques
   if (quotaEvidence.general.status === 'unknown') reasons.add('general-quota-unknown');
   if (!catalog.length) reasons.add('model-catalog-unavailable');
   // Strong reasoning requirements cannot be weakened merely because only a small model has quota.
-  const selected = strongNeeded ? (explicit && !isLightweightModel(explicit) ? explicit : strong)
-    : explicit ?? lightweight ?? strong ?? usable[0];
+  const balancedNeeded = advisoryPreference === 'balanced-preferred' || plan?.modelHint === 'balanced-preferred' || plan?.contextHints?.modelPreference === 'balanced-preferred';
+  const selected = strongNeeded ? (explicit && isStrongReasoningModel(explicit) ? explicit : strong)
+    : explicit ?? (advisoryPreference === 'strong-reasoning-preferred' ? strong ?? balanced ?? fallback
+      : balancedNeeded ? balanced ?? strong ?? fallback : lightweight ?? balanced ?? strong ?? fallback) ?? usable[0];
+  if (explicit && strongNeeded && !isStrongReasoningModel(explicit)) reasons.add('requested-model-below-risk-floor');
+  if (balancedNeeded) reasons.add(balanced ? 'balanced-reasoning-preferred' : 'balanced-unavailable-fallback');
   if (strongNeeded) reasons.add(escalation ? 'escalation-required' : 'strong-reasoning-required');
   if (!selected) reasons.add(strongNeeded ? 'required-reasoning-unavailable' : 'no-capable-model-available');
   const effort = (entry, preferred = 'medium') => {
@@ -73,16 +84,17 @@ export function resolveModelPolicy({ plan, models, usage, requestedModel, reques
   const route = wave => {
     const preference = wave.modelHint ?? 'lightweight-preferred';
     const entry = preference === 'strong-reasoning-preferred' ? strong
+      : preference === 'balanced-preferred' ? balanced ?? strong
       : preference === 'inherit-primary' ? selected : lightweight ?? selected;
     return { id: wave.id, preference, model: entry ? modelId(entry) : null,
       effort: entry ? effort(entry) : null, contextBudget: wave.contextBudget ?? null, advisory: true };
   };
   return {
     mode: !selected ? 'blocked' : /spark/i.test(modelId(selected)) && quotaEvidence.general.status === 'exhausted'
-      ? 'spark-only' : isLightweightModel(selected) ? 'lightweight-preferred' : 'strong-reasoning',
+      ? 'spark-only' : isLightweightModel(selected) ? 'lightweight-preferred' : isBalancedModel(selected) ? 'balanced-preferred' : 'strong-reasoning',
     coordinator: { model: selected ? modelId(selected) : null, effort: selected ? effort(selected, requestedEffort) : null },
     routing: (plan?.waves ?? []).map(route),
-    availableModels: usable.map(entry => ({ model: modelId(entry), lightweight: isLightweightModel(entry), strongReasoning: isStrongReasoningModel(entry) })),
+    availableModels: usable.map(entry => ({ model: modelId(entry), lightweight: isLightweightModel(entry), balanced: isBalancedModel(entry), strongReasoning: isStrongReasoningModel(entry) })),
     optimization: { primaryGoal: 'correctness', secondaryGoal: 'minimize-total-model-tokens', latencyPriority: 'low', avoidDuplicateContext: true, preferSequentialWhenCheaper: true },
     escalation: { state: escalation ? 'required' : 'none', compactEvidenceRequired: true, automaticRetry: false },
     reasonCodes: [...reasons], quotaEvidence

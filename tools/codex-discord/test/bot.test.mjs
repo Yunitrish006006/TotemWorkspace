@@ -2,6 +2,28 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { applyUsagePresence, approvalComponents, commandDefinition, createProgressReporter, formatQuestionResult, formatUsageResult, imageUrlsForAttachments, isReplyToActiveStatus, modelAutocompleteChoices, reasoningAutocompleteChoices, safeStatusChunks, statusChunks, usagePresenceText } from "../src/bot.mjs";
 
+test('final delivery formats tables and preserves confirmed attachments and mention suppression', async () => {
+  const payloads = [];
+  const status = { edit: async payload => {
+    payloads.push(payload);
+    return { attachments: new Map([['1', { id: '1', name: 'result.jar', size: 5,
+      url: 'https://cdn.discordapp.com/attachments/test/result.jar' }]]) };
+  }, channel: { send: async payload => payloads.push(payload) } };
+  await statusChunks(status, '| Profile | FPS |\n| --- | --- |\n| RGB | 300 |\n\n```js\n'
+    + '    sample();\n'.repeat(400) + '```\n[result](/tmp/result.jar)',
+    [{ attachment: '/tmp/result.jar', name: 'result.jar' }]);
+  assert.match(payloads[1].content, /附件已由 Discord 確認/);
+  assert.match(payloads[1].content, /- Profile：RGB\n  - FPS：300/);
+  assert.equal(payloads.filter(payload => payload.files).length, 1);
+  for (const payload of payloads.slice(1)) {
+    assert.ok(payload.content.length <= 1850);
+    assert.equal((payload.content.match(/```/g) ?? []).length % 2, 0);
+    assert.deepEqual(payload.allowedMentions, { parse: [] });
+    assert.equal(payload.attachments, undefined);
+    assert.ok(!payload.content.includes('/tmp/'));
+  }
+});
+
 test('usage summary distinguishes observed tools and requested effort from model turns', () => {
   const text = formatQuestionResult('bounded task', { exitCode: 0, message: 'done', usageSummary: {
     observedToolCalls: 2, firstContext: 100, peakContext: 200, threadInputTokens: 300,
@@ -11,6 +33,22 @@ test('usage summary distinguishes observed tools and requested effort from model
   assert.match(text, /回報模型 未知/);
   assert.match(text, /要求 effort medium/);
   assert.match(text, /非逐輪分佈/);
+  assert.match(text, /本輪 context/);
+  assert.match(text, /整段對話累計 input\/output/);
+});
+
+test('local context stops explain the limit and preserve-history recovery separately from account quota', async () => {
+  const summary = { observedToolCalls: 0, firstContext: 190219, peakContext: 190219,
+    stopReason: 'context-limit', maxContextTokens: 64000, stopped: true };
+  const text = formatQuestionResult('Inspect progress', { exitCode: 1, message: 'Stopped', usageSummary: summary });
+  assert.match(text, /64000 tokens/);
+  assert.match(text, /並非帳戶配額耗盡/);
+  assert.match(text, /原始歷史仍保留/);
+  const edits = [];
+  const progress = createProgressReporter({ workspaceName: 'workspace', task: 'Inspect', edit: async payload => edits.push(payload) });
+  progress.update({ method: 'bridge/usageGuard', params: { action: 'stop', ...summary } });
+  const retained = await progress.finish();
+  assert.match(JSON.stringify({ edits, retained }), /本輪 context 已達本機 64000/);
 });
 
 test("progress cards show sanitized CLI-style activity as Discord subtext", async () => {
@@ -293,7 +331,7 @@ test("output attachment failures preserve the final text and explain the missing
   const status = {
     edit: async (payload) => {
       edits.push(payload);
-      if (payload.files.length > 0) throw new Error("Missing Permissions");
+      if (payload.files?.length > 0) throw Object.assign(new Error("Missing Permissions"), { code: 50_013 });
     },
     channel: { send: async () => {} }
   };
@@ -301,16 +339,50 @@ test("output attachment failures preserve the final text and explain the missing
   const originalWarn = console.warn;
   console.warn = (message) => warnings.push(message);
   try {
-    await statusChunks(status, "Codex finished.", [{ attachment: "/tmp/result.png", name: "result.png" }]);
+    assert.equal(await statusChunks(status, "Codex finished. [result](/tmp/result.png)", [{ attachment: "/tmp/result.png", name: "result.png" }]), false);
   } finally {
     console.warn = originalWarn;
   }
 
   assert.equal(edits.length, 2);
-  assert.equal(edits[1].files.length, 0);
+  assert.equal(edits[1].files, undefined);
   assert.match(edits[1].content, /Codex finished/);
   assert.match(edits[1].content, /Attach Files/);
-  assert.deepEqual(warnings, ["Discord attachment upload failed for 1 file(s): Error: Missing Permissions"]);
+  assert.match(edits[1].content, /附件交付未完成/);
+  assert.ok(!edits[1].content.includes("/tmp/"));
+  assert.deepEqual(warnings, ["Discord attachment delivery unconfirmed for 1 file(s)."]);
+});
+
+test("resolved HTTP requests without a complete attachment receipt cannot claim delivery", async () => {
+  const files = [{ attachment: "/tmp/a.jar", name: "a.jar" }, { attachment: "/tmp/b.png", name: "b.png" }];
+  const good = { id: "1", name: "a.jar", size: 5, url: "https://cdn.discordapp.com/attachments/1/2/a.jar" };
+  const receipts = [undefined, { attachments: new Map() }, { attachments: new Map([["1", good]]) },
+    { attachments: new Map([["1", { ...good, url: "file:///tmp/a.jar" }]]) }];
+  for (const receipt of receipts) {
+    const edits = [];
+    const status = { edit: async payload => { edits.push(payload); return receipt; }, channel: { send: async () => {} } };
+    assert.equal(await statusChunks(status, "[jar](/tmp/a.jar) [image](/tmp/b.png)", files), false);
+    assert.equal(edits.filter(edit => edit.files).length, 1, "never blindly repeat an uncertain upload");
+    assert.match(edits[1].content, /Discord 回覆未包含全部預期附件/);
+    assert.ok(!edits[1].content.includes("/tmp/"));
+    assert.ok(!edits[1].content.includes("附件已由 Discord 確認"));
+  }
+});
+
+test("size rejection is explicit, long text stays sanitized and network errors do not leak", async () => {
+  for (const error of [Object.assign(new Error("private /secret/token"), { status: 413 }), new Error("private /secret/token")]) {
+    const edits = [], sends = [];
+    const status = { edit: async payload => { edits.push(payload); if (payload.files) throw error; },
+      channel: { send: async payload => sends.push(payload) } };
+    assert.equal(await statusChunks(status, "detail ".repeat(400) + "[file](/tmp/result.jar)",
+      [{ attachment: "/tmp/result.jar", name: "result.jar" }]), false);
+    assert.match(edits[1].content, error.status === 413 ? /大小限制/ : /結果不明/);
+    for (const payload of [edits[1], ...sends]) {
+      assert.ok(!payload.content.includes("/tmp/"));
+      assert.ok(!payload.content.includes("/secret/"));
+      assert.deepEqual(payload.allowedMentions, { parse: [] });
+    }
+  }
 });
 
 test("a deleted Discord status message cannot crash task cleanup", async () => {

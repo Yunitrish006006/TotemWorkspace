@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { CONVERSATION_MIRROR_EVENTS } from "../intelligence/conversation-sync.mjs";
 import fs from "node:fs";
 import http from "node:http";
 import path from "node:path";
@@ -888,47 +889,28 @@ async function handleApi(req, res, url, { agentAdapter, conversation, conversati
     return true;
   }
 
-  if (req.method === "POST" && pathname === "/api/conversation/prompt") {
-    if (!conversationToken) {
-      json(res, 503, { error: "Discord conversation transport is not configured" });
-      return true;
-    }
+  if (req.method === "POST" && pathname === "/api/conversation/mirror") {
     if (!conversationTokenAccepted) {
-      json(res, 401, { error: "Discord conversation transport is unauthorized" });
+      json(res, 401, { error: "Discord display transport is unauthorized" });
       return true;
     }
     const args = await readJsonBody(req);
-    const result = await submitPrompt(args, {
-      source: "discord",
-      clientMessageId: boundedText(args.clientMessageId, 160)
-    });
-    json(res, result.status, result.payload);
+    if (!args || Object.keys(args).some(key => !["runId", "event"].includes(key))
+        || typeof args.runId !== "string" || !/^[a-zA-Z0-9:_-]{1,128}$/.test(args.runId)
+        || typeof args.event !== "string" || !Object.hasOwn(CONVERSATION_MIRROR_EVENTS, args.event)) {
+      json(res, 400, { error: "Invalid display entry" });
+      return true;
+    }
+    const [kind, text, status] = CONVERSATION_MIRROR_EVENTS[args.event];
+    const result = conversation.append({ source: "discord", kind, text, status,
+      conversationId: `discord-runtime:${args.runId}` });
+    // Display only: never call dispatch, steer, approve or cancel from a mirror payload.
+    json(res, 202, { status: "recorded", entry: result.entry });
     return true;
   }
 
-  if (req.method === "POST" && pathname === "/api/conversation/cancel") {
-    if (!conversationToken) {
-      json(res, 503, { error: "Discord conversation transport is not configured" });
-      return true;
-    }
-    if (!conversationTokenAccepted) {
-      json(res, 401, { error: "Discord conversation transport is unauthorized" });
-      return true;
-    }
-    const activeTask = agentAdapter?.status?.().currentTask ?? null;
-    if (!activeTask) {
-      json(res, 200, { status: "idle", task: null });
-      return true;
-    }
-    agentAdapter.close("Cancelled from the allow-listed CodexDiscord interface");
-    conversation.append({
-      source: "workspace",
-      kind: "status",
-      text: "Codex task cancellation was requested from Discord",
-      taskId: activeTask.id,
-      status: "cancelled"
-    });
-    json(res, 202, { status: "cancelling", taskId: activeTask.id });
+  if (req.method === "POST" && ["/api/conversation/prompt", "/api/conversation/cancel"].includes(pathname)) {
+    json(res, 410, { error: "Discord execution moved to the shared local Codex runtime; this transport is display-only." });
     return true;
   }
 

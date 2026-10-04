@@ -281,7 +281,7 @@ test('usage context limit interrupts without claiming completion or replaying', 
     else if (request.method === 'thread/start') respond({ id: request.id, result: { thread: { id: 'budget-thread' } } });
     else if (request.method === 'turn/start') {
       respond({ id: request.id, result: { turn: { id: 'budget-turn' } } });
-      notify({ method: 'thread/tokenUsage/updated', params: { threadId: 'budget-thread', tokenUsage: {
+      notify({ method: 'thread/tokenUsage/updated', params: { threadId: 'budget-thread', turnId: 'budget-turn', tokenUsage: {
         last: { inputTokens: 65000 }, total: { inputTokens: 100000, outputTokens: 1000 }
       } } });
     } else if (request.method === 'turn/interrupt') {
@@ -539,8 +539,8 @@ test("writing lease remains held until delayed App Server close after a turn fai
   await assert.rejects(afterClose.execute({ key: "after", workspace, prompt: "Fix" }), /Lease was released/);
 });
 
-async function fakeRuntime() {
-  return { models: [{ model: "gpt-6-astra", supportedReasoningEfforts: ["medium", "high"], inputModalities: ["text", "image"] },
+async function fakeRuntime({ threadId } = {}) {
+  return { threadRoutingState: threadId ? { query: 'Fix validator', hasImages: false, contextTokens: 20 } : null, models: [{ model: "gpt-6-astra", supportedReasoningEfforts: ["medium", "high"], inputModalities: ["text", "image"] },
     { model: "gpt-5.3-codex-spark", supportedReasoningEfforts: ["medium"], inputModalities: ["text"] }],
     usage: { checkedAt: Date.now(), rateLimitsByLimitId: {
       codex: { primary: { usedPercent: 20 } }, codex_bengalfox: { primary: { usedPercent: 20 } }
@@ -564,7 +564,7 @@ test("live Spark-only policy is identical across resumed thread and turn and can
     planImpl: () => ({ mode: "assisted", assignments: [{ id: "worker:one", role: "worker" }, { id: "reviewer:one", role: "reviewer" }] }),
     probeRuntime: async () => {
       probes++;
-      const snapshot = await fakeRuntime();
+      const snapshot = await fakeRuntime({ threadId: 'fixture' });
       snapshot.usage.rateLimitsByLimitId.codex.primary.usedPercent = 100;
       return snapshot;
     }
@@ -592,7 +592,7 @@ test("blocked separate Spark quota prevents any coding process or hidden model f
   let decision;
   const runner = new CodexRunner({ leaseDirectory, maxRuntimeMs: 5000, spawnImpl: () => { spawns++; throw new Error("must not launch"); },
     planImpl: () => ({ assignments: [] }), probeRuntime: async () => {
-      const snapshot = await fakeRuntime();
+      const snapshot = await fakeRuntime({ threadId: 'fixture' });
       snapshot.usage.rateLimitsByLimitId.codex.primary.usedPercent = 100;
       delete snapshot.usage.rateLimitsByLimitId.codex_bengalfox;
       return snapshot;
@@ -616,4 +616,234 @@ test("quota failure on resumed turn never replays the task in a fresh thread", a
   const runner = new CodexRunner({ leaseDirectory, maxRuntimeMs: 5000, spawnImpl: () => child, probeRuntime: fakeRuntime, planImpl: () => ({ assignments: [] }) });
   await assert.rejects(runner.execute({ key: "no-replay", workspace: "/srv/nexus", prompt: "Fix", resumeSessionId: "saved" }), /Usage limit/);
   assert.equal(started, 0);
+});
+
+test('resumed managed routing retains task risk, images and context before choosing write scope', async () => {
+  let plannedQuery, selectedModel;
+  const child = new FakeAppServer((request, respond, notify) => {
+    if (request.method === 'initialize') respond({ id: request.id, result: {} });
+    if (request.method === 'thread/resume') respond({ id: request.id, result: { thread: { id: 'old' } } });
+    if (request.method === 'turn/start') {
+      selectedModel = request.params.model;
+      respond({ id: request.id, result: { turn: { id: 't' } } });
+      notify({ method: 'turn/completed', params: { turn: { status: 'completed', items: [] } } });
+    }
+  });
+  const runner = new CodexRunner({ leaseDirectory, spawnImpl: () => child,
+    probeRuntime: async args => {
+      assert.equal(args.threadId, 'old');
+      return { ...await fakeRuntime(), threadRoutingState: { query: 'Review security contracts', hasImages: true, contextTokens: 20000 } };
+    }, planImpl: ({ prompt }) => { plannedQuery = prompt; return { contextHints: {}, writeScope: [] }; } });
+  await runner.execute({ key: 'resume-routing', workspace: '/tmp', resumeSessionId: 'old', prompt: 'continue' });
+  assert.equal(plannedQuery, 'Review security contracts\ncontinue');
+  assert.equal(selectedModel, 'gpt-6-astra');
+});
+
+test('unknown continuation cannot invent a managed write scope', async () => {
+  const runner = new CodexRunner({ leaseDirectory, probeRuntime: async () => ({ ...await fakeRuntime(), threadRoutingState: null }),
+    spawnImpl: () => { throw new Error('Must not start a turn'); } });
+  await assert.rejects(runner.execute({ key: 'lost', workspace: '/tmp', resumeSessionId: 'missing', prompt: 'continue' }), /recover the previous task scope/);
+  assert.equal(runner.isRunning('lost'), false);
+});
+
+test('user questions preserve RPC IDs, reject cross-turn requests and stale answers, and never use approval-all', async () => {
+  let runner, presented = 0;
+  const questions = [{ id: 'choice', header: 'Choice', question: 'Pick a path', options: [{ label: 'A', description: 'First' }] }];
+  const child = new FakeAppServer((request, respond, notify) => {
+    if (request.method === 'initialize') respond({ id: request.id, result: {} });
+    if (request.method === 'thread/start') respond({ id: request.id, result: { thread: { id: 'q-thread' } } });
+    if (request.method === 'turn/start') {
+      respond({ id: request.id, result: { turn: { id: 'q-turn' } } });
+      notify({ id: 'foreign', method: 'item/tool/requestUserInput', params: { threadId: 'q-thread', turnId: 'old-turn', questions } });
+      notify({ id: 'approval', method: 'item/commandExecution/requestApproval', params: { threadId: 'q-thread', turnId: 'q-turn', itemId: 'cmd', command: 'echo hi', availableDecisions: ['accept', 'decline'] } });
+    }
+    if (request.id === 'foreign') assert.ok(request.error);
+    if (request.id === 'approval') {
+      assert.equal(request.result.decision, 'accept');
+      notify({ id: '001', method: 'item/tool/requestUserInput', params: { threadId: 'q-thread', turnId: 'q-turn', questions } });
+    }
+    if (request.id === '001') {
+      assert.deepEqual(request.result, { answers: { choice: { answers: ['A'] } } });
+      assert.equal(presented, 1);
+      assert.equal(runner.answerUserInput('questions', '001', { choice: { answers: ['A'] } }), false);
+      notify({ method: 'turn/completed', params: { turn: { status: 'completed', items: [] } } });
+    }
+  });
+  runner = new CodexRunner({ leaseDirectory, spawnImpl: () => child, probeRuntime: fakeRuntime,
+    planImpl: () => ({ writeScope: [] }), maxRuntimeMs: 1000 });
+  const result = await runner.execute({ key: 'questions', workspace: '/tmp', prompt: 'Inspect',
+    onApproval: approval => assert.equal(runner.approveAll('questions', approval.requestId), true),
+    onUserInput: input => {
+      presented++;
+      assert.equal(runner.answerUserInput('wrong-key', input.requestId, {}), false);
+      assert.equal(runner.answerUserInput('questions', input.requestId, { wrong: { answers: ['A'] } }), false);
+      assert.equal(runner.answerUserInput('questions', input.requestId, { choice: { answers: ['A'] } }), true);
+    } });
+  assert.equal(result.exitCode, 0);
+  assert.equal(runner.answerUserInput('questions', '001', {}), false);
+});
+
+test('failed history recovery also blocks an explicit new task on a resumed thread', async () => {
+  const runner = new CodexRunner({ leaseDirectory, probeRuntime: async () => ({ ...await fakeRuntime(), threadRoutingState: null }),
+    planImpl: () => { throw new Error('Must not plan without capabilities'); },
+    spawnImpl: () => { throw new Error('Must not start without history'); } });
+  await assert.rejects(runner.execute({ key: 'missing-history', workspace: '/tmp', resumeSessionId: 'old-images',
+    prompt: 'Review the README' }), /recover the previous task scope and capabilities/);
+  assert.equal(runner.isRunning('missing-history'), false);
+});
+
+for (const earlyCurrent of [false, true]) test(`resumed usage is scoped to the accepted turn (current usage before response: ${earlyCurrent})`, async () => {
+  let starts = 0, interrupts = 0;
+  const progress = [];
+  const historical = { last: { inputTokens: 190219 }, total: { inputTokens: 1611515277, outputTokens: 2929080 } };
+  const current = { last: { inputTokens: 1200 }, total: { inputTokens: 1611516477, outputTokens: 2929200 } };
+  const event = (threadId, turnId, tokenUsage) => ({ method: 'thread/tokenUsage/updated', params: { threadId, turnId, tokenUsage } });
+  const child = new FakeAppServer((request, respond, notify) => {
+    if (request.method === 'initialize') respond({ id: request.id, result: {} });
+    else if (request.method === 'thread/resume') {
+      notify(event('saved', 'previous-turn', historical));
+      respond({ id: request.id, result: { thread: { id: 'saved' } } });
+    } else if (request.method === 'turn/start') {
+      starts++;
+      notify(event('saved', 'previous-turn', historical));
+      if (earlyCurrent) notify(event('saved', 'current-turn', current));
+      respond({ id: request.id, result: { turn: { id: 'current-turn' } } });
+      notify(event('other-thread', 'current-turn', historical));
+      notify(event('saved', 'previous-turn', historical));
+      notify(event('saved', undefined, historical));
+      if (!earlyCurrent) notify(event('saved', 'current-turn', current));
+      notify({ method: 'turn/completed', params: { turn: { id: 'current-turn', status: 'completed', items: [] } } });
+    } else if (request.method === 'turn/interrupt') interrupts++;
+  });
+  const runner = new CodexRunner({ leaseDirectory, probeRuntime: fakeRuntime, planImpl: () => ({ writeScope: [] }),
+    spawnImpl: () => child, maxRuntimeMs: 2000 });
+  const result = await runner.execute({ key: `resume-budget-${earlyCurrent}`, workspace: '/tmp', prompt: 'Inspect progress', resumeSessionId: 'saved',
+    onProgress: event => progress.push(event) });
+  assert.equal(starts, 1); assert.equal(interrupts, 0); assert.equal(result.exitCode, 0);
+  assert.equal(result.usageSummary.stopped, false);
+  assert.equal(result.usageSummary.observedToolCalls, 0);
+  assert.equal(result.usageSummary.firstContext, 1200);
+  assert.equal(result.usageSummary.peakContext, 1200);
+  assert.equal(result.usageSummary.threadInputTokens, current.total.inputTokens);
+  assert.deepEqual(result.usage, current);
+  assert.equal(progress.some(event => event.method === 'bridge/usageGuard' && event.params.action === 'stop'), false);
+});
+
+test('current usage arriving before turn/start response still enforces the unchanged context limit', async () => {
+  let interrupts = 0;
+  const child = new FakeAppServer((request, respond, notify) => {
+    if (request.method === 'initialize') respond({ id: request.id, result: {} });
+    else if (request.method === 'thread/start') respond({ id: request.id, result: { thread: { id: 'thread' } } });
+    else if (request.method === 'turn/start') {
+      notify({ method: 'thread/tokenUsage/updated', params: { threadId: 'thread', turnId: 'current', tokenUsage: {
+        last: { inputTokens: 64000 }, total: { inputTokens: 64000, outputTokens: 100 }
+      } } });
+      respond({ id: request.id, result: { turn: { id: 'current' } } });
+    } else if (request.method === 'turn/interrupt') {
+      interrupts++; respond({ id: request.id, result: {} });
+      notify({ method: 'turn/completed', params: { turn: { id: 'current', status: 'interrupted', items: [] } } });
+    }
+  });
+  const runner = new CodexRunner({ leaseDirectory, probeRuntime: fakeRuntime, planImpl: () => ({ writeScope: [] }),
+    spawnImpl: () => child, maxRuntimeMs: 2000 });
+  const result = await runner.execute({ key: 'early-budget', workspace: '/tmp', prompt: 'Inspect' });
+  assert.equal(interrupts, 1); assert.equal(result.exitCode, 1);
+  assert.equal(result.usageSummary.stopReason, 'context-limit');
+  assert.match(result.message, /not an account quota error/);
+});
+
+for (const scenario of [
+  { name: 'context stop', context: 64000, tools: 0, stopped: true, reason: 'context-limit' },
+  { name: 'tool stop', context: 1200, tools: 80, stopped: true, reason: 'tool-limit' },
+  { name: 'bounded completion', context: 1200, tools: 1, stopped: false, reason: null }
+]) test(`early completion waits for accepted usage: ${scenario.name}`, async () => {
+  const child = new FakeAppServer((request, respond, notify) => {
+    if (request.method === 'initialize') respond({ id: request.id, result: {} });
+    else if (request.method === 'thread/start') respond({ id: request.id, result: { thread: { id: 'thread' } } });
+    else if (request.method === 'turn/start') {
+      notify({ method: 'turn/completed', params: { threadId: 'thread', turn: { id: 'old', status: 'completed', items: [] } } });
+      notify({ method: 'thread/tokenUsage/updated', params: { threadId: 'thread', turnId: 'current', tokenUsage: {
+        last: { inputTokens: scenario.context }, total: { inputTokens: scenario.context, outputTokens: 100 }
+      } } });
+      for (let i = 0; i < 80; i++) notify({ method: 'item/started', params: {
+        threadId: 'thread', turnId: 'old', item: { id: `old-${i}`, type: 'mcpToolCall' }
+      } });
+      for (let i = 0; i < scenario.tools; i++) {
+        const event = { method: 'item/started', params: {
+          threadId: 'thread', turnId: 'current', item: { id: `tool-${i}`, type: 'mcpToolCall' }
+        } };
+        notify(event); notify(event);
+      }
+      notify({ method: 'turn/completed', params: { threadId: 'thread', turn: { id: 'current', status: 'completed', items: [] } } });
+      respond({ id: request.id, result: { turn: { id: 'current' } } });
+    } else if (request.method === 'turn/interrupt') respond({ id: request.id, result: {} });
+  });
+  const runner = new CodexRunner({ leaseDirectory, probeRuntime: fakeRuntime, planImpl: () => ({ writeScope: [] }),
+    spawnImpl: () => child, maxRuntimeMs: 2000 });
+  const result = await runner.execute({ key: `early-complete-${scenario.name}`, workspace: '/tmp', prompt: 'Inspect' });
+  assert.equal(result.exitCode, scenario.stopped ? 1 : 0);
+  assert.equal(result.usageSummary.stopped, scenario.stopped);
+  assert.equal(result.usageSummary.stopReason, scenario.reason);
+  assert.equal(result.usageSummary.peakContext, scenario.context);
+  assert.equal(result.usageSummary.observedToolCalls, scenario.tools);
+});
+
+for (const resumed of [false, true]) test(`host warning-only mode continues past local thresholds (resumed: ${resumed})`, async () => {
+  let interrupts = 0, policyChecked = false;
+  const progress = [];
+  const child = new FakeAppServer((request, respond, notify) => {
+    if (request.method === 'initialize') respond({ id: request.id, result: {} });
+    else if (request.method === 'thread/start' || request.method === 'thread/resume') {
+      assert.equal(request.params.approvalPolicy, 'on-request');
+      assert.equal(request.params.sandbox, 'workspace-write');
+      assert.match(request.params.developerInstructions, /host owner selected warning-only/);
+      assert.doesNotMatch(request.params.developerInstructions, /at 80 calls or 64K stop/);
+      policyChecked = true;
+      respond({ id: request.id, result: { thread: { id: 'terminal-thread' } } });
+    } else if (request.method === 'turn/start') {
+      assert.equal(request.params.approvalPolicy, 'on-request');
+      assert.equal(request.params.sandboxPolicy.type, 'workspaceWrite');
+      assert.equal(request.params.sandboxPolicy.networkAccess, false);
+      respond({ id: request.id, result: { turn: { id: 'terminal-turn' } } });
+      notify({ method: 'thread/tokenUsage/updated', params: { threadId: 'terminal-thread', turnId: 'terminal-turn', tokenUsage: {
+        last: { inputTokens: 190219 }, total: { inputTokens: 200000, outputTokens: 1000 }
+      } } });
+      for (let i = 0; i < 100; i++) notify({ method: 'item/started', params: {
+        threadId: 'terminal-thread', turnId: 'terminal-turn', item: { id: `tool-${i}`, type: 'mcpToolCall' }
+      } });
+      notify({ method: 'turn/completed', params: { threadId: 'terminal-thread', turn: { id: 'terminal-turn', status: 'completed', items: [] } } });
+    } else if (request.method === 'turn/interrupt') interrupts++;
+  });
+  const runner = new CodexRunner({ usageGuardMode: 'observe', maxRuntimeMs: 0, leaseDirectory,
+    probeRuntime: fakeRuntime, planImpl: () => ({ waves: [] }), spawnImpl: () => child });
+  const result = await runner.execute({ key: `terminal-${resumed}`, workspace: '/tmp', prompt: 'Inspect',
+    resumeSessionId: resumed ? 'terminal-thread' : null, onProgress: event => progress.push(event) });
+  assert.equal(policyChecked, true); assert.equal(interrupts, 0); assert.equal(result.exitCode, 0);
+  assert.equal(result.usageSummary.mode, 'observe'); assert.equal(result.usageSummary.stopped, false);
+  assert.equal(result.usageSummary.peakContext, 190219); assert.equal(result.usageSummary.observedToolCalls, 100);
+  assert.equal(progress.filter(event => event.method === 'bridge/usageGuard' && event.params.action === 'checkpoint').length, 1);
+});
+
+test('warning-only task budgets still honor user cancellation', async () => {
+  let runner, interrupts = 0;
+  const child = new FakeAppServer((request, respond, notify) => {
+    if (request.method === 'initialize') respond({ id: request.id, result: {} });
+    else if (request.method === 'thread/start') respond({ id: request.id, result: { thread: { id: 'cancel-thread' } } });
+    else if (request.method === 'turn/start') {
+      respond({ id: request.id, result: { turn: { id: 'cancel-turn' } } });
+      assert.equal(runner.cancel('terminal-cancel'), true);
+    } else if (request.method === 'turn/interrupt') {
+      interrupts++; respond({ id: request.id, result: {} });
+      notify({ method: 'turn/completed', params: { threadId: 'cancel-thread', turn: { id: 'cancel-turn', status: 'interrupted', items: [] } } });
+    }
+  });
+  runner = new CodexRunner({ usageGuardMode: 'observe', maxRuntimeMs: 0, leaseDirectory,
+    probeRuntime: fakeRuntime, planImpl: () => ({ writeScope: [] }), spawnImpl: () => child });
+  const result = await runner.execute({ key: 'terminal-cancel', workspace: '/tmp', prompt: 'Inspect' });
+  assert.equal(interrupts, 1); assert.equal(result.exitCode, 1); assert.equal(result.usageSummary.stopped, false);
+  assert.match(result.message, /stopped/);
+});
+
+test('unknown host budget modes fail closed', () => {
+  assert.throws(() => new CodexRunner({ usageGuardMode: 'unlimited' }), /must be enforce or observe/);
 });

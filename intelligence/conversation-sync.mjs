@@ -114,3 +114,17 @@ export function createConversationSync({ now = () => new Date().toISOString(), e
 
   return Object.freeze({ append, clearDraft, linkTask, setDraft, snapshot, submission });
 }
+
+// A display credential can project only these statuses, never caller-supplied text.
+export const CONVERSATION_MIRROR_EVENTS = Object.freeze({
+  started: ['prompt', 'Discord 工作已開始；完整對話請在 Discord 查看。', 'running'],
+  preparing: ['progress', '正在準備 Codex 回合', 'running'],
+  command: ['progress', '正在執行本機命令', 'running'],
+  files: ['progress', '正在修改檔案', 'running'],
+  tool: ['progress', '正在使用工具', 'running'],
+  collaboration: ['progress', '正在協作處理工作', 'running'],
+  approval: ['progress', '正在等待 Discord 使用者核准', 'running'],
+  question: ['progress', '正在等待 Discord 使用者回答', 'running'],
+  completed: ['status', 'Codex 回合已結束；結果與驗證請在 Discord 查看。', 'completed'],
+  failed: ['status', 'Codex 回合未完成；請在 Discord 查看詳情。', 'failed']
+});

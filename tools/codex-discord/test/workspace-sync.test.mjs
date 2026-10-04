@@ -1,94 +1,70 @@
-import test from "node:test";
-import assert from "node:assert/strict";
-import { createWorkspaceSync, isWorkspaceSyncEnabled, workspaceConversationCard } from "../src/workspace-sync.mjs";
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import { createWorkspaceSync, isWorkspaceSyncEnabled } from '../src/workspace-sync.mjs';
 
-const config = Object.freeze({
-  workspaceSync: Object.freeze({
-    url: "http://127.0.0.1:18765/",
-    token: "test-private-sync-token",
-    channelId: "423456789012345678",
-    workspaceName: "workspace"
-  })
-});
+const config = { workspaceSync: { url: 'http://127.0.0.1:18765/', token: 'test-token', workspaceName: 'workspace' } };
 
-test("workspace sync mirrors the explicit conversation contract and submits through the loopback relay", async () => {
+test('Viewer mirroring has no execution API and only posts bounded display entries', async () => {
   const requests = [];
-  const sent = [];
-  let clock = 10_000;
-  const message = {
-    async edit(payload) {
-      sent.push({ edit: true, payload });
-      return this;
-    }
-  };
-  const channel = {
-    async send(payload) {
-      sent.push({ edit: false, payload });
-      return message;
-    }
-  };
-  const fetchImpl = async (url, options) => {
+  const sync = createWorkspaceSync({ config, fetchImpl: async (url, options) => {
     requests.push({ url: String(url), options });
-    if (options.method === "POST") {
-      return new Response(JSON.stringify({ status: "accepted", execution: "codex" }), { status: 202 });
-    }
-    if (String(url).endsWith("/api/conversation/status")) {
-      return new Response(JSON.stringify({ available: true, busy: true, currentTask: { id: "task:1" } }), { status: 200 });
-    }
-    return new Response(JSON.stringify({
-      schemaVersion: 1,
-      latestRevision: 3,
-      draft: { revision: 1, clientId: "viewer:1", text: "正在輸入的網頁草稿" },
-      entries: [{
-        revision: 2,
-        source: "viewer",
-        kind: "prompt",
-        text: "請同步處理開發工具",
-        conversationId: "viewer:prompt:1"
-      }, {
-        revision: 3,
-        source: "workspace",
-        kind: "progress",
-        text: "Codex is processing the request",
-        conversationId: "viewer:prompt:1"
-      }]
-    }), { status: 200 });
-  };
-  const sync = createWorkspaceSync({
-    config,
-    fetchImpl,
-    now: () => clock,
-    log: () => {}
-  });
-
-  assert.equal(sync.handlesWorkspace("workspace"), true);
-  assert.equal(sync.handlesWorkspace("core"), false);
-  assert.equal(isWorkspaceSyncEnabled(config, "workspace"), true);
-  await sync.start({ channels: { fetch: async () => channel } });
-  assert.equal(sent.length, 2, "draft preview and one coalesced status card should be created");
-  assert.match(sent[0].payload.content, /網頁草稿/);
-  assert.match(sent[1].payload.content, /網頁 Prompt/);
-
-  const result = await sync.submitPrompt({ prompt: "從 Discord 送出", clientMessageId: "discord:1" });
-  assert.equal(result.execution, "codex");
-  const post = requests.at(-1);
-  assert.equal(post.options.headers.authorization, "Bearer test-private-sync-token");
-  assert.match(post.url, /\/api\/conversation\/prompt$/);
-  assert.deepEqual(JSON.parse(post.options.body), { prompt: "從 Discord 送出", clientMessageId: "discord:1" });
-  assert.deepEqual(await sync.status(), { available: true, busy: true, currentTask: { id: "task:1" } });
-  assert.equal((await sync.cancel()).status, "accepted");
-  sync.stop();
-  clock += 10_000;
+    return new Response('{}', { status: 202 });
+  } });
+  for (const key of ['submitPrompt', 'cancel', 'status', 'handlesWorkspace', 'start']) assert.equal(sync[key], undefined);
+  assert.equal(isWorkspaceSyncEnabled(config, 'workspace'), true);
+  sync.record('core', { runId: 'ignored', event: 'started' });
+  sync.record('workspace', { runId: 'run1', event: 'started' });
+  sync.record('workspace', { runId: 'run1', event: 'completed' });
+  await sync.drain();
+  assert.equal(requests.length, 2);
+  for (const request of requests) {
+    assert.match(request.url, /\/api\/conversation\/mirror$/);
+    assert.equal(request.options.headers.authorization, 'Bearer test-token');
+    assert.deepEqual(Object.keys(JSON.parse(request.options.body)), ['runId', 'event']);
+  }
+  sync.record('workspace', { runId: 'run1', event: 'command' });
+  await sync.drain();
+  assert.equal(requests.length, 2);
 });
 
-test("conversation cards limit Discord payloads and keep prompt content explicit", () => {
-  const card = workspaceConversationCard({
-    revision: 1,
-    source: "discord",
-    kind: "prompt",
-    text: "x".repeat(2_000)
-  });
-  assert.match(card, /Discord Prompt/);
-  assert.match(card, /已送到 TotemWorkspace/);
-  assert.ok(card.length <= 1_950);
+test('slow Viewer coalesces progress, preserves terminal order and does not block record callers', async () => {
+  let unblock;
+  const blocked = new Promise(resolve => { unblock = resolve; });
+  const values = [];
+  const sync = createWorkspaceSync({ config, fetchImpl: async (_url, options) => {
+    values.push(JSON.parse(options.body));
+    if (values.length === 1) await blocked;
+    return new Response('{}', { status: 202 });
+  } });
+  assert.equal(sync.record('workspace', { runId: 'slow', event: 'started' }), undefined);
+  for (let i = 0; i < 100; i++) sync.record('workspace', { runId: 'slow', event: i === 99 ? 'files' : 'command' });
+  sync.record('workspace', { runId: 'slow', event: 'completed' });
+  unblock(); await sync.drain();
+  assert.deepEqual(values.map(value => value.event), ['started', 'files', 'completed']);
+});
+
+test('Viewer failure is isolated and raw errors, commands, questions and answers are not mirrored', async () => {
+  const messages = [];
+  let fetches = 0;
+  const sync = createWorkspaceSync({ config, log: text => messages.push(text), fetchImpl: async () => {
+    fetches++; throw new Error('secret-token private-endpoint');
+  } });
+  sync.progress('workspace', 'failed', { method: 'item/commandExecution/outputDelta', params: { delta: 'PRIVATE OUTPUT' } });
+  sync.progress('workspace', 'failed', { method: 'item/tool/requestUserInput', params: { questions: ['PRIVATE QUESTION'] } });
+  assert.equal(fetches, 0);
+  sync.record('workspace', { runId: 'failed', event: 'failed' });
+  await sync.drain();
+  assert.equal(fetches, 1);
+  assert.doesNotMatch(messages.join(''), /secret-token|private-endpoint/);
+});
+
+test('status projection cannot carry arbitrary text, paths, credentials or prompts', async () => {
+  const entries = [];
+  const sync = createWorkspaceSync({ config, fetchImpl: async (_url, options) => {
+    entries.push(JSON.parse(options.body)); return new Response('{}', { status: 202 });
+  } });
+  sync.record('workspace', { runId: 'private', event: 'started', text: ['-----BEGIN', 'PRIVATE KEY----- secret', '/home', 'user/file'].join(' ') });
+  sync.progress('workspace', 'private', { method: 'item/started', params: { item: { type: 'commandExecution', command: 'secret' } } });
+  await sync.drain();
+  assert.deepEqual(entries, [{ runId: 'private', event: 'started' }, { runId: 'private', event: 'command' }]);
 });

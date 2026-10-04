@@ -230,6 +230,21 @@
       ],
       "notes": "Declared integration failures must fail closed rather than bypass container-network authorization."
     },
+    "totem-lumen": {
+      "validation": [
+        "unit-tests",
+        "shader-compilation",
+        "configured-version-api-check",
+        "dedicated-server-load-check",
+        "client-runtime-check",
+        "vulkan-resource-lifecycle",
+        "apple-silicon-moltenvk",
+        "native-vulkan-desktop",
+        "server-authority",
+        "budget-boundedness"
+      ],
+      "notes": "Java 25 / Minecraft 26.3. Validate owning Gradle shader/mixin checks, dedicated-server isolation and affected RGB rules. Renderer changes require native Vulkan and Apple Silicon/MoltenVK lifecycle and in-world evidence; shader compilation or fallback frames do not prove full-lighting readiness, visual acceptance or FPS."
+    },
     "totem-nexus": {
       "validation": [
         "gametest",

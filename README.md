@@ -148,7 +148,11 @@ scripts/*.mjs
 tools/codex-discord/*.mjs
 ```
 
-Shared runtime CLI：
+原生 Codex CLI／IDE 對話可經由 MCP 使用 `allocation_start`、`allocation_status`、`allocation_feedback` 顯示分配、進度與回饋。模型建議由宿主控制執行，回報不冒充實際證據；詳見 [原生對話分配](docs/native-codex-allocation.md)。
+
+原生 terminal UI 可用 `node scripts/codex-auto.mjs --cwd ..` 啟動每回合自動選模型；先執行 `npm ci --prefix tools/codex-auto`。同 thread 延續、原生核准與 sandbox 保留，使用專用私有 Unix socket；詳見 [CLI 自動模型路由](docs/native-codex-auto-routing.md)。
+
+既有 shared runtime CLI（本次原生對話開發未擴充此入口）：
 
 ```sh
 node scripts/totem-runtime.mjs capabilities

@@ -59,6 +59,16 @@ jobs:
         run: node scripts/validate-development-replay.mjs
       - name: Validate Phase 7 adaptive orchestration
         run: node scripts/validate-adaptive-orchestration.mjs
+      - name: Validate model routing and native Codex task feedback
+        run: node scripts/validate-model-policy.mjs && node scripts/validate-native-allocation.mjs
+      - name: Install native CLI router dependencies
+        run: npm ci --prefix tools/codex-auto --ignore-scripts --no-audit --no-fund
+      - name: Validate native CLI automatic model routing
+        run: npm test --prefix tools/codex-auto
+      - name: Install Discord surface dependencies
+        run: npm ci --prefix tools/codex-discord --ignore-scripts --no-audit --no-fund
+      - name: Validate Discord runtime, input ownership and display transport
+        run: npm test --prefix tools/codex-discord
       - name: Validate remote bridge shell syntax
         run: bash -n tools/remote/bridge.sh
       - name: Validate remote tmux bridge tooling

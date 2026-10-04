@@ -176,6 +176,37 @@
       ]
     },
     {
+      "id": "totem-lumen",
+      "name": "TotemLumen",
+      "active": true,
+      "version": "0.1.0-alpha.61",
+      "defaultBranch": "main",
+      "commit": "f4180149ca566ab44b91b7b1060505903c901ca8",
+      "repository": "https://github.com/Yunitrish006006/TotemLumen",
+      "coreDependency": null,
+      "role": "Vulkan-only 體素光線追蹤、材質與光照渲染，以及獨立於 GPU 的伺服器權威 RGB gameplay lighting。",
+      "snapshot": {
+        "date": "2026-10-03",
+        "minecraft": "26.3",
+        "java": 25,
+        "fabricLoader": ">=0.19.5",
+        "fabricApi": "0.160.5+26.3",
+        "scope": "source-state",
+        "publicationStateInferred": false
+      },
+      "featureGroups": [
+        "Vulkan 體素光追：compute baseline、Apple Silicon MoltenVK 路徑與原版世界畫面接管；硬體 RT 尚待評估。",
+        "光照與反射：陰影、單次反彈 GI、時間累積、降噪、玻璃透光與獨立反射 pass；完整真機驗收仍待完成。",
+        "場景幾何：方塊模型、方塊實體、精確流體與 Player/LivingEntity 擷取；其他 renderer families 與材質完整度仍待補齊。",
+        "LabPBR 材質：貼圖、normal/AO、粗糙度、金屬、發光、alpha coverage 與動畫；entity/block-entity fidelity 仍待完成。",
+        "伺服器 RGB 照明：權威光場、資料包規則、區塊同步、存檔恢復與生成判定；專用伺服器不初始化 Vulkan。",
+        "渲染設定與診斷：Minecraft Pure/RGB/Totem Lumen profiles、品質設定、pipeline cache 與生命週期診斷；編譯及效能驗收仍進行中。"
+      ],
+      "declaredSuggests": [],
+      "runtimeOptionalIntegrationIds": [],
+      "observerProviders": []
+    },
+    {
       "id": "totem-nexus",
       "name": "TotemNexus",
       "active": true,

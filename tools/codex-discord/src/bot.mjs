@@ -1,10 +1,12 @@
+import { userInputCard, presentUserInput, userInputModal, answersFromModal, ownsUserInput } from "./user-input.mjs";
 import { randomUUID } from "node:crypto";
 import { ActionRowBuilder, ActivityType, ButtonBuilder, ButtonStyle, Client, Events, GatewayIntentBits, REST, Routes, SlashCommandBuilder } from "discord.js";
 import { isAllowedInteraction, isAllowedMessage } from "./config.mjs";
 import { validateModel } from "./codex-runner.mjs";
-import { discordOutputImages } from "./output-images.mjs";
+import { discordOutputAttachments, outputFileName, withoutLocalFileLinks } from "./output-images.mjs";
 import { conversationKey, sessionKey, taskKey } from "./session-store.mjs";
 import { createWorkspaceSync } from "./workspace-sync.mjs";
+import { splitDiscordMessage } from "./discord-markdown.mjs";
 
 const MAX_DISCORD_MESSAGE = 1_850;
 const PROGRESS_EDIT_INTERVAL_MS = 1_200;
@@ -198,17 +200,7 @@ function reasoningLabel(effort) {
 }
 
 function splitMessage(message) {
-  const normalized = message.trim() || "Codex completed without a final message.";
-  const chunks = [];
-  let remaining = normalized;
-  while (remaining.length > MAX_DISCORD_MESSAGE) {
-    let cut = remaining.lastIndexOf("\n", MAX_DISCORD_MESSAGE);
-    if (cut < 1) cut = MAX_DISCORD_MESSAGE;
-    chunks.push(remaining.slice(0, cut));
-    remaining = remaining.slice(cut).trimStart();
-  }
-  chunks.push(remaining);
-  return chunks;
+  return splitDiscordMessage(message, MAX_DISCORD_MESSAGE);
 }
 
 /**
@@ -217,24 +209,53 @@ function splitMessage(message) {
  * cards remain editable for the whole local Codex run.
  */
 export async function statusChunks(status, message, files = []) {
-  const [first, ...rest] = splitMessage(message);
+  let content = withoutLocalFileLinks(message);
+  let delivered = true;
   try {
-    await status.edit({ content: first, components: [], files, allowedMentions: { parse: [] } });
+    if (files.length > 0) {
+      const receipt = await status.edit({ content: "附件上傳中，尚未確認交付。", components: [],
+        attachments: [], files, allowedMentions: { parse: [] } });
+      const attachments = Array.from(receipt?.attachments?.values?.() ?? []);
+      const used = new Set();
+      for (const file of files) {
+        const match = attachments.find(attachment => !used.has(attachment.id)
+          && attachment.id && attachment.name === file.name && attachment.size > 0
+          && /^https:\/\/(?:cdn\.discordapp\.com|media\.discordapp\.net)\//.test(attachment.url ?? ""));
+        if (!match) throw Object.assign(new Error("Attachment receipt incomplete"), { code: "ATTACHMENT_UNCONFIRMED" });
+        used.add(match.id);
+      }
+      content = `附件已由 Discord 確認：${files.map(file => outputFileName(file.name)).join("、")}\n\n${content}`;
+    }
   } catch (error) {
     if (error?.code === 10_008 || error?.rawError?.code === 10_008) {
       console.warn("Discord status message no longer exists; skipping its final update.");
       return false;
     }
     if (files.length === 0) throw error;
-    const detail = error instanceof Error ? `${error.name}: ${error.message}` : String(error);
-    console.warn(`Discord attachment upload failed for ${files.length} file(s): ${detail}`);
-    return statusChunks(status,
-      `${message}\n\n（圖片附件上傳失敗；請確認 Bot 具有 Attach Files 權限，且伺服器附件大小限制足夠。）`, []);
+    const code = error?.code ?? error?.rawError?.code;
+    const reason = code === 50_013 ? "Bot 缺少 Attach Files 或頻道權限"
+      : code === 40_005 || error?.status === 413 ? "超過 Discord 附件大小限制"
+      : code === "ATTACHMENT_UNCONFIRMED" ? "Discord 回覆未包含全部預期附件"
+      : "上傳失敗或結果不明；請檢查網路、Attach Files 權限及容量限制";
+    console.warn(`Discord attachment delivery unconfirmed for ${files.length} file(s).`);
+    delivered = false;
+    content = `附件交付未完成：${files.map(file => outputFileName(file.name)).join("、")}。${reason}。\n以下僅為文字結果，不代表附件已送達；本機路徑不能下載。\n\n${content}`;
+  }
+  const [first, ...rest] = splitMessage(content);
+  try {
+    // Omit attachments here: preserve uploads acknowledged by the first edit.
+    await status.edit({ content: first, components: [], allowedMentions: { parse: [] } });
+  } catch (error) {
+    if (error?.code === 10_008 || error?.rawError?.code === 10_008) {
+      console.warn("Discord status message no longer exists; skipping its final update.");
+      return false;
+    }
+    throw error;
   }
   for (const chunk of rest) {
     await status.channel.send({ content: chunk, allowedMentions: { parse: [] } });
   }
-  return true;
+  return delivered;
 }
 
 /** Keeps a Discord delivery failure from terminating the Gateway event loop. */
@@ -248,16 +269,16 @@ export async function safeStatusChunks(status, content, files = []) {
   }
 }
 
-async function completedTaskPayload(result, workspace) {
-  const images = await discordOutputImages({
+export async function completedTaskPayload(result, workspace) {
+  const attachments = await discordOutputAttachments({
     generatedPaths: result.imagePaths ?? [],
     message: result.message,
     workspace
   });
-  const warning = images.skipped > 0
-    ? `\n\n（另有 ${images.skipped} 張圖片因超過限制、格式錯誤或不在允許的工作區而未上傳。）`
+  const warning = attachments.skipped > 0
+    ? `\n\n附件交付未完成：${attachments.skipped} 個附件未上傳。\n${attachments.issues.slice(0, 8).map(issue => `- ${issue.name}：${issue.reason}`).join("\n")}\n本機路徑不是下載連結。`
     : "";
-  return { files: images.files, warning };
+  return { files: attachments.files, warning };
 }
 
 function resultPrefix(result) {
@@ -359,6 +380,7 @@ function requestedPermissions(permissions) {
 }
 
 function approvalDescription(approval) {
+  if (approval.kind === "user-input") return userInputCard(approval);
   const lines = ["**需要你的授權才能繼續。**"];
   if (approval.kind === "command") {
     if (approval.network) lines.push(`網路連線：\`${approval.network.protocol}://${approval.network.host}\``);
@@ -429,7 +451,8 @@ export function formatQuestionResult(task, result, progressLines = []) {
   );
   if (result.usageSummary) {
     const summary = result.usageSummary;
-    lines.push('', `用量：工具 ${summary.observedToolCalls} 次｜context ${summary.firstContext ?? '?'}→${summary.peakContext}｜thread input/output ${summary.threadInputTokens ?? '?'}/${summary.threadOutputTokens ?? '?'}｜回報模型 ${summary.reportedModel ?? '未知'}｜要求 effort ${summary.requestedEffort ?? '預設'}（非逐輪分佈）`);
+    lines.push('', `用量：本輪工具 ${summary.observedToolCalls} 次｜本輪 context ${summary.firstContext ?? '?'}→${summary.peakContext}｜整段對話累計 input/output ${summary.threadInputTokens ?? '?'}/${summary.threadOutputTokens ?? '?'}｜回報模型 ${summary.reportedModel ?? '未知'}｜要求 effort ${summary.requestedEffort ?? '預設'}（非逐輪分佈）`);
+    if (summary.stopReason === 'context-limit') lines.push(`本輪 context 已達本機 ${summary.maxContextTokens} tokens 上限，並非帳戶配額耗盡。請先保存工作摘要，再用 \`/codex reset\` 選擇工作區，於新對話提供摘要與明確需求；reset 只移除 DC 的對話對應，原始歷史仍保留。`);
   }
   return lines.join("\n");
 }
@@ -687,7 +710,10 @@ export function createProgressReporter({ workspaceName, task, model, reasoningEf
     } else if (method === "bridge/sessionReset") {
       activity = "舊工作階段無法恢復，正在建立新的工作階段…";
     } else if (method === "bridge/usageGuard") {
-      activity = params.action === 'stop' ? '已達用量上限，正在暫停；任務尚未完成。' : '用量提醒：請收斂工作並保存檢查點。';
+      activity = params.action === 'stop'
+        ? (params.stopReason === 'context-limit' ? `本輪 context 已達本機 ${params.maxContextTokens} tokens 上限，正在暫停；並非帳戶配額耗盡。`
+          : `本輪已達本機 ${params.maxToolCalls} 次工具操作上限，正在暫停；任務尚未完成。`)
+        : (params.mode === 'observe' ? '本輪用量提醒：保存進度後繼續；目前為不中斷模式。' : '本輪用量提醒：請收斂工作並保存檢查點。');
       setCliProgress('usage-guard', activity, 'append');
     } else if (method === "bridge/gradleAutoApproved") {
       activity = "已自動同意 Gradle 編譯／測試，正在繼續…";
@@ -701,7 +727,7 @@ export function createProgressReporter({ workspaceName, task, model, reasoningEf
     update,
     async requestApproval(value, components) {
       approval = { value, components };
-      activity = "正在等待你的授權…";
+      activity = value.kind === "user-input" ? "正在等待你的回答…" : "正在等待你的授權…";
       await flush();
     },
     async approvalSubmitted(autoApproveAll = false) {
@@ -749,7 +775,7 @@ async function acknowledgeSteering(message) {
   }
 }
 
-async function runTask({ config, runner, sessions, userId, channelId, workspaceName, task, model = null, reasoningEffort = null, imageUrls = [], onProgress = () => {}, onApproval = () => {} }) {
+async function runTask({ config, runner, sessions, userId, channelId, workspaceName, task, model = null, reasoningEffort = null, imageUrls = [], onProgress = () => {}, onApproval = () => {}, onUserInput = null }) {
   const workspaceConfig = config.workspaces.get(workspaceName);
   if (!workspaceConfig) throw new Error("That workspace is not configured");
   const savedKey = sessionKey({ userId, channelId, workspace: workspaceName });
@@ -768,7 +794,8 @@ async function runTask({ config, runner, sessions, userId, channelId, workspaceN
       await sessions.set(savedKey, { sessionId, workspace: workspaceName, updatedAt: new Date().toISOString() });
     },
     onProgress,
-    onApproval
+    onApproval,
+    onUserInput
   });
   if (result.sessionId && result.sessionId !== saved?.sessionId) {
     await sessions.set(savedKey, { sessionId: result.sessionId, workspace: workspaceName, updatedAt: new Date().toISOString() });
@@ -783,7 +810,7 @@ export async function registerCommands(config) {
   });
 }
 
-export async function startBot({ config, runner, sessions, models = [] }) {
+export async function startBot({ config, runner, sessions, models = [], clientFactory = options => new Client(options) }) {
   const approvals = new Map();
   const activeTasks = new Map();
   const workspaceSync = createWorkspaceSync({ config });
@@ -795,10 +822,11 @@ export async function startBot({ config, runner, sessions, models = [] }) {
       .catch((error) => { console.warn(`Could not refresh Codex usage presence: ${error.message}`); });
     return usagePresenceRefresh;
   };
-  const registerApproval = ({ approval, key, userId, channelId, progress }) => {
+  const registerApproval = ({ approval, key, userId, channelId, progress, runId }) => {
     const token = randomUUID();
     approvals.set(token, {
       ...approval,
+      runId,
       key,
       userId,
       channelId,
@@ -806,15 +834,15 @@ export async function startBot({ config, runner, sessions, models = [] }) {
     });
     return token;
   };
-  const resolveApproval = async (key, requestId) => {
+  const resolveApproval = async (key, requestId, runId) => {
     for (const [token, approval] of approvals) {
-      if (approval.key === key && approval.requestId === String(requestId)) {
+      if (approval.key === key && approval.runId === runId && approval.requestId === String(requestId)) {
         approvals.delete(token);
         await approval.progress.resolveApproval(requestId);
       }
     }
   };
-  const client = new Client({
+  const client = clientFactory({
     intents: [
       GatewayIntentBits.Guilds,
       GatewayIntentBits.GuildMessages,
@@ -828,9 +856,31 @@ export async function startBot({ config, runner, sessions, models = [] }) {
   client.once(Events.ClientReady, (readyClient) => {
     console.info(`CodexDiscord ready as ${readyClient.user.tag}`);
     void refreshUsagePresence();
-    void workspaceSync.start(readyClient);
   });
   client.on(Events.InteractionCreate, async (interaction) => {
+    if ((interaction.isButton() && interaction.customId.startsWith("codex:input:"))
+        || (interaction.isModalSubmit() && interaction.customId.startsWith("codex:answers:"))) {
+      const token = interaction.customId.split(":")[2];
+      const input = approvals.get(token);
+      if (!ownsUserInput(input, interaction, isAllowedInteraction(interaction, config)) || !belongsToActiveRun(input, activeTasks)) {
+        await interaction.reply({ content: "這個問題已失效，或不屬於你的工作。", ephemeral: true, allowedMentions: { parse: [] } });
+        return;
+      }
+      if (interaction.isButton()) {
+        await interaction.showModal(userInputModal(token, input));
+        return;
+      }
+      try {
+        const answers = answersFromModal(input, interaction.fields);
+        if (!runner.answerUserInput(input.key, input.requestId, answers)) throw new Error("問題已結束，答案未送出");
+        approvals.delete(token);
+        await input.progress.resolveApproval(input.requestId);
+        await interaction.reply({ content: "答案已送回 Codex。", ephemeral: true, allowedMentions: { parse: [] } });
+      } catch (error) {
+        await interaction.reply({ content: error.message, ephemeral: true, allowedMentions: { parse: [] } });
+      }
+      return;
+    }
     if (interaction.isAutocomplete()) {
       if (interaction.commandName !== "codex" || !isAllowedInteraction(interaction, config)) {
         await interaction.respond([]);
@@ -858,7 +908,7 @@ export async function startBot({ config, runner, sessions, models = [] }) {
     if (interaction.isButton() && interaction.customId.startsWith("codex:approval:")) {
       const [, , token, choice] = interaction.customId.split(":");
       const approval = approvals.get(token);
-      if (!approval) {
+      if (!approval || !belongsToActiveRun(approval, activeTasks)) {
         approvals.delete(token);
         await interaction.update({ components: [] });
         await interaction.followUp({
@@ -874,15 +924,13 @@ export async function startBot({ config, runner, sessions, models = [] }) {
       }
       await interaction.deferUpdate();
       const autoApproveAll = choice === "allow-all";
-      const accepted = autoApproveAll
+      const accepted = belongsToActiveRun(approval, activeTasks) && (autoApproveAll
         ? runner.approveAll(approval.key, approval.requestId)
-        : runner.approve(approval.key, approval.requestId, choice);
+        : runner.approve(approval.key, approval.requestId, choice));
       approvals.delete(token);
       if (accepted) {
         if (autoApproveAll) {
-          for (const [pendingToken, pendingApproval] of approvals) {
-            if (pendingApproval.key === approval.key) approvals.delete(pendingToken);
-          }
+          retireRunApprovals(approvals, approval.runId, pending => pending.kind !== "user-input");
         }
         await approval.progress.approvalSubmitted(autoApproveAll);
       }
@@ -976,42 +1024,22 @@ export async function startBot({ config, runner, sessions, models = [] }) {
     let taskStarted = false;
     let progress = null;
     let activeTask = null;
+    const mirrorRunId = randomUUID();
     try {
       if (action === "status") {
-        if (workspaceSync.handlesWorkspace(workspaceName)) {
-          try {
-            const shared = await workspaceSync.status();
-            const state = shared.busy ? `running (${shared.currentTask?.id ?? "task"})` : shared.available ? "idle" : "adapter unavailable";
-            await interaction.reply({ content: `Shared TotemWorkspace Codex queue: ${state}.`, ephemeral: true, allowedMentions: { parse: [] } });
-          } catch (error) {
-            await interaction.reply({ content: `Could not query the shared TotemWorkspace queue: ${error.message}`, ephemeral: true, allowedMentions: { parse: [] } });
-          }
-          return;
-        }
+
         const saved = sessions.get(savedKey);
         const state = runner.isRunning(activeKey) ? "running" : saved ? "ready to resume" : "new";
         const model = sessions.activeModel(conversation) ?? "local default";
         const reasoningEffort = reasoningLabel(sessions.activeReasoningEffort(conversation));
         const progressLines = sessions.progressLineCount(conversation) ?? DEFAULT_CLI_PROGRESS_LINES;
-        await interaction.reply({ content: `Codex session for **${workspaceName}**: ${state}. Model: **${model}**. Reasoning depth: **${reasoningEffort}**. Gray progress lines: **${progressLines}**.`, ephemeral: true, allowedMentions: { parse: [] } });
+        const budget = config.usageGuardMode === 'observe' ? '只提醒，不因工具次數或 context 中斷' : '80 次工具／64K context';
+        const duration = config.maxRuntimeMs ? `${config.maxRuntimeMs / 1000} 秒` : '不限時';
+        await interaction.reply({ content: `Codex session for **${workspaceName}**: ${state}. Model: **${model}**. Reasoning depth: **${reasoningEffort}**. Gray progress lines: **${progressLines}**.\n本機任務預算：${budget}；執行時間：${duration}。`, ephemeral: true, allowedMentions: { parse: [] } });
         return;
       }
       if (action === "cancel") {
-        if (workspaceSync.handlesWorkspace(workspaceName)) {
-          try {
-            const result = await workspaceSync.cancel();
-            await interaction.reply({
-              content: result.status === "cancelling"
-                ? "Sent a cancellation request to the shared TotemWorkspace Codex task."
-                : "The shared TotemWorkspace Codex queue is already idle.",
-              ephemeral: true,
-              allowedMentions: { parse: [] }
-            });
-          } catch (error) {
-            await interaction.reply({ content: `Could not cancel the shared TotemWorkspace task: ${error.message}`, ephemeral: true, allowedMentions: { parse: [] } });
-          }
-          return;
-        }
+
         const stopped = runner.cancel(activeKey);
         await interaction.reply({ content: stopped ? "Sent a stop request to your active Codex task." : "No active Codex task for this workspace.", ephemeral: true, allowedMentions: { parse: [] } });
         return;
@@ -1029,29 +1057,7 @@ export async function startBot({ config, runner, sessions, models = [] }) {
       }
 
       task = interaction.options.getString("task", true);
-      if (workspaceSync.handlesWorkspace(workspaceName)) {
-        if (interaction.options.getAttachment("image", false)) {
-          await interaction.reply({
-            content: "The shared TotemWorkspace prompt channel currently accepts text only.",
-            ephemeral: true,
-            allowedMentions: { parse: [] }
-          });
-          return;
-        }
-        await interaction.deferReply();
-        status = await interaction.fetchReply();
-        const relay = await workspaceSync.submitPrompt({
-          prompt: task,
-          clientMessageId: `interaction:${interaction.id}`
-        });
-        await status.edit({
-          content: relay.execution === "codex"
-            ? "Prompt sent to the shared TotemWorkspace Codex queue. Progress is mirrored below."
-            : "Prompt was recorded by TotemWorkspace; check the mirrored status for its execution state.",
-          allowedMentions: { parse: [] }
-        });
-        return;
-      }
+
       const model = sessions.activeModel(conversation);
       const activeModel = activeCatalogModel(model, models);
       const attachment = interaction.options.getAttachment("image", false);
@@ -1079,9 +1085,9 @@ export async function startBot({ config, runner, sessions, models = [] }) {
         imageCount: imageUrls.length,
         edit: (payload) => status.edit(payload)
       });
-      taskStarted = true;
       activeTask = {
         key: activeKey,
+        runId: mirrorRunId,
         mapKey: savedKey,
         userId: interaction.user.id,
         channelId: interaction.channelId,
@@ -1090,25 +1096,32 @@ export async function startBot({ config, runner, sessions, models = [] }) {
         progress,
         model: activeModel
       };
-      activeTasks.set(savedKey, activeTask);
+      claimActiveTask(activeTasks, activeTask, runner);
+      taskStarted = true;
+      workspaceSync.record(workspaceName, { runId: mirrorRunId, event: "started" });
       const { result } = await runTask({
         config, runner, sessions, userId: interaction.user.id, channelId: interaction.channelId, workspaceName, task,
         model,
         reasoningEffort,
         imageUrls,
         onProgress: async (event) => {
-          if (event?.method === "serverRequest/resolved") await resolveApproval(activeKey, event.params?.requestId);
+          workspaceSync.progress(workspaceName, mirrorRunId, event);
+          if (event?.method === "serverRequest/resolved") await resolveApproval(activeKey, event.params?.requestId, mirrorRunId);
           progress.update(event);
         },
+        onUserInput: (input) => presentUserInput({ input, key: activeKey, userId: interaction.user.id, channelId: interaction.channelId,
+          status, register: args => registerApproval({ ...args, runId: mirrorRunId }), forget: token => approvals.delete(token) }),
         onApproval: async (approval) => {
-          const token = registerApproval({ approval, key: activeKey, userId: interaction.user.id, channelId: interaction.channelId, progress });
+          const token = registerApproval({ approval, runId: mirrorRunId, key: activeKey, userId: interaction.user.id, channelId: interaction.channelId, progress });
           await progress.requestApproval(approval, approvalComponents(token, approval));
         }
       });
       const retainedProgress = await progress.finish();
+      workspaceSync.record(workspaceName, { runId: mirrorRunId, event: result.exitCode === 0 ? "completed" : "failed" });
       const output = await completedTaskPayload(result, workspaceConfig.path);
-      await safeStatusChunks(status, `${formatQuestionResult(task, result, retainedProgress)}${output.warning}`, output.files);
+      await safeStatusChunks(status, `${output.warning}\n${formatQuestionResult(task, result, retainedProgress)}`, output.files);
     } catch (error) {
+      if (taskStarted) workspaceSync.record(workspaceName, { runId: mirrorRunId, event: "failed" });
       const message = `Codex request failed: ${error.message}`;
       if (status) {
         const retainedProgress = progress ? await progress.finish() : [];
@@ -1118,7 +1131,10 @@ export async function startBot({ config, runner, sessions, models = [] }) {
       else await interaction.reply({ content: message, ephemeral: true, allowedMentions: { parse: [] } });
     } finally {
       if (activeTask && activeTasks.get(activeTask.mapKey) === activeTask) activeTasks.delete(activeTask.mapKey);
-      if (taskStarted) void refreshUsagePresence();
+      if (taskStarted) {
+        await clearRunApprovals(approvals, mirrorRunId);
+        void refreshUsagePresence();
+      }
     }
   });
   client.on(Events.MessageCreate, async (message) => {
@@ -1157,30 +1173,7 @@ export async function startBot({ config, runner, sessions, models = [] }) {
       return;
     }
     const task = message.content.trim() || "請檢視我上傳的圖片，說明你看到的內容並依此處理。";
-    if (workspaceSync.handlesWorkspace(workspaceName)) {
-      if (message.attachments.size > 0) {
-        await message.reply({
-          content: "The shared TotemWorkspace prompt channel currently accepts text only.",
-          allowedMentions: { parse: [] }
-        });
-        return;
-      }
-      try {
-        const relay = await workspaceSync.submitPrompt({ prompt: task, clientMessageId: message.id });
-        await message.reply({
-          content: relay.execution === "codex"
-            ? "已送到共用 TotemWorkspace Codex 佇列；處理進度會同步到這裡與網頁。"
-            : "Prompt 已由 TotemWorkspace 記錄；請查看同步狀態。",
-          allowedMentions: { parse: [] }
-        });
-      } catch (error) {
-        await message.reply({
-          content: `無法送到 TotemWorkspace：${error.message}`,
-          allowedMentions: { parse: [] }
-        });
-      }
-      return;
-    }
+
     const model = sessions.activeModel(conversation);
     const reasoningEffort = sessions.activeReasoningEffort(conversation);
     let imageUrls;
@@ -1196,6 +1189,7 @@ export async function startBot({ config, runner, sessions, models = [] }) {
       await message.reply({ content: "Codex is already working on this workspace, possibly in another Discord thread. Reply to that task's status card to steer it, or use `/codex cancel` first.", allowedMentions: { parse: [] } });
       return;
     }
+    const mirrorRunId = randomUUID();
     const modelLabel = model ?? "local default";
     const status = await message.reply({ content: `Codex is working in **${workspaceName}** with **${modelLabel}** at **${reasoningLabel(reasoningEffort)}** reasoning depth${imageUrls.length ? ` and ${imageUrls.length} image(s)` : ""}…`, allowedMentions: { parse: [] } });
     const progress = createProgressReporter({
@@ -1209,6 +1203,7 @@ export async function startBot({ config, runner, sessions, models = [] }) {
     });
     const activeTask = {
       key: activeKey,
+      runId: mirrorRunId,
       mapKey: savedKey,
       userId: message.author.id,
       channelId: message.channelId,
@@ -1217,31 +1212,65 @@ export async function startBot({ config, runner, sessions, models = [] }) {
       progress,
       model: activeCatalogModel(model, models)
     };
-    activeTasks.set(savedKey, activeTask);
+    let taskStarted = false;
     try {
+      claimActiveTask(activeTasks, activeTask, runner);
+      taskStarted = true;
+      workspaceSync.record(workspaceName, { runId: mirrorRunId, event: "started" });
       const { result } = await runTask({
         config, runner, sessions, userId: message.author.id, channelId: message.channelId, workspaceName, task, model, reasoningEffort, imageUrls,
         onProgress: async (event) => {
-          if (event?.method === "serverRequest/resolved") await resolveApproval(activeKey, event.params?.requestId);
+          workspaceSync.progress(workspaceName, mirrorRunId, event);
+          if (event?.method === "serverRequest/resolved") await resolveApproval(activeKey, event.params?.requestId, mirrorRunId);
           progress.update(event);
         },
+        onUserInput: (input) => presentUserInput({ input, key: activeKey, userId: message.author.id, channelId: message.channelId,
+          status, register: args => registerApproval({ ...args, runId: mirrorRunId }), forget: token => approvals.delete(token) }),
         onApproval: async (approval) => {
-          const token = registerApproval({ approval, key: activeKey, userId: message.author.id, channelId: message.channelId, progress });
+          const token = registerApproval({ approval, runId: mirrorRunId, key: activeKey, userId: message.author.id, channelId: message.channelId, progress });
           await progress.requestApproval(approval, approvalComponents(token, approval));
         }
       });
       const retainedProgress = await progress.finish();
+      workspaceSync.record(workspaceName, { runId: mirrorRunId, event: result.exitCode === 0 ? "completed" : "failed" });
       const output = await completedTaskPayload(result, workspaceConfig.path);
-      await safeStatusChunks(status, `${formatQuestionResult(task, result, retainedProgress)}${output.warning}`, output.files);
+      await safeStatusChunks(status, `${output.warning}\n${formatQuestionResult(task, result, retainedProgress)}`, output.files);
     } catch (error) {
+      if (taskStarted) workspaceSync.record(workspaceName, { runId: mirrorRunId, event: "failed" });
       const retainedProgress = await progress.finish();
       await safeStatusChunks(status,
         formatQuestionResult(task, { exitCode: 1, message: `Codex request failed: ${error.message}` }, retainedProgress));
     } finally {
       if (activeTasks.get(savedKey) === activeTask) activeTasks.delete(savedKey);
+      await clearRunApprovals(approvals, mirrorRunId);
       void refreshUsagePresence();
     }
   });
   await client.login(config.botToken);
   return client;
+}
+
+export function belongsToActiveRun(pending, activeTasks) {
+  return Boolean(pending?.runId) && [...activeTasks.values()].some(task => task.key === pending.key && task.runId === pending.runId);
+}
+
+function claimActiveTask(activeTasks, task, runner) {
+  // Discord delivery yields before registration: another request may have started meanwhile.
+  if (runner.isRunning(task.key) || [...activeTasks.values()].some(active => active.key === task.key))
+    throw new Error("Codex is already working on this workspace. Reply to its status card or cancel it first.");
+  activeTasks.set(task.mapKey, task);
+}
+
+export function retireRunApprovals(approvals, runId, predicate = () => true) {
+  const retired = [];
+  for (const [token, pending] of approvals) if (pending.runId === runId && predicate(pending)) {
+    approvals.delete(token); retired.push(pending);
+  }
+  return retired;
+}
+
+// Retire only this invocation's cards, atomically before any asynchronous Discord edits.
+export async function clearRunApprovals(approvals, runId) {
+  const retired = retireRunApprovals(approvals, runId);
+  await Promise.allSettled(retired.map(pending => Promise.resolve().then(() => pending.progress.resolveApproval(pending.requestId))));
 }

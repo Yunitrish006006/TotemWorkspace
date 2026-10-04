@@ -38,6 +38,14 @@ node scripts/totem-intelligence.mjs render-graph
 
 ## Shared execution contract
 
+### Native Codex conversation allocation
+
+For substantive native Codex CLI/IDE tasks, when the allocation tools are available, call `allocation_start` after narrowing the owner. Keep the returned task ID for this task; reuse it for follow-ups. Present a short allocation summary in the user's language: scope, recommended model/effort, reason and evidence status. The host controls the primary model; never claim the recommendation switched it. Continue the normal intelligence lifecycle and independent review requirements.
+
+Use `allocation_status` to report a stage only at meaningful transitions or answer a status request. A reported stage never proves dependencies complete. At task end call `allocation_feedback` once, distinguishing quality failure, infrastructure failure, cancellation, quota exhaustion and incomplete work. Caller-supplied model/validation/review fields remain reported claims; leave unknown fields unset. Display completed work and actual validation separately from the tool's unverified record. Reuse the task ID instead of creating samples for the same task. Tools unavailable in an already-running MCP session are a reload boundary: continue ordinary work and do not restart active services or spawn the standalone runtime CLI.
+
+The first policy learns advisory promotions from at least five comparable reports with two quality failures, within a thirty-day/policy-version window. It never lowers risk, validation or approval requirements; successful reports alone never establish verified completion or justify downgrading. Details: [native allocation](../../../docs/native-codex-allocation.md).
+
 TotemWorkspace constrains work; it does not prescribe a fixed internal agent topology.
 All non-trivial Totem development uses the same lifecycle from Flutter, Discord, Bridge, CLI, IDE or sibling-repository Codex:
 
