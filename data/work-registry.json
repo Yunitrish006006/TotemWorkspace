@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-07T01:24:00+08:00",
+  "updatedAt": "2026-10-07T01:34:00+08:00",
   "activeWorkId": "totem-workspace-bounded-execution",
   "workItems": [
     {
@@ -15,12 +15,13 @@
           "purpose": "Own planning, runtime execution constraints, durable work state, and developer-facing progress surfaces."
         }
       ],
-      "currentTaskId": "TWX-05",
+      "currentTaskId": "TWX-06",
       "completedTaskIds": [
         "TWX-01",
         "TWX-02",
         "TWX-03",
-        "TWX-04"
+        "TWX-04",
+        "TWX-05"
       ],
       "blockedBy": [],
       "milestones": [
@@ -156,7 +157,7 @@
           "goal": "Update durable work progress after each micro-task while keeping transient runtime/replay details local.",
           "primaryConcept": "checkpoint persistence",
           "repository": "Yunitrish006006/TotemWorkspace",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "TWX-02",
             "TWX-03"
@@ -180,7 +181,7 @@
           "goal": "Expose active objective, target repositories, plan, current task, blockers, and completion state through supported Workspace surfaces.",
           "primaryConcept": "work progress visibility",
           "repository": "Yunitrish006006/TotemWorkspace",
-          "status": "planned",
+          "status": "in-progress",
           "dependsOn": [
             "TWX-05"
           ],
@@ -188,20 +189,26 @@
             "supported clients can read the active work summary",
             "plan state is visually distinct from actual runtime activity"
           ],
-          "stopBoundary": "Do not expand the architecture graph contract beyond progress visibility."
+          "stopBoundary": "Do not expand the architecture graph contract beyond progress visibility.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/work-progress-surface"
+            }
+          ]
         }
       ],
       "checkpoint": {
-        "summary": "TWX-04 context guardrails are implemented in PR #51; automatic checkpoint persistence is the current task.",
-        "currentTaskId": "TWX-05",
-        "branch": "feature/automatic-work-checkpoints",
+        "summary": "TWX-05 automatic checkpoint persistence passed PR #52 validation; Work Progress surface is the current final task.",
+        "currentTaskId": "TWX-06",
+        "branch": "feature/work-progress-surface",
         "head": null,
         "filesChanged": [],
-        "validation": "PR #51 validation passed; TWX-05 implementation is awaiting its own CI.",
+        "validation": "PR #52 validation passed; TWX-06 validation pending.",
         "remainingRisks": [
-          "TWX-05 implementation has not yet passed CI"
+          "TWX-06 API and Flutter surface have not yet passed CI"
         ],
-        "nextTask": "TWX-06"
+        "nextTask": null
       }
     }
   ]
