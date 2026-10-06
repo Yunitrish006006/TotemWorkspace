@@ -33,6 +33,19 @@ export const MICRO_TASK_POLICY = Object.freeze({
   contextEscalation: Object.freeze(["symbol", "function-or-range", "file", "module", "cross-module", "workspace"])
 });
 
+export const CONTEXT_PRESSURE_POLICY = Object.freeze({
+  retrievalOrder: Object.freeze(["symbol", "function-or-range", "file", "module", "cross-module", "workspace"]),
+  startAt: "symbol",
+  escalateOnlyOnEvidenceGap: true,
+  metadataBeforeFullDiff: true,
+  maxFullSourceFilesPerFetch: 1,
+  maxFullDiffsPerFetch: 1,
+  truncatedOutputUsableAsEvidence: false,
+  onTruncatedOutput: "discard-and-requery-narrower",
+  onBudgetPressure: "checkpoint-and-narrow",
+  broadWorkspaceScan: "last-resort"
+});
+
 // This is a work contract. The executor chooses its internal agent topology.
 export function buildOrchestrationPlan({ query, moduleId = null, featureId = null, changedModules = [], changedFiles = [], knowledge = loadKnowledge() } = {}) {
   if (typeof query !== "string" || !query.trim()) throw new Error("orchestration plan requires a query");
@@ -102,6 +115,7 @@ export function buildOrchestrationPlan({ query, moduleId = null, featureId = nul
     engineeringConstraints: ["Java 25 and repository Gradle wrapper; inspect configured Minecraft, Fabric Loader/API and mappings.", "Preserve dedicated-server safety and client-only class isolation; inspect shared API consumers before edits.", "Keep feature-specific behavior in its owning module; required validation cannot be waived for token savings."],
     optimization: EXECUTION_OPTIMIZATION,
     microTaskPolicy: MICRO_TASK_POLICY,
+    contextPressurePolicy: CONTEXT_PRESSURE_POLICY,
     contextHints: { budget: 8000, reuseEvidence: true, evidenceFields: ["modules", "contracts", "files", "symbols", "tests", "findings", "unresolvedQuestions"], modelPreference: highRisks.length || sharedContractStabilizationRequired ? "strong-reasoning-preferred" : "lightweight-preferred", escalationAllowed: true,
       escalationTriggers: ["architecture judgment", "conflicting contracts or evidence", "high-risk persistence/networking", "non-local validation failure", "insufficient correctness confidence", "retries cost more tokens than escalation"],
       strategy: "Use the cheapest capable available model for bounded work. Reuse compact evidence before delegation or escalation; prefer sequential execution when it avoids duplicate context. No fixed agent topology is required." },
@@ -113,5 +127,6 @@ export function buildOrchestrationPlan({ query, moduleId = null, featureId = nul
 export function orchestrationPlanSummary(plan) {
   return Object.freeze({ schemaVersion: plan.schemaVersion, score: plan.score, modules: plan.affectedModules,
     execution: plan.execution, waves: plan.waves, independentReviewRequired: plan.independentReviewRequired,
-    requiredValidation: plan.requiredValidation, optimization: plan.optimization, microTaskPolicy: plan.microTaskPolicy, contextHints: plan.contextHints });
+    requiredValidation: plan.requiredValidation, optimization: plan.optimization, microTaskPolicy: plan.microTaskPolicy,
+    contextPressurePolicy: plan.contextPressurePolicy, contextHints: plan.contextHints });
 }
