@@ -2040,7 +2040,9 @@ class _WorkProgressSummary extends StatelessWidget {
         active.status == 'blocked';
     final progressValue = active.totalTasks == 0
         ? 1.0
-        : (active.completedTasks / active.totalTasks).clamp(0.0, 1.0);
+        : (active.completedTasks / active.totalTasks)
+              .clamp(0.0, 1.0)
+              .toDouble();
     final statusColor = blocked
         ? const Color(0xFFFCA5A5)
         : current?.status == 'in-review'
