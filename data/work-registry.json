@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-07T01:10:00+08:00",
+  "updatedAt": "2026-10-07T01:20:00+08:00",
   "activeWorkId": "totem-workspace-bounded-execution",
   "workItems": [
     {
@@ -15,7 +15,7 @@
           "purpose": "Own planning, runtime execution constraints, durable work state, and developer-facing progress surfaces."
         }
       ],
-      "currentTaskId": "TWX-04",
+      "currentTaskId": "TWX-05",
       "completedTaskIds": [
         "TWX-01",
         "TWX-02",
@@ -129,7 +129,7 @@
           "goal": "Enforce narrow-first source and diff retrieval and stop/requery when tool output is truncated or exceeds context budget.",
           "primaryConcept": "context pressure guardrails",
           "repository": "Yunitrish006006/TotemWorkspace",
-          "status": "in-progress",
+          "status": "in-review",
           "dependsOn": [
             "TWX-03"
           ],
@@ -155,7 +155,7 @@
           "goal": "Update durable work progress after each micro-task while keeping transient runtime/replay details local.",
           "primaryConcept": "checkpoint persistence",
           "repository": "Yunitrish006006/TotemWorkspace",
-          "status": "planned",
+          "status": "in-progress",
           "dependsOn": [
             "TWX-02",
             "TWX-03"
@@ -165,7 +165,13 @@
             "local runtime checkpoint stores branch, head, files, validation, risks, and exact next task",
             "resume starts from the latest checkpoint instead of rescanning the whole workspace"
           ],
-          "stopBoundary": "Do not build viewer controls in this task."
+          "stopBoundary": "Do not build viewer controls in this task.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/automatic-work-checkpoints"
+            }
+          ]
         },
         {
           "id": "TWX-06",
@@ -185,14 +191,16 @@
         }
       ],
       "checkpoint": {
-        "summary": "TWX-01, TWX-02, and TWX-03 are validated; TWX-04 context escalation guardrails are implemented in PR #51 and awaiting its CI.",
-        "currentTaskId": "TWX-04",
-        "branch": "feature/context-escalation-guardrails",
-        "validation": "PR #48, #49, and #50 validation passed; PR #51 validation pending.",
+        "summary": "TWX-04 context guardrails are implemented in PR #51; automatic checkpoint persistence is the current task.",
+        "currentTaskId": "TWX-05",
+        "branch": "feature/automatic-work-checkpoints",
+        "head": null,
+        "filesChanged": [],
+        "validation": "PR #51 Workspace and inventory checks passed; Flutter validation still pending when TWX-05 began.",
         "remainingRisks": [
-          "automatic checkpoint persistence and resume-first execution are not implemented yet"
+          "TWX-05 implementation has not yet passed CI"
         ],
-        "nextTask": "TWX-05"
+        "nextTask": "TWX-06"
       }
     }
   ]
