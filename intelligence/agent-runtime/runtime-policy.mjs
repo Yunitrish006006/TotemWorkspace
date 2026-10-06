@@ -7,6 +7,7 @@ Prefer available lightweight/Spark models for bounded discovery, symbol/consumer
 Escalate to stronger Astra reasoning for ambiguity, architecture or protocol decisions, shared critical APIs, conflicting contracts/evidence, risky persistence/networking, non-local failures, insufficient correctness confidence, or when repeated lightweight attempts cost more than escalation. Supply compact evidence before escalation, not another workspace scan.
 Choose actual models from the runtime catalog and capability routing decision. A model preference is not evidence that a model ran. Do not bind fixed agent roles to models. When a delegated model differs from the primary, use fork_turns="none" and bounded context rather than inheriting the complete conversation.
 Reuse resolve_task, graph, context_pack, code index, relevant symbols/tests, and compact upstream findings. Prefer sequential work when it avoids duplicate context. Parallelize only independent work with small context duplication, within the plan's write concurrency limit.
+Micro-task boundaries are execution gates, not suggestions. When an active work task is supplied, execute only that task. Do not start, implement, pre-emptively edit for, or silently roll into the next task. Stop when the current task's done criteria are satisfied or a blocker prevents completion, and honor its stop boundary exactly.
 For non-trivial Totem work, perform resolve_task -> orchestration_plan -> bounded context -> implementation -> impact -> test_plan -> actual deterministic validation. Starting from Web, Discord, CLI, IDE, Local Bridge, or a sibling repository does not change this lifecycle or the semantic execution contract.
 Enforce affected module ownership, read/write scopes, dependency ordering, max concurrent writes, shared-contract stabilization before consumer writes, impacted-consumer inspection, required validation, security constraints, and release gates. When independentReviewRequired is true, perform genuinely independent review using a mechanism you choose; never silently omit it.
 Use Java 25 and each repository's Gradle wrapper. Read the actual configured Minecraft, Fabric Loader/API, mappings and build settings. Preserve dedicated-server safety and client-only isolation. Inspect all shared API consumers before changing their contract; keep feature-specific behavior in its owning module.
@@ -16,9 +17,11 @@ Edits are not releases. Commit/push only when authorized; publish only with expl
 Record only real runtime lifecycle/model/usage/delegation evidence. Planned waves, parallelism and model hints are not spawned agents or measured token usage. Never automatically replay a failed turn after work began.
 Keep final responses concise: result, affected components, actual validation and material remaining risks.`;
 
-export function buildDeveloperInstructions({ plan = null, modelPolicy = null } = {}) {
+export function buildDeveloperInstructions({ plan = null, modelPolicy = null, activeWorkTask = null } = {}) {
   const sections = [CORE_DEVELOPER_INSTRUCTIONS];
   if (plan) sections.push(`Authoritative execution constraints: ${JSON.stringify(plan)}`);
+  if (activeWorkTask) sections.push(`Authoritative active micro-task: ${JSON.stringify(activeWorkTask)}
+Execute only this micro-task. Treat doneCriteria as the completion gate and stopBoundary as a hard scope boundary. Do not continue into another task after completion; report the checkpoint and stop.`);
   if (modelPolicy) sections.push(`Live model routing decision: ${JSON.stringify(modelPolicy)}`);
   if (modelPolicy?.mode === 'spark-only') sections.push('General quota is exhausted. Only the confirmed separate Spark quota may be used, including delegated work. Do not bypass this quota restriction or accept unsupported image input; stop when that model/quota becomes unavailable.');
   return sections.join('\n\n');
