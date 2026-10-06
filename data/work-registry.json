@@ -1,0 +1,175 @@
+{
+  "schemaVersion": 1,
+  "updatedAt": "2026-10-07T00:54:00+08:00",
+  "activeWorkId": "totem-workspace-bounded-execution",
+  "workItems": [
+    {
+      "id": "totem-workspace-bounded-execution",
+      "title": "TotemWorkspace bounded execution hardening",
+      "objective": "Make TotemWorkspace plan, execute, checkpoint, and resume small verifiable development tasks without overloading model context or losing cross-session progress.",
+      "status": "in-progress",
+      "targetRepositories": [
+        {
+          "repository": "Yunitrish006006/TotemWorkspace",
+          "moduleId": "totem-workspace",
+          "purpose": "Own planning, runtime execution constraints, durable work state, and developer-facing progress surfaces."
+        }
+      ],
+      "currentTaskId": "TWX-02",
+      "completedTaskIds": [],
+      "blockedBy": [],
+      "milestones": [
+        {
+          "id": "TWX-M1",
+          "title": "Planning and durable work state",
+          "tasks": [
+            "TWX-01",
+            "TWX-02"
+          ]
+        },
+        {
+          "id": "TWX-M2",
+          "title": "Runtime bounded execution",
+          "tasks": [
+            "TWX-03",
+            "TWX-04",
+            "TWX-05"
+          ]
+        },
+        {
+          "id": "TWX-M3",
+          "title": "Progress visibility",
+          "tasks": [
+            "TWX-06"
+          ]
+        }
+      ],
+      "tasks": [
+        {
+          "id": "TWX-01",
+          "title": "Micro-task planning contract",
+          "goal": "Define one-primary-concept task boundaries, split triggers, focused validation, checkpoints, and stop boundaries in orchestration plans.",
+          "primaryConcept": "micro-task planning contract",
+          "repository": "Yunitrish006006/TotemWorkspace",
+          "status": "in-review",
+          "dependsOn": [],
+          "doneCriteria": [
+            "orchestration plans expose the micro-task policy",
+            "validation covers required micro-task contract fields"
+          ],
+          "stopBoundary": "Do not add runtime enforcement in this task.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/micro-task-planning-contract"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemWorkspace/pull/48"
+            }
+          ]
+        },
+        {
+          "id": "TWX-02",
+          "title": "Work registry foundation",
+          "goal": "Persist current objective, repository scope, full task plan, progress, blockers, and checkpoints in TotemWorkspace.",
+          "primaryConcept": "durable work registry",
+          "repository": "Yunitrish006006/TotemWorkspace",
+          "status": "in-progress",
+          "dependsOn": [
+            "TWX-01"
+          ],
+          "doneCriteria": [
+            "data/work-registry.json stores the active initiative and decomposed plan",
+            "registry structure is validated in CI",
+            "current task and per-task progress are machine-readable"
+          ],
+          "stopBoundary": "Do not automatically mutate registry state from the runtime yet.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/work-registry-foundation"
+            }
+          ]
+        },
+        {
+          "id": "TWX-03",
+          "title": "Runtime micro-task enforcement",
+          "goal": "Require the runtime developer instructions to execute at most one planned micro-task at a time and stop at its boundary.",
+          "primaryConcept": "runtime task-boundary enforcement",
+          "repository": "Yunitrish006006/TotemWorkspace",
+          "status": "planned",
+          "dependsOn": [
+            "TWX-01",
+            "TWX-02"
+          ],
+          "doneCriteria": [
+            "runtime instructions consume the micro-task contract",
+            "runtime cannot silently roll into the next planned task"
+          ],
+          "stopBoundary": "Do not add context truncation handling or progress UI."
+        },
+        {
+          "id": "TWX-04",
+          "title": "Context escalation guardrails",
+          "goal": "Enforce narrow-first source and diff retrieval and stop/requery when tool output is truncated or exceeds context budget.",
+          "primaryConcept": "context pressure guardrails",
+          "repository": "Yunitrish006006/TotemWorkspace",
+          "status": "planned",
+          "dependsOn": [
+            "TWX-03"
+          ],
+          "doneCriteria": [
+            "runtime guidance follows symbol-to-workspace escalation",
+            "truncated output is treated as a failed retrieval that must be narrowed"
+          ],
+          "stopBoundary": "Do not add automatic checkpoint persistence."
+        },
+        {
+          "id": "TWX-05",
+          "title": "Automatic checkpoint persistence",
+          "goal": "Update durable work progress after each micro-task while keeping transient runtime/replay details local.",
+          "primaryConcept": "checkpoint persistence",
+          "repository": "Yunitrish006006/TotemWorkspace",
+          "status": "planned",
+          "dependsOn": [
+            "TWX-02",
+            "TWX-03"
+          ],
+          "doneCriteria": [
+            "micro-task completion updates canonical task progress",
+            "local runtime checkpoint stores branch, head, files, validation, risks, and exact next task",
+            "resume starts from the latest checkpoint instead of rescanning the whole workspace"
+          ],
+          "stopBoundary": "Do not build viewer controls in this task."
+        },
+        {
+          "id": "TWX-06",
+          "title": "Work progress surface",
+          "goal": "Expose active objective, target repositories, plan, current task, blockers, and completion state through supported Workspace surfaces.",
+          "primaryConcept": "work progress visibility",
+          "repository": "Yunitrish006006/TotemWorkspace",
+          "status": "planned",
+          "dependsOn": [
+            "TWX-05"
+          ],
+          "doneCriteria": [
+            "supported clients can read the active work summary",
+            "plan state is visually distinct from actual runtime activity"
+          ],
+          "stopBoundary": "Do not expand the architecture graph contract beyond progress visibility."
+        }
+      ],
+      "checkpoint": {
+        "summary": "Micro-task planning contract is in PR #48; durable Work Registry foundation is the current task.",
+        "currentTaskId": "TWX-02",
+        "branch": "feature/work-registry-foundation",
+        "validation": "pending",
+        "remainingRisks": [
+          "runtime does not yet enforce or automatically update registry progress"
+        ],
+        "nextTask": "TWX-03"
+      }
+    }
+  ]
+}
