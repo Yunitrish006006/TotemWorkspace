@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-07T01:00:00+08:00",
+  "updatedAt": "2026-10-07T01:06:00+08:00",
   "activeWorkId": "totem-workspace-bounded-execution",
   "workItems": [
     {
@@ -15,7 +15,7 @@
           "purpose": "Own planning, runtime execution constraints, durable work state, and developer-facing progress surfaces."
         }
       ],
-      "currentTaskId": "TWX-03",
+      "currentTaskId": "TWX-04",
       "completedTaskIds": [
         "TWX-02"
       ],
@@ -100,7 +100,7 @@
           "goal": "Require the runtime developer instructions to execute at most one planned micro-task at a time and stop at its boundary.",
           "primaryConcept": "runtime task-boundary enforcement",
           "repository": "Yunitrish006006/TotemWorkspace",
-          "status": "in-progress",
+          "status": "in-review",
           "dependsOn": [
             "TWX-01",
             "TWX-02"
@@ -109,7 +109,17 @@
             "runtime instructions consume the micro-task contract",
             "runtime cannot silently roll into the next planned task"
           ],
-          "stopBoundary": "Do not add context truncation handling or progress UI."
+          "stopBoundary": "Do not add context truncation handling or progress UI.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/runtime-micro-task-enforcement"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemWorkspace/pull/50"
+            }
+          ]
         },
         {
           "id": "TWX-04",
@@ -117,7 +127,7 @@
           "goal": "Enforce narrow-first source and diff retrieval and stop/requery when tool output is truncated or exceeds context budget.",
           "primaryConcept": "context pressure guardrails",
           "repository": "Yunitrish006006/TotemWorkspace",
-          "status": "planned",
+          "status": "in-progress",
           "dependsOn": [
             "TWX-03"
           ],
@@ -125,7 +135,13 @@
             "runtime guidance follows symbol-to-workspace escalation",
             "truncated output is treated as a failed retrieval that must be narrowed"
           ],
-          "stopBoundary": "Do not add automatic checkpoint persistence."
+          "stopBoundary": "Do not add automatic checkpoint persistence.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/context-escalation-guardrails"
+            }
+          ]
         },
         {
           "id": "TWX-05",
@@ -163,14 +179,14 @@
         }
       ],
       "checkpoint": {
-        "summary": "Work Registry foundation is implemented and PR #49 validation passed; runtime micro-task enforcement is the current task.",
-        "currentTaskId": "TWX-03",
-        "branch": "feature/runtime-micro-task-enforcement",
-        "validation": "PR #49 GitHub Actions passed",
+        "summary": "Runtime micro-task enforcement is implemented in PR #50; context escalation guardrails are the current task.",
+        "currentTaskId": "TWX-04",
+        "branch": "feature/context-escalation-guardrails",
+        "validation": "PR #50 core Workspace and inventory checks passed; Flutter validation was still running when TWX-04 began.",
         "remainingRisks": [
-          "runtime does not yet guard truncated/oversized retrievals or persist checkpoints automatically"
+          "automatic checkpoint persistence and resume-first execution are not implemented yet"
         ],
-        "nextTask": "TWX-04"
+        "nextTask": "TWX-05"
       }
     }
   ]
