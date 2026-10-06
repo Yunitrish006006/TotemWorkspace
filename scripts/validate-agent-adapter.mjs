@@ -6,7 +6,9 @@ import path from 'node:path';
 import { createAgentAdapter } from '../intelligence/agent-adapter.mjs';
 import { loadKnowledge } from '../intelligence/workspace-knowledge.mjs';
 import { buildOrchestrationPlan } from '../intelligence/orchestration-plan.mjs';
-import { CORE_DEVELOPER_INSTRUCTIONS } from '../intelligence/agent-runtime/runtime-policy.mjs';
+import { buildDeveloperInstructions, CORE_DEVELOPER_INSTRUCTIONS } from '../intelligence/agent-runtime/runtime-policy.mjs';
+import { resolveActiveRuntimeTask } from '../intelligence/agent-runtime/runtime.mjs';
+import { activeWorkItem, loadWorkRegistry } from '../intelligence/work-registry.mjs';
 
 const root = fs.mkdtempSync(path.join(os.tmpdir(), 'totem-agent-adapter-'));
 const workspaceRoot = path.join(root, 'TotemWorkspace');
@@ -100,6 +102,17 @@ try {
   await assert.rejects(pending, /cancelled/);
   assert.match(CORE_DEVELOPER_INSTRUCTIONS, /does not prescribe your internal agent topology/);
   assert.match(CORE_DEVELOPER_INSTRUCTIONS, /minimum total model-token/);
+  assert.match(CORE_DEVELOPER_INSTRUCTIONS, /Micro-task boundaries are execution gates/);
+  const registry = loadWorkRegistry(knowledge.root);
+  const activeWork = activeWorkItem(registry);
+  const activeRuntimeTask = resolveActiveRuntimeTask(knowledge.root, knowledge);
+  assert.equal(activeRuntimeTask?.taskId, activeWork.currentTaskId);
+  assert.equal(activeRuntimeTask?.repository, activeWork.tasks.find((entry) => entry.id === activeWork.currentTaskId)?.repository);
+  const taskInstructions = buildDeveloperInstructions({ plan, activeWorkTask: activeRuntimeTask });
+  assert.match(taskInstructions, /Authoritative active micro-task/);
+  assert.ok(taskInstructions.includes(activeRuntimeTask.stopBoundary));
+  assert.match(taskInstructions, /Do not continue into another task/);
+  assert.equal(resolveActiveRuntimeTask(path.join(root, 'UnrelatedRepo'), knowledge), null);
   const adapterSource = fs.readFileSync(new URL('../intelligence/agent-adapter.mjs', import.meta.url), 'utf8');
   assert.ok(!adapterSource.includes('["exec", "--json"'));
   assert.match(adapterSource, /CodexRunner/);
