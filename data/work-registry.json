@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-07T02:15:00+08:00",
-  "activeWorkId": "totem-workspace-bounded-execution",
+  "updatedAt": "2026-10-07T03:30:00+08:00",
+  "activeWorkId": "totem-alchemy-m6-effect-dose",
   "workItems": [
     {
       "id": "totem-workspace-bounded-execution",
@@ -212,6 +212,244 @@
         "validation": "PR #53 Validate TotemWorkspace, Validate Code-first Inventory, and Validate Flutter Viewer all passed. Earlier stacked PR validations also passed.",
         "remainingRisks": [],
         "nextTask": null
+      }
+    },
+    {
+      "id": "totem-alchemy-m6-effect-dose",
+      "title": "TotemAlchemy M6 EffectDose and concentration",
+      "objective": "Continue the TotemAlchemy 26.3 chemistry rewrite using the repository roadmap as the authoritative full plan, completing M6 as bounded independently verifiable micro-tasks before dependent M7 station-output work.",
+      "status": "in-progress",
+      "planSource": {
+        "repository": "Yunitrish006006/TotemAlchemy",
+        "path": "docs/alchemy-next-task-plan.md",
+        "note": "Authoritative full rewrite plan; this registry item tracks the currently active M6 milestone only."
+      },
+      "targetRepositories": [
+        {
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "moduleId": "totem-alchemy",
+          "purpose": "Implement EffectDose quantity, standard dose, concentration, presentation split, conservation and regression coverage."
+        }
+      ],
+      "currentTaskId": "M6-T02",
+      "completedTaskIds": [
+        "M6-T01"
+      ],
+      "blockedBy": [],
+      "milestones": [
+        {
+          "id": "M6",
+          "title": "EffectDose and concentration",
+          "tasks": [
+            "M6-T01",
+            "M6-T02",
+            "M6-T03",
+            "M6-T04",
+            "M6-T05",
+            "M6-T06",
+            "M6-T07",
+            "M6-T08",
+            "M6-T09",
+            "M6-T10"
+          ]
+        }
+      ],
+      "tasks": [
+        {
+          "id": "M6-T01",
+          "title": "Canonical EffectDose quantity",
+          "goal": "Make canonical EffectDose quantity explicit.",
+          "primaryConcept": "canonical conserved effect quantity",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "completed",
+          "dependsOn": [],
+          "doneCriteria": [
+            "EffectDose exposes canonical quantity",
+            "duration/amplifier conversion is explicit",
+            "focused GameTest adds no new regression"
+          ],
+          "stopBoundary": "Do not define standard-dose lookup or concentration."
+        },
+        {
+          "id": "M6-T02",
+          "title": "Standard dose lookup",
+          "goal": "Define standard dose lookup from registered one-bottle potion contents.",
+          "primaryConcept": "standard EffectDose lookup",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "in-review",
+          "dependsOn": [
+            "M6-T01"
+          ],
+          "doneCriteria": [
+            "registered potion contents remain source of truth",
+            "lookup returns canonical EffectDose per effect",
+            "focused normal/strong/effectless cases pass without new regression"
+          ],
+          "stopBoundary": "Do not derive concentration or change Brewing Stand output.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/effect-dose-standard-lookup"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/50"
+            }
+          ]
+        },
+        {
+          "id": "M6-T03",
+          "title": "Effect concentration",
+          "goal": "Derive effect concentration from EffectDose and liquid volume.",
+          "primaryConcept": "effect concentration calculation",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "planned",
+          "dependsOn": [
+            "M6-T02"
+          ],
+          "doneCriteria": [
+            "concentration has one explicit formula",
+            "standard one-bottle dose maps to baseline concentration",
+            "focused tests cover volume scaling"
+          ],
+          "stopBoundary": "Do not implement potency/duration presentation split."
+        },
+        {
+          "id": "M6-T04",
+          "title": "Sustained potency-duration split",
+          "goal": "Implement sustained-effect potency/duration split.",
+          "primaryConcept": "sustained effect presentation",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "planned",
+          "dependsOn": [
+            "M6-T03"
+          ],
+          "doneCriteria": [
+            "sustained effect output derives potency and duration from concentration",
+            "EffectDose quantity remains conserved"
+          ],
+          "stopBoundary": "Do not add configurable bias."
+        },
+        {
+          "id": "M6-T05",
+          "title": "Configurable split bias",
+          "goal": "Add configurable potency-duration bias with default 0.5.",
+          "primaryConcept": "potency-duration bias",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "planned",
+          "dependsOn": [
+            "M6-T04"
+          ],
+          "doneCriteria": [
+            "bias is configurable",
+            "default is 0.5",
+            "focused tests cover the default"
+          ],
+          "stopBoundary": "Do not implement instant-effect rules."
+        },
+        {
+          "id": "M6-T06",
+          "title": "Instant-effect concentration",
+          "goal": "Implement instant-effect concentration rule.",
+          "primaryConcept": "instant effect concentration",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "planned",
+          "dependsOn": [
+            "M6-T03"
+          ],
+          "doneCriteria": [
+            "instant effects use an explicit concentration rule",
+            "sustained-effect behavior remains unchanged"
+          ],
+          "stopBoundary": "Do not expand into dilution or merge regression work."
+        },
+        {
+          "id": "M6-T07",
+          "title": "Dilution conservation",
+          "goal": "Verify dilution conserves total EffectDose.",
+          "primaryConcept": "dilution conservation",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "planned",
+          "dependsOn": [
+            "M6-T03"
+          ],
+          "doneCriteria": [
+            "dilution changes concentration without creating or destroying EffectDose",
+            "focused regression passes"
+          ],
+          "stopBoundary": "Do not alter merge/extract semantics beyond what the test exposes."
+        },
+        {
+          "id": "M6-T08",
+          "title": "Merge and extract conservation",
+          "goal": "Verify merge/extract conserve EffectDose.",
+          "primaryConcept": "merge/extract conservation",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "planned",
+          "dependsOn": [
+            "M6-T07"
+          ],
+          "doneCriteria": [
+            "split plus remainder conserves EffectDose",
+            "merge restores conserved total",
+            "focused regression passes"
+          ],
+          "stopBoundary": "Do not add concentration caps."
+        },
+        {
+          "id": "M6-T09",
+          "title": "Normal recipe concentration cap",
+          "goal": "Add concentration cap behavior for normal recipes.",
+          "primaryConcept": "normal recipe concentration cap",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "planned",
+          "dependsOn": [
+            "M6-T04",
+            "M6-T06"
+          ],
+          "doneCriteria": [
+            "normal recipe cap is explicit",
+            "cap does not violate EffectDose accounting",
+            "focused cap tests pass"
+          ],
+          "stopBoundary": "Do not perform the full M6 regression pass."
+        },
+        {
+          "id": "M6-T10",
+          "title": "EffectDose regression pass",
+          "goal": "Run the bounded EffectDose regression pass.",
+          "primaryConcept": "M6 regression verification",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "planned",
+          "dependsOn": [
+            "M6-T05",
+            "M6-T06",
+            "M6-T08",
+            "M6-T09"
+          ],
+          "doneCriteria": [
+            "M6 focused tests pass",
+            "no new regressions beyond documented inherited failures",
+            "M7-T08 prerequisites are explicit"
+          ],
+          "stopBoundary": "Do not begin M7-T08 in the same task."
+        }
+      ],
+      "checkpoint": {
+        "summary": "M6-T01 is implemented and adds no new regression. M6-T02 is implemented in TotemAlchemy PR #50 and its Build is currently running.",
+        "currentTaskId": "M6-T02",
+        "branch": "feature/effect-dose-standard-lookup",
+        "head": "fa1c8f13d509c4dcfe7b5ff0334e2dc2d374d5d7",
+        "filesChanged": [
+          "docs/alchemy-next-task-plan.md",
+          "src/gametest/java/dev/totem/alchemy/gametest/AlchemyMixtureGameTest.java",
+          "src/main/java/dev/totem/alchemy/mixture/EffectDoseStandards.java"
+        ],
+        "validation": "M6-T01 build had no compile error and only the four known inherited GameTest failures. M6-T02 Build is in progress.",
+        "remainingRisks": [
+          "Repository-wide CI remains red from four inherited pre-M6 regressions until they are repaired separately."
+        ],
+        "nextTask": "M6-T03"
       }
     }
   ]
