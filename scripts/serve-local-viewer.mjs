@@ -33,7 +33,8 @@ import {
   activeWorkItem,
   captureRepositoryCheckpoint,
   loadWorkRegistry,
-  persistRuntimeWorkSettlement
+  persistRuntimeWorkSettlement,
+  workProgressPayload
 } from "../intelligence/work-registry.mjs";
 import { createConversationSync } from "../intelligence/conversation-sync.mjs";
 import {
@@ -785,6 +786,11 @@ async function handleApi(req, res, url, { agentAdapter, conversation, conversati
     } catch (error) {
       json(res, 400, { error: error instanceof Error ? error.message : String(error) });
     }
+    return true;
+  }
+
+  if (req.method === "GET" && pathname === "/api/work-progress") {
+    json(res, 200, workProgressPayload(loadWorkRegistry(ROOT)));
     return true;
   }
 
