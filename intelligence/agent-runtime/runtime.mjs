@@ -8,7 +8,7 @@ import { buildOrchestrationPlan } from "../orchestration-plan.mjs";
 import { loadKnowledge } from "../workspace-knowledge.mjs";
 import { resolveModelPolicy } from "../model-policy.mjs";
 import { probeCodexRuntime } from "../codex-runtime-probe.mjs";
-import { activeWorkItem, loadWorkRegistry } from "../work-registry.mjs";
+import { activeWorkItem, loadWorkRegistry, resumeCheckpointForTask } from "../work-registry.mjs";
 
 const MAX_PROMPT_LENGTH = 120_000;
 const MAX_IMAGE_INPUTS = 4;
@@ -47,7 +47,8 @@ export function resolveActiveRuntimeTask(workspace, knowledge = loadKnowledge())
       repository: task.repository,
       dependsOn: Object.freeze([...(task.dependsOn ?? [])]),
       doneCriteria: Object.freeze([...(task.doneCriteria ?? [])]),
-      stopBoundary: task.stopBoundary
+      stopBoundary: task.stopBoundary,
+      resumeCheckpoint: resumeCheckpointForTask(knowledge.root, work.id, task.id)
     });
   } catch {
     return null;
