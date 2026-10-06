@@ -281,3 +281,53 @@ export function resumeCheckpointForTask(root = ROOT, workId, taskId) {
   if (checkpoint.taskId !== taskId && checkpoint.nextTask !== taskId) return null;
   return checkpoint;
 }
+
+
+export function workProgressPayload(registry = loadWorkRegistry()) {
+  const active = activeWorkItem(registry);
+  if (!active) {
+    return Object.freeze({
+      schemaVersion: 1,
+      generatedAt: new Date().toISOString(),
+      kind: "plan-state",
+      activeWorkId: null,
+      active: null
+    });
+  }
+  const tasks = active.tasks ?? [];
+  const completedTasks = tasks.filter((task) => task.status === "completed").length;
+  const currentTask = tasks.find((task) => task.id === active.currentTaskId) ?? null;
+  const milestones = (active.milestones ?? []).map((milestone) => {
+    const milestoneTasks = (milestone.tasks ?? [])
+      .map((id) => tasks.find((task) => task.id === id))
+      .filter(Boolean);
+    return {
+      id: milestone.id,
+      title: milestone.title,
+      completedTasks: milestoneTasks.filter((task) => task.status === "completed").length,
+      totalTasks: milestoneTasks.length,
+      taskIds: [...(milestone.tasks ?? [])]
+    };
+  });
+  return Object.freeze({
+    schemaVersion: 1,
+    generatedAt: new Date().toISOString(),
+    kind: "plan-state",
+    activeWorkId: active.id,
+    active: Object.freeze({
+      id: active.id,
+      title: active.title,
+      objective: active.objective,
+      status: active.status,
+      currentTaskId: active.currentTaskId,
+      currentTask: currentTask ? Object.freeze(cloneJson(currentTask)) : null,
+      completedTasks,
+      totalTasks: tasks.length,
+      completionPercent: tasks.length ? Math.round((completedTasks / tasks.length) * 1000) / 10 : 100,
+      targetRepositories: Object.freeze(cloneJson(active.targetRepositories ?? [])),
+      blockedBy: Object.freeze([...(active.blockedBy ?? [])]),
+      milestones: Object.freeze(cloneJson(milestones)),
+      checkpoint: active.checkpoint ? Object.freeze(cloneJson(active.checkpoint)) : null
+    })
+  });
+}
