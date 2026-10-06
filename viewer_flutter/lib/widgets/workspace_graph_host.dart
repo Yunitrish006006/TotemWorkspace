@@ -23,6 +23,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
   late GraphData _data;
   LocalWorkspaceClient? _client;
   WorkspaceLiveStatus? _live;
+  WorkProgressState? _workProgress;
   Timer? _poller;
   Timer? _activityPoller;
   Timer? _verificationPoller;
@@ -111,6 +112,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
         client.verificationState(),
         client.agentAdapterStatus(),
         client.replayTimeline(),
+        client.workProgress(),
       ]);
       if (!mounted) {
         client.close();
@@ -121,6 +123,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
       final verification = results[2] as VerificationState;
       final adapter = results[3] as AgentAdapterStatus;
       final replayTimeline = results[4] as DevelopmentReplayTimeline;
+      final workProgress = results[5] as WorkProgressState;
       setState(() {
         _client = client;
         _live = status;
@@ -132,6 +135,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
             adapter.currentTask?.orchestration ??
             adapter.lastTask?.orchestration;
         _replayTimeline = replayTimeline;
+        _workProgress = workProgress;
         _replayDraftSequence = replayTimeline.latestSequence.toDouble();
         _mergeActivity(activity);
         _probing = false;
@@ -181,10 +185,14 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
     if (client == null || _refreshing || !_activePolls.add('workspace-status'))
       return;
     try {
-      final status = await client.workspaceStatus();
+      final results = await Future.wait<Object>([
+        client.workspaceStatus(),
+        client.workProgress(),
+      ]);
       if (!mounted) return;
       setState(() {
-        _live = status;
+        _live = results[0] as WorkspaceLiveStatus;
+        _workProgress = results[1] as WorkProgressState;
         _liveError = null;
       });
     } catch (error) {
@@ -508,12 +516,14 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
         client.graphData(),
         client.workspaceStatus(),
         client.verificationState(),
+        client.workProgress(),
       ]);
       if (!mounted) return;
       setState(() {
         _data = results[0] as GraphData;
         _live = results[1] as WorkspaceLiveStatus;
         _verification = results[2] as VerificationState;
+        _workProgress = results[3] as WorkProgressState;
         _change = change;
       });
     } catch (error) {
@@ -807,6 +817,7 @@ class _WorkspaceGraphHostState extends State<WorkspaceGraphHost> {
                 savingSettings: _savingSettings,
                 promptEnabled: _settings.promptEnabled,
                 live: live,
+                workProgress: _workProgress,
                 error: _liveError,
                 errorSource: _liveErrorSource,
                 onRefresh: isLocal ? _refreshWorkspace : null,
@@ -1902,6 +1913,7 @@ class _ModeBanner extends StatelessWidget {
     required this.savingSettings,
     required this.promptEnabled,
     required this.live,
+    required this.workProgress,
     required this.error,
     required this.errorSource,
     required this.onRefresh,
@@ -1916,6 +1928,7 @@ class _ModeBanner extends StatelessWidget {
   final bool savingSettings;
   final bool promptEnabled;
   final WorkspaceLiveStatus? live;
+  final WorkProgressState? workProgress;
   final String? error;
   final String? errorSource;
   final VoidCallback? onRefresh;
@@ -1932,16 +1945,20 @@ class _ModeBanner extends StatelessWidget {
         : 'PUBLISHED SNAPSHOT · FLUTTER ROOT';
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
       decoration: const BoxDecoration(
         color: Color(0xFF07111D),
         border: Border(bottom: BorderSide(color: Color(0xFF2B4058))),
       ),
-      child: Wrap(
-        spacing: 8,
-        runSpacing: 6,
-        crossAxisAlignment: WrapCrossAlignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
           Text(
             label,
             style: TextStyle(
@@ -1997,6 +2014,170 @@ class _ModeBanner extends StatelessWidget {
                   : const Icon(Icons.refresh, size: 16),
               label: Text(refreshing ? '重新索引中' : '重新整理本機'),
             ),
+              ],
+            ),
+          ),
+          if (local && workProgress?.active != null)
+            _WorkProgressSummary(progress: workProgress!),
+        ],
+      ),
+    );
+  }
+}
+
+class _WorkProgressSummary extends StatelessWidget {
+  const _WorkProgressSummary({required this.progress});
+
+  final WorkProgressState progress;
+
+  @override
+  Widget build(BuildContext context) {
+    final active = progress.active!;
+    final current = active.currentTask;
+    final checkpoint = active.checkpoint;
+    final blocked = active.blockedBy.isNotEmpty ||
+        current?.status == 'blocked' ||
+        active.status == 'blocked';
+    final progressValue = active.totalTasks == 0
+        ? 1.0
+        : (active.completedTasks / active.totalTasks).clamp(0.0, 1.0);
+    final statusColor = blocked
+        ? const Color(0xFFFCA5A5)
+        : current?.status == 'in-review'
+        ? const Color(0xFFFBBF24)
+        : const Color(0xFF86EFAC);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(12, 9, 12, 11),
+      decoration: const BoxDecoration(
+        color: Color(0xFF0A1521),
+        border: Border(top: BorderSide(color: Color(0xFF24394E))),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Text(
+                'WORK PLAN',
+                style: TextStyle(
+                  color: Color(0xFF93C5FD),
+                  fontSize: 10,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 0.7,
+                ),
+              ),
+              const Spacer(),
+              Text(
+                '${active.completedTasks}/${active.totalTasks} · ${active.completionPercent.toStringAsFixed(1)}%',
+                style: TextStyle(
+                  color: statusColor,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 6),
+          LinearProgressIndicator(
+            value: progressValue,
+            minHeight: 5,
+            borderRadius: BorderRadius.circular(5),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            active.title,
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w800),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            active.objective,
+            maxLines: 3,
+            overflow: TextOverflow.ellipsis,
+            style: const TextStyle(
+              color: Color(0xFFB8C7D9),
+              fontSize: 11,
+              height: 1.35,
+            ),
+          ),
+          if (current != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'CURRENT · ${current.id} · ${current.status.toUpperCase()} · ${current.title}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: statusColor,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              current.goal,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF94A3B8),
+                fontSize: 10.5,
+                height: 1.3,
+              ),
+            ),
+          ],
+          if (active.targetRepositories.isNotEmpty) ...[
+            const SizedBox(height: 7),
+            Text(
+              'REPO · ${active.targetRepositories.map((entry) => entry.repository).join(' · ')}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF67E8F9),
+                fontSize: 10.5,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+          if (active.milestones.isNotEmpty) ...[
+            const SizedBox(height: 7),
+            Text(
+              'MILESTONES · ${active.milestones.map((entry) => '${entry.id} ${entry.completedTasks}/${entry.totalTasks}').join(' · ')}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFFC4B5FD),
+                fontSize: 10.5,
+              ),
+            ),
+          ],
+          if (active.blockedBy.isNotEmpty) ...[
+            const SizedBox(height: 7),
+            Text(
+              'BLOCKED · ${active.blockedBy.join(' · ')}',
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFFFCA5A5),
+                fontSize: 10.5,
+                fontWeight: FontWeight.w800,
+              ),
+            ),
+          ],
+          if (checkpoint?.summary != null &&
+              checkpoint!.summary!.isNotEmpty) ...[
+            const SizedBox(height: 7),
+            Text(
+              'CHECKPOINT · ${checkpoint.summary}'
+              '${checkpoint.nextTask == null ? '' : ' · next ${checkpoint.nextTask}'}',
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                color: Color(0xFF9FB4CA),
+                fontSize: 10.5,
+                height: 1.3,
+              ),
+            ),
+          ],
         ],
       ),
     );
