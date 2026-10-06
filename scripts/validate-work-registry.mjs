@@ -10,6 +10,7 @@ import {
   persistRuntimeWorkSettlement,
   resumeCheckpointForTask,
   validateWorkRegistry,
+  workProgressPayload,
   workRegistrySummary
 } from "../intelligence/work-registry.mjs";
 
@@ -30,6 +31,16 @@ assert.equal(summary.activeWorkId, active.id);
 assert.equal(summary.active.currentTaskId, active.currentTaskId);
 assert.equal(summary.active.totalTasks, active.tasks.length);
 assert.ok(summary.active.checkpoint?.summary);
+
+const progress = workProgressPayload(registry);
+assert.equal(progress.kind, "plan-state");
+assert.equal(progress.activeWorkId, active.id);
+assert.equal(progress.active.currentTaskId, active.currentTaskId);
+assert.equal(progress.active.currentTask.id, active.currentTaskId);
+assert.equal(progress.active.completedTasks, active.tasks.filter((task) => task.status === "completed").length);
+assert.equal(progress.active.totalTasks, active.tasks.length);
+assert.ok(progress.active.completionPercent >= 0 && progress.active.completionPercent <= 100);
+assert.equal(progress.active.milestones.length, active.milestones.length);
 
 console.log(`Totem work registry validation passed: ${active.id}, current task ${active.currentTaskId}, ${summary.active.completedTasks}/${summary.active.totalTasks} completed.`);
 
@@ -102,3 +113,5 @@ try {
 const viewerSource = fs.readFileSync(new URL("./serve-local-viewer.mjs", import.meta.url), "utf8");
 assert.ok(viewerSource.includes("persistRuntimeWorkSettlement(knowledge.root"), "Bridge must persist canonical progress when a runtime task settles");
 assert.ok(viewerSource.includes("captureRepositoryCheckpoint(repositoryRoot)"), "Bridge must capture branch, HEAD and changed files for the checkpoint");
+assert.ok(viewerSource.includes('pathname === "/api/work-progress"'), "Bridge must expose canonical work progress separately from runtime activity");
+assert.ok(viewerSource.includes("workProgressPayload(loadWorkRegistry(ROOT))"), "Work progress API must derive from the canonical registry");
