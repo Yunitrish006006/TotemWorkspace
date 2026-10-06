@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-07T03:30:00+08:00",
+  "updatedAt": "2026-10-07T03:40:00+08:00",
   "activeWorkId": "totem-alchemy-m6-effect-dose",
   "workItems": [
     {
@@ -231,9 +231,10 @@
           "purpose": "Implement EffectDose quantity, standard dose, concentration, presentation split, conservation and regression coverage."
         }
       ],
-      "currentTaskId": "M6-T02",
+      "currentTaskId": "M6-T03",
       "completedTaskIds": [
-        "M6-T01"
+        "M6-T01",
+        "M6-T02"
       ],
       "blockedBy": [],
       "milestones": [
@@ -276,7 +277,7 @@
           "goal": "Define standard dose lookup from registered one-bottle potion contents.",
           "primaryConcept": "standard EffectDose lookup",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-review",
+          "status": "completed",
           "dependsOn": [
             "M6-T01"
           ],
@@ -303,7 +304,7 @@
           "goal": "Derive effect concentration from EffectDose and liquid volume.",
           "primaryConcept": "effect concentration calculation",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "planned",
+          "status": "in-review",
           "dependsOn": [
             "M6-T02"
           ],
@@ -312,7 +313,17 @@
             "standard one-bottle dose maps to baseline concentration",
             "focused tests cover volume scaling"
           ],
-          "stopBoundary": "Do not implement potency/duration presentation split."
+          "stopBoundary": "Do not implement potency/duration presentation split.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/effect-dose-concentration"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/51"
+            }
+          ]
         },
         {
           "id": "M6-T04",
@@ -436,20 +447,20 @@
         }
       ],
       "checkpoint": {
-        "summary": "M6-T01 is implemented and adds no new regression. M6-T02 is implemented in TotemAlchemy PR #50 and its Build is currently running.",
-        "currentTaskId": "M6-T02",
-        "branch": "feature/effect-dose-standard-lookup",
-        "head": "fa1c8f13d509c4dcfe7b5ff0334e2dc2d374d5d7",
+        "summary": "M6-T02 standard dose lookup completed with no new compile or GameTest regressions. M6-T03 concentration derivation is implemented in TotemAlchemy PR #51 and awaiting its Build.",
+        "currentTaskId": "M6-T03",
+        "branch": "feature/effect-dose-concentration",
+        "head": "bca7dbfc1e2841df43129141aa7b663d248babbf",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
           "src/gametest/java/dev/totem/alchemy/gametest/AlchemyMixtureGameTest.java",
-          "src/main/java/dev/totem/alchemy/mixture/EffectDoseStandards.java"
+          "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureState.java"
         ],
-        "validation": "M6-T01 build had no compile error and only the four known inherited GameTest failures. M6-T02 Build is in progress.",
+        "validation": "M6-T02 Build had no compile error and only the four documented inherited GameTest failures. M6-T03 Build pending.",
         "remainingRisks": [
-          "Repository-wide CI remains red from four inherited pre-M6 regressions until they are repaired separately."
+          "Repository-wide CI remains red from four inherited regressions outside M6."
         ],
-        "nextTask": "M6-T03"
+        "nextTask": "M6-T04"
       }
     }
   ]
