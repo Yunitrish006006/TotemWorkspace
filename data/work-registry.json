@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-07T12:15:00+08:00",
-  "activeWorkId": "totem-alchemy-m7-station-resolvers",
+  "updatedAt": "2026-10-07T12:30:00+08:00",
+  "activeWorkId": "totem-alchemy-m2-reaction-authority-tail",
   "workItems": [
     {
       "id": "totem-workspace-bounded-execution",
@@ -544,7 +544,7 @@
       "id": "totem-alchemy-m7-station-resolvers",
       "title": "TotemAlchemy M7 Station resolvers",
       "objective": "Finish Brewing Stand and Alchemy Cauldron station-resolution behavior after the M6 EffectDose model, preserving deterministic Brewing Stand outcomes and probabilistic Cauldron outcomes.",
-      "status": "in-progress",
+      "status": "blocked",
       "planSource": {
         "repository": "Yunitrish006006/TotemAlchemy",
         "path": "docs/alchemy-next-task-plan.md",
@@ -557,7 +557,7 @@
           "purpose": "Complete station-specific output, parity, and cleanup."
         }
       ],
-      "currentTaskId": "M7-T10",
+      "currentTaskId": "M7-T03",
       "completedTaskIds": [
         "M7-T01",
         "M7-T02",
@@ -566,7 +566,8 @@
         "M7-T06",
         "M7-T07",
         "M7-T08",
-        "M7-T09"
+        "M7-T09",
+        "M7-T10"
       ],
       "blockedBy": [
         "M7-T03 requires an explicit Brewing Stand station bonus balance value."
@@ -751,7 +752,7 @@
           "goal": "Remove obsolete direct Brewing Stand chance/outcome paths.",
           "primaryConcept": "station path cleanup",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-review",
+          "status": "completed",
           "dependsOn": [
             "M7-T09"
           ],
@@ -772,8 +773,8 @@
         }
       ],
       "checkpoint": {
-        "summary": "M7-T10 cleanup compile errors were fixed. A follow-up GameTest failure came from an overly narrow test fixture that required nativeVanillaRecipe=true even for deterministic modifiers; the fixture now accepts either native vanilla or deterministic modifier guaranteed paths. New CI has not started yet for the latest head.",
-        "currentTaskId": "M7-T10",
+        "summary": "M7-T10 Brewing Stand path cleanup completed with no new compile or GameTest regressions. M7 station work now has only M7-T03 remaining, blocked on an explicit station success-bonus balance value.",
+        "currentTaskId": "M7-T03",
         "branch": "feature/brewing-station-path-cleanup",
         "head": "d6154410a7f26aa151cb286ea7d3b0bfa2144076",
         "filesChanged": [
@@ -782,18 +783,125 @@
           "src/main/java/dev/totem/alchemy/alchemy/BrewingStationPolicy.java",
           "src/main/java/dev/totem/alchemy/alchemy/MultiOutcomeBrewing.java",
           "src/gametest/java/dev/totem/alchemy/gametest/AlchemyCauldronPersistenceGameTest.java",
-          "src/gametest/java/dev/totem/alchemy/gametest/RestorativeBrewingGameTest.java",
           "src/gametest/java/dev/totem/alchemy/gametest/BrewingMigrationGameTest.java",
           "src/gametest/java/dev/totem/alchemy/gametest/PotionBrewingRegressionGameTest.java",
-          "src/gametest/java/dev/totem/alchemy/gametest/ReactionRegistryMigrationGameTest.java"
+          "src/gametest/java/dev/totem/alchemy/gametest/ReactionRegistryMigrationGameTest.java",
+          "src/gametest/java/dev/totem/alchemy/gametest/RestorativeBrewingGameTest.java"
         ],
-        "validation": "Latest head d6154410 fixes the guaranteed-path fixture after Build 37570100484 showed one cleanup-caused GameTest failure and no compile errors. New Build pending trigger.",
+        "validation": "Latest M7-T10 Build had no compile errors and only the four documented inherited GameTest failures.",
         "remainingRisks": [
-          "M7-T03 remains blocked on an explicit Brewing Stand station success-bonus balance value.",
-          "Repository-wide CI has four documented inherited failures once M7-T10-specific regressions are cleared.",
-          "After M7-T10 validation, dependency order resumes at M2-T14."
+          "M7-T03 remains blocked until a Brewing Stand station success-bonus value is explicitly chosen."
         ],
-        "nextTask": "M2-T14"
+        "nextTask": null
+      }
+    },
+    {
+      "id": "totem-alchemy-m2-reaction-authority-tail",
+      "title": "TotemAlchemy M2 Reaction authority tail",
+      "objective": "Finish the remaining reaction-registry authority tasks before starting liquid composition work.",
+      "status": "in-progress",
+      "planSource": {
+        "repository": "Yunitrish006006/TotemAlchemy",
+        "path": "docs/alchemy-next-task-plan.md",
+        "note": "Authoritative M2 task plan; this work item tracks the remaining M2-T14 through M2-T16 tail."
+      },
+      "targetRepositories": [
+        {
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "moduleId": "totem-alchemy",
+          "purpose": "Complete reaction extension merging, downstream readers, and registry regression."
+        }
+      ],
+      "currentTaskId": "M2-T14",
+      "completedTaskIds": [],
+      "blockedBy": [],
+      "milestones": [
+        {
+          "id": "M2-tail",
+          "title": "Reaction authority tail",
+          "tasks": [
+            "M2-T14",
+            "M2-T15",
+            "M2-T16"
+          ]
+        }
+      ],
+      "tasks": [
+        {
+          "id": "M2-T14",
+          "title": "Reaction extension merge",
+          "goal": "Add reaction-extension merge semantics for Totem-on-Minecraft additions.",
+          "primaryConcept": "additive reaction extensions",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "in-review",
+          "dependsOn": [
+            "M2-T13"
+          ],
+          "doneCriteria": [
+            "Dedicated extension resources can add outcomes to an existing reaction by ID.",
+            "Target scalar policy cannot be silently overridden.",
+            "Unknown targets and duplicate outcomes fail deterministically.",
+            "Focused validation adds no new regression."
+          ],
+          "stopBoundary": "Do not migrate actual datapack content or adapt Manual/Discovery readers.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/reaction-extension-merge"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/62"
+            }
+          ]
+        },
+        {
+          "id": "M2-T15",
+          "title": "Manual and Discovery registry readers",
+          "goal": "Adapt Manual/Discovery readers without changing UI.",
+          "primaryConcept": "reaction-registry readers",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "planned",
+          "dependsOn": [
+            "M2-T14"
+          ],
+          "doneCriteria": [
+            "Manual and Discovery read merged reaction registry data without UI behavior changes."
+          ],
+          "stopBoundary": "Do not perform the full M2 regression pass."
+        },
+        {
+          "id": "M2-T16",
+          "title": "Reaction registry regression",
+          "goal": "Run the full reaction-registry regression pass.",
+          "primaryConcept": "reaction registry validation",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "planned",
+          "dependsOn": [
+            "M2-T15"
+          ],
+          "doneCriteria": [
+            "Reaction-registry focused regressions pass or are isolated from documented inherited failures."
+          ],
+          "stopBoundary": "Do not begin M3 liquid composition."
+        }
+      ],
+      "checkpoint": {
+        "summary": "M2-T14 additive reaction-extension merge semantics are implemented in TotemAlchemy PR #62 and awaiting Build.",
+        "currentTaskId": "M2-T14",
+        "branch": "feature/reaction-extension-merge",
+        "head": "2b7ae7ce08f621d521ee57ae772966823770a9f4",
+        "filesChanged": [
+          "docs/alchemy-next-task-plan.md",
+          "src/main/java/dev/totem/alchemy/reaction/AlchemyReactionDataLoader.java",
+          "src/main/java/dev/totem/alchemy/reaction/IngredientReactionExtension.java",
+          "src/test/java/dev/totem/alchemy/reaction/AlchemyReactionDataLoaderTest.java"
+        ],
+        "validation": "M7-T10 is validated. M2-T14 Build pending.",
+        "remainingRisks": [
+          "No reaction extension content has been migrated yet; M10-T05 owns that content move."
+        ],
+        "nextTask": "M2-T15"
       }
     }
   ]
