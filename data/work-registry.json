@@ -1256,11 +1256,12 @@
           "purpose": "Implement activated base composition value/state/persistence behavior."
         }
       ],
-      "currentTaskId": "M4-T04",
+      "currentTaskId": "M4-T05",
       "completedTaskIds": [
         "M4-T01",
         "M4-T02",
-        "M4-T03"
+        "M4-T03",
+        "M4-T04"
       ],
       "blockedBy": [],
       "milestones": [
@@ -1364,7 +1365,7 @@
           "goal": "Preserve base units through copy/reset.",
           "primaryConcept": "activated base lifecycle",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-review",
+          "status": "completed",
           "dependsOn": [
             "M4-T03"
           ],
@@ -1389,14 +1390,24 @@
           "goal": "Conserve base units through merge.",
           "primaryConcept": "activated base merge conservation",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "todo",
+          "status": "in-review",
           "dependsOn": [
             "M4-T04"
           ],
           "doneCriteria": [
             "mergeFrom adds absolute activated base units without creating or destroying them."
           ],
-          "stopBoundary": "Do not change extraction."
+          "stopBoundary": "Do not change extraction.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/activated-base-merge"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/79"
+            }
+          ]
         },
         {
           "id": "M4-T06",
@@ -1475,22 +1486,22 @@
         }
       ],
       "checkpoint": {
-        "summary": "M4-T03 activated-base total-unit and concentration derivation completed with no new compile or GameTest regressions. M4-T04 copy/reset lifecycle preservation is implemented in TotemAlchemy PR #78 and awaiting Build.",
-        "currentTaskId": "M4-T04",
-        "branch": "feature/activated-base-copy-reset",
-        "head": "3d67d0bc475077b6e2e6a215692c3c7882bf1388",
+        "summary": "M4-T04 activated-base copy/reset lifecycle completed with no new compile or GameTest regressions. M4-T05 absolute-unit merge conservation is implemented in TotemAlchemy PR #79 and awaiting Build.",
+        "currentTaskId": "M4-T05",
+        "branch": "feature/activated-base-merge",
+        "head": "12528d1e868e244a16b329d9153062d7ed90a281",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
           "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureState.java",
           "src/gametest/java/dev/totem/alchemy/gametest/AlchemyMixtureGameTest.java"
         ],
-        "validation": "M4-T03 Build had no compile errors and only the four documented inherited GameTest failures. M4-T04 Build pending.",
+        "validation": "M4-T04 Build had no compile errors and only the four documented inherited GameTest failures. M4-T05 Build pending.",
         "remainingRisks": [
-          "Merge conservation remains deferred to M4-T05.",
           "Extraction proportional splitting remains deferred to M4-T06.",
+          "A| persistence remains deferred to M4-T07.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
-        "nextTask": "M4-T05"
+        "nextTask": "M4-T06"
       }
     }
   ]
