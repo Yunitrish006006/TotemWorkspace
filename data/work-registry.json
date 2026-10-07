@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-07T11:30:00+08:00",
+  "updatedAt": "2026-10-07T12:08:00+08:00",
   "activeWorkId": "totem-alchemy-m7-station-resolvers",
   "workItems": [
     {
@@ -772,10 +772,10 @@
         }
       ],
       "checkpoint": {
-        "summary": "M7-T09 cross-station primary-outcome parity completed with no new compile or GameTest regressions. M7-T10 Brewing Stand chance/outcome path cleanup is implemented in TotemAlchemy PR #61 and awaiting its Build.",
+        "summary": "M7-T10 cleanup initially exposed compile regressions in two remaining GameTests that still referenced removed direct chance/outcome APIs. Those tests were migrated to BrewingStationPolicy and activeOutcomes().getFirst(); PR #61 rerun is in progress.",
         "currentTaskId": "M7-T10",
         "branch": "feature/brewing-station-path-cleanup",
-        "head": "1e9bddfced591a936a9ac53b9433a988f08ec430",
+        "head": "cb967684159d2f74236a8efe4ede9ec4a253e9bd",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
           "src/main/java/dev/totem/alchemy/alchemy/VanillaBrewingChance.java",
@@ -783,14 +783,17 @@
           "src/main/java/dev/totem/alchemy/alchemy/MultiOutcomeBrewing.java",
           "src/gametest/java/dev/totem/alchemy/gametest/AlchemyCauldronPersistenceGameTest.java",
           "src/gametest/java/dev/totem/alchemy/gametest/RestorativeBrewingGameTest.java",
-          "src/gametest/java/dev/totem/alchemy/gametest/BrewingMigrationGameTest.java"
+          "src/gametest/java/dev/totem/alchemy/gametest/BrewingMigrationGameTest.java",
+          "src/gametest/java/dev/totem/alchemy/gametest/PotionBrewingRegressionGameTest.java",
+          "src/gametest/java/dev/totem/alchemy/gametest/ReactionRegistryMigrationGameTest.java"
         ],
-        "validation": "M7-T09 Build had no compile errors and only the four documented inherited GameTest failures. M7-T10 Build pending.",
+        "validation": "First PR #61 Build found cleanup-caused compile errors in two GameTests. Both residual legacy references are fixed; rerun Build 37570100484 is in progress.",
         "remainingRisks": [
           "M7-T03 remains blocked on an explicit Brewing Stand station success-bonus balance value.",
-          "Repository-wide CI remains red from four inherited regressions outside M7-T10."
+          "Repository-wide CI has four documented inherited failures once compile succeeds.",
+          "After M7-T10 validation, dependency order should resume at M2-T14 before M3/M8."
         ],
-        "nextTask": "M7-T03"
+        "nextTask": "M2-T14"
       }
     }
   ]
