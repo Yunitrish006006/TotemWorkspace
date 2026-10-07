@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-07T13:58:00+08:00",
+  "updatedAt": "2026-10-07T14:06:00+08:00",
   "activeWorkId": "totem-alchemy-m3-liquid-composition",
   "workItems": [
     {
@@ -945,14 +945,15 @@
           "purpose": "Implement liquid composition value/state/persistence behavior."
         }
       ],
-      "currentTaskId": "M3-T07",
+      "currentTaskId": "M3-T08",
       "completedTaskIds": [
         "M3-T01",
         "M3-T02",
         "M3-T03",
         "M3-T04",
         "M3-T05",
-        "M3-T06"
+        "M3-T06",
+        "M3-T07"
       ],
       "blockedBy": [],
       "milestones": [
@@ -1121,7 +1122,7 @@
           "goal": "Add deterministic L| serialization.",
           "primaryConcept": "composition serialization",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-review",
+          "status": "completed",
           "dependsOn": [
             "M3-T06"
           ],
@@ -1146,14 +1147,24 @@
           "goal": "Decode L| and migrate legacy non-empty mixtures to Water.",
           "primaryConcept": "composition migration",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "planned",
+          "status": "in-review",
           "dependsOn": [
             "M3-T07"
           ],
           "doneCriteria": [
             "L| decodes and legacy mixtures migrate to Water."
           ],
-          "stopBoundary": "Do not alter vanilla potion import."
+          "stopBoundary": "Do not alter vanilla potion import.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/liquid-composition-decode"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/72"
+            }
+          ]
         },
         {
           "id": "M3-T09",
@@ -1187,22 +1198,22 @@
         }
       ],
       "checkpoint": {
-        "summary": "M3-T07 deterministic L| serialization implementation is complete. Initial Build exposed a focused GameTest compile regression caused by a missing java.util.List import; the import was fixed and the replacement Build is queued.",
-        "currentTaskId": "M3-T07",
-        "branch": "feature/liquid-composition-serialization",
-        "head": "b73321e1c0b9903014b5d5b66612cf4a4fa3bee3",
+        "summary": "M3-T07 deterministic L| serialization completed after fixing a missing test import; replacement Build returned to the inherited four-failure baseline. M3-T08 L| decode and legacy non-empty -> Water migration are implemented in TotemAlchemy PR #72 and awaiting Build.",
+        "currentTaskId": "M3-T08",
+        "branch": "feature/liquid-composition-decode",
+        "head": "c669db6574fe6c571f2c4d595e1fecd8fce4d2cb",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
           "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureState.java",
           "src/gametest/java/dev/totem/alchemy/gametest/AlchemyMixtureGameTest.java"
         ],
-        "validation": "Initial M3-T07 Build failed only at compile time because AlchemyMixtureGameTest used List without importing java.util.List. Fix committed; replacement Build queued.",
+        "validation": "M3-T07 replacement Build had no compile errors and only the four documented inherited GameTest failures. M3-T08 Build pending.",
         "remainingRisks": [
-          "M3-T07 must return to the inherited four-failure baseline before M3-T08 starts.",
-          "L| decoder support and legacy non-empty mixture migration remain deferred to M3-T08.",
+          "Vanilla potion import does not yet initialize Water composition; M3-T09 owns that adapter behavior.",
+          "Repository-wide CI remains red from four inherited regressions outside M3.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
-        "nextTask": "M3-T08"
+        "nextTask": "M3-T09"
       }
     }
   ]
