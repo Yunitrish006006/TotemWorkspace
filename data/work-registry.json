@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-07T13:12:00+08:00",
+  "updatedAt": "2026-10-07T13:20:00+08:00",
   "activeWorkId": "totem-alchemy-m3-liquid-composition",
   "workItems": [
     {
@@ -945,8 +945,10 @@
           "purpose": "Implement liquid composition value/state/persistence behavior."
         }
       ],
-      "currentTaskId": "M3-T01",
-      "completedTaskIds": [],
+      "currentTaskId": "M3-T02",
+      "completedTaskIds": [
+        "M3-T01"
+      ],
       "blockedBy": [],
       "milestones": [
         {
@@ -973,7 +975,7 @@
           "goal": "Add LiquidComposition value object.",
           "primaryConcept": "liquid composition value object",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-review",
+          "status": "completed",
           "dependsOn": [
             "M2-T16"
           ],
@@ -989,14 +991,24 @@
           "goal": "Add normalize/epsilon/deterministic ordering.",
           "primaryConcept": "composition normalization",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "planned",
+          "status": "in-review",
           "dependsOn": [
             "M3-T01"
           ],
           "doneCriteria": [
             "Composition can normalize, epsilon-prune, and expose deterministic ordering."
           ],
-          "stopBoundary": "Do not store composition in AlchemyMixtureState."
+          "stopBoundary": "Do not store composition in AlchemyMixtureState.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/liquid-composition-normalize"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/66"
+            }
+          ]
         },
         {
           "id": "M3-T03",
@@ -1120,21 +1132,21 @@
         }
       ],
       "checkpoint": {
-        "summary": "M3-T01 LiquidComposition value object is implemented in TotemAlchemy PR #65 and awaiting Build.",
-        "currentTaskId": "M3-T01",
-        "branch": "feature/liquid-composition-value",
-        "head": "ed7b474c3a41bd8ac2b8c280fd9ef2fd1055beef",
+        "summary": "M3-T01 LiquidComposition value semantics completed with no new compile or GameTest regressions. M3-T02 deterministic ordering and explicit normalization/epsilon cleanup are implemented in TotemAlchemy PR #66 and awaiting Build.",
+        "currentTaskId": "M3-T02",
+        "branch": "feature/liquid-composition-normalize",
+        "head": "d8c8bbb25ed863b9a366ba978a1f1d8e53a7fd19",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
           "src/main/java/dev/totem/alchemy/mixture/LiquidComposition.java",
           "src/test/java/dev/totem/alchemy/mixture/LiquidCompositionTest.java"
         ],
-        "validation": "M2 is fully validated against the known inherited baseline. M3-T01 Build pending.",
+        "validation": "M3-T01 Build had no compile errors and only the four documented inherited GameTest failures. M3-T02 Build pending.",
         "remainingRisks": [
-          "Normalization, epsilon pruning, and canonical ordering are intentionally deferred to M3-T02.",
+          "AlchemyMixtureState does not store liquid composition yet; M3-T03 owns that integration.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
-        "nextTask": "M3-T02"
+        "nextTask": "M3-T03"
       }
     }
   ]
