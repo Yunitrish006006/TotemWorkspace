@@ -1198,19 +1198,19 @@
         }
       ],
       "checkpoint": {
-        "summary": "M3-T07 deterministic L| serialization completed after fixing a missing test import; replacement Build returned to the inherited four-failure baseline. M3-T08 L| decode and legacy non-empty -> Water migration are implemented in TotemAlchemy PR #72 and awaiting Build.",
+        "summary": "M3-T08 L| decode and legacy Water migration initially exposed one new regression: modern non-empty states with unknown composition were indistinguishable from legacy no-composition states. The codec now emits an explicit empty L| sentinel for modern unknown composition, while only states with no L| marker migrate to Water 100%. Replacement Build queued.",
         "currentTaskId": "M3-T08",
         "branch": "feature/liquid-composition-decode",
-        "head": "c669db6574fe6c571f2c4d595e1fecd8fce4d2cb",
+        "head": "4a400781000e1dfc5e70a3b7178b687266dc3b5d",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
           "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureState.java",
           "src/gametest/java/dev/totem/alchemy/gametest/AlchemyMixtureGameTest.java"
         ],
-        "validation": "M3-T07 replacement Build had no compile errors and only the four documented inherited GameTest failures. M3-T08 Build pending.",
+        "validation": "Initial M3-T08 Build had no compile errors but added one FlaskEnchantmentsGameTest failure because modern unknown composition was migrated as legacy Water. Explicit L| sentinel fix committed; replacement Build queued.",
         "remainingRisks": [
-          "Vanilla potion import does not yet initialize Water composition; M3-T09 owns that adapter behavior.",
-          "Repository-wide CI remains red from four inherited regressions outside M3.",
+          "M3-T08 must return to the inherited four-failure baseline before M3-T09 is formalized.",
+          "Vanilla potion Water-composition import remains M3-T09.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
         "nextTask": "M3-T09"
