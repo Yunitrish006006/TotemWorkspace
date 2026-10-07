@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-07T13:34:00+08:00",
+  "updatedAt": "2026-10-07T13:40:00+08:00",
   "activeWorkId": "totem-alchemy-m3-liquid-composition",
   "workItems": [
     {
@@ -945,11 +945,12 @@
           "purpose": "Implement liquid composition value/state/persistence behavior."
         }
       ],
-      "currentTaskId": "M3-T04",
+      "currentTaskId": "M3-T05",
       "completedTaskIds": [
         "M3-T01",
         "M3-T02",
-        "M3-T03"
+        "M3-T03",
+        "M3-T04"
       ],
       "blockedBy": [],
       "milestones": [
@@ -1043,7 +1044,7 @@
           "goal": "Preserve composition through copy/reset.",
           "primaryConcept": "composition lifecycle",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-review",
+          "status": "completed",
           "dependsOn": [
             "M3-T03"
           ],
@@ -1068,14 +1069,24 @@
           "goal": "Volume-weight composition in mergeFrom.",
           "primaryConcept": "composition merge",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "planned",
+          "status": "in-review",
           "dependsOn": [
             "M3-T04"
           ],
           "doneCriteria": [
             "mergeFrom volume-weights liquid composition."
           ],
-          "stopBoundary": "Do not change extraction."
+          "stopBoundary": "Do not change extraction.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/liquid-composition-merge"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/69"
+            }
+          ]
         },
         {
           "id": "M3-T06",
@@ -1154,22 +1165,22 @@
         }
       ],
       "checkpoint": {
-        "summary": "M3-T03 mixture-state liquid composition storage completed with no new compile or GameTest regressions. M3-T04 copy/reset composition lifecycle is implemented in TotemAlchemy PR #68 and awaiting Build.",
-        "currentTaskId": "M3-T04",
-        "branch": "feature/liquid-composition-copy-reset",
-        "head": "3c774b1338b03f2d42598757efb5781fd953d403",
+        "summary": "M3-T04 liquid composition copy/reset lifecycle completed with no new compile or GameTest regressions. M3-T05 volume-weighted merge composition is implemented in TotemAlchemy PR #69 and awaiting Build.",
+        "currentTaskId": "M3-T05",
+        "branch": "feature/liquid-composition-merge",
+        "head": "502f8c08596ea69f78215465d4cb5df41df8cb60",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
           "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureState.java",
           "src/gametest/java/dev/totem/alchemy/gametest/AlchemyMixtureGameTest.java"
         ],
-        "validation": "M3-T03 Build had no compile errors and only the four documented inherited GameTest failures. M3-T04 Build pending.",
+        "validation": "M3-T04 Build had no compile errors and only the four documented inherited GameTest failures. M3-T05 Build pending.",
         "remainingRisks": [
-          "Liquid composition merge weighting is not implemented yet; M3-T05 owns mergeFrom behavior.",
-          "Extracted-state composition preservation remains deferred to M3-T06.",
+          "Composition extraction ratio preservation is not implemented yet; M3-T06 owns scaled/extracted state composition.",
+          "Legacy non-empty states without composition intentionally remain unknown until M3-T08 migration.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
-        "nextTask": "M3-T05"
+        "nextTask": "M3-T06"
       }
     }
   ]
