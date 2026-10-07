@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-07T12:45:00+08:00",
+  "updatedAt": "2026-10-07T13:00:00+08:00",
   "activeWorkId": "totem-alchemy-m2-reaction-authority-tail",
   "workItems": [
     {
@@ -812,9 +812,10 @@
           "purpose": "Complete reaction extension merging, downstream readers, and registry regression."
         }
       ],
-      "currentTaskId": "M2-T15",
+      "currentTaskId": "M2-T16",
       "completedTaskIds": [
-        "M2-T14"
+        "M2-T14",
+        "M2-T15"
       ],
       "blockedBy": [],
       "milestones": [
@@ -863,7 +864,7 @@
           "goal": "Adapt Manual/Discovery readers without changing UI.",
           "primaryConcept": "reaction-registry readers",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-review",
+          "status": "completed",
           "dependsOn": [
             "M2-T14"
           ],
@@ -888,34 +889,42 @@
           "goal": "Run the full reaction-registry regression pass.",
           "primaryConcept": "reaction registry validation",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "planned",
+          "status": "in-review",
           "dependsOn": [
             "M2-T15"
           ],
           "doneCriteria": [
             "Reaction-registry focused regressions pass or are isolated from documented inherited failures."
           ],
-          "stopBoundary": "Do not begin M3 liquid composition."
+          "stopBoundary": "Do not begin M3 liquid composition.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/reaction-registry-regression-pass"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/64"
+            }
+          ]
         }
       ],
       "checkpoint": {
-        "summary": "M2-T14 additive reaction extensions completed with no new compile or GameTest regressions. M2-T15 Manual/Discovery merged-registry readers are implemented in TotemAlchemy PR #63 and awaiting Build.",
-        "currentTaskId": "M2-T15",
-        "branch": "feature/reaction-registry-readers",
-        "head": "2b6ac692e7ea57288f33f4f67d0be6fee66b4d05",
+        "summary": "M2-T15 Manual/Discovery merged-registry readers completed with no new compile or GameTest regressions. M2-T16 end-to-end reaction-registry regression handoff is implemented in TotemAlchemy PR #64 and awaiting its Build.",
+        "currentTaskId": "M2-T16",
+        "branch": "feature/reaction-registry-regression-pass",
+        "head": "3f7d7b28e0f17684d7f6dec0df2f9bbd2d9f5468",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
-          "src/client/java/dev/totem/alchemy/client/manual/AlchemyMaterialResearchOverlay.java",
-          "src/main/java/dev/totem/alchemy/discovery/AlchemyDiscoveryService.java",
-          "src/main/java/dev/totem/alchemy/reaction/AlchemyReactionReader.java",
-          "src/test/java/dev/totem/alchemy/reaction/AlchemyReactionReaderTest.java"
+          "src/gametest/java/dev/totem/alchemy/gametest/ReactionRegistryMigrationGameTest.java",
+          "test-artifacts/m2-reaction-registry-validation.md"
         ],
-        "validation": "M2-T14 Build had no compile errors and only the four documented inherited GameTest failures. M2-T15 Build pending.",
+        "validation": "M2-T15 Build had no compile errors and only the four documented inherited GameTest failures. M2-T16 Build pending.",
         "remainingRisks": [
-          "Client/server datapack synchronization remains a later multiplayer concern; M2-T15 changes reader authority without changing UI/network protocol.",
-          "Repository-wide CI remains red from four inherited regressions outside M2-T15."
+          "Repository-wide CI remains red from four inherited regressions outside M2.",
+          "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
-        "nextTask": "M2-T16"
+        "nextTask": "M3-T01"
       }
     }
   ]
