@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-07T12:30:00+08:00",
+  "updatedAt": "2026-10-07T12:45:00+08:00",
   "activeWorkId": "totem-alchemy-m2-reaction-authority-tail",
   "workItems": [
     {
@@ -812,8 +812,10 @@
           "purpose": "Complete reaction extension merging, downstream readers, and registry regression."
         }
       ],
-      "currentTaskId": "M2-T14",
-      "completedTaskIds": [],
+      "currentTaskId": "M2-T15",
+      "completedTaskIds": [
+        "M2-T14"
+      ],
       "blockedBy": [],
       "milestones": [
         {
@@ -833,7 +835,7 @@
           "goal": "Add reaction-extension merge semantics for Totem-on-Minecraft additions.",
           "primaryConcept": "additive reaction extensions",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-review",
+          "status": "completed",
           "dependsOn": [
             "M2-T13"
           ],
@@ -861,14 +863,24 @@
           "goal": "Adapt Manual/Discovery readers without changing UI.",
           "primaryConcept": "reaction-registry readers",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "planned",
+          "status": "in-review",
           "dependsOn": [
             "M2-T14"
           ],
           "doneCriteria": [
             "Manual and Discovery read merged reaction registry data without UI behavior changes."
           ],
-          "stopBoundary": "Do not perform the full M2 regression pass."
+          "stopBoundary": "Do not perform the full M2 regression pass.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/reaction-registry-readers"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/63"
+            }
+          ]
         },
         {
           "id": "M2-T16",
@@ -887,21 +899,23 @@
         }
       ],
       "checkpoint": {
-        "summary": "M2-T14 additive reaction-extension merge semantics are implemented in TotemAlchemy PR #62 and awaiting Build.",
-        "currentTaskId": "M2-T14",
-        "branch": "feature/reaction-extension-merge",
-        "head": "2b7ae7ce08f621d521ee57ae772966823770a9f4",
+        "summary": "M2-T14 additive reaction extensions completed with no new compile or GameTest regressions. M2-T15 Manual/Discovery merged-registry readers are implemented in TotemAlchemy PR #63 and awaiting Build.",
+        "currentTaskId": "M2-T15",
+        "branch": "feature/reaction-registry-readers",
+        "head": "2b6ac692e7ea57288f33f4f67d0be6fee66b4d05",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
-          "src/main/java/dev/totem/alchemy/reaction/AlchemyReactionDataLoader.java",
-          "src/main/java/dev/totem/alchemy/reaction/IngredientReactionExtension.java",
-          "src/test/java/dev/totem/alchemy/reaction/AlchemyReactionDataLoaderTest.java"
+          "src/client/java/dev/totem/alchemy/client/manual/AlchemyMaterialResearchOverlay.java",
+          "src/main/java/dev/totem/alchemy/discovery/AlchemyDiscoveryService.java",
+          "src/main/java/dev/totem/alchemy/reaction/AlchemyReactionReader.java",
+          "src/test/java/dev/totem/alchemy/reaction/AlchemyReactionReaderTest.java"
         ],
-        "validation": "M7-T10 is validated. M2-T14 Build pending.",
+        "validation": "M2-T14 Build had no compile errors and only the four documented inherited GameTest failures. M2-T15 Build pending.",
         "remainingRisks": [
-          "No reaction extension content has been migrated yet; M10-T05 owns that content move."
+          "Client/server datapack synchronization remains a later multiplayer concern; M2-T15 changes reader authority without changing UI/network protocol.",
+          "Repository-wide CI remains red from four inherited regressions outside M2-T15."
         ],
-        "nextTask": "M2-T15"
+        "nextTask": "M2-T16"
       }
     }
   ]
