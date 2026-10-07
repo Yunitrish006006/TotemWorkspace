@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-07T09:20:00+08:00",
+  "updatedAt": "2026-10-07T09:28:00+08:00",
   "activeWorkId": "totem-alchemy-m6-effect-dose",
   "workItems": [
     {
@@ -231,11 +231,12 @@
           "purpose": "Implement EffectDose quantity, standard dose, concentration, presentation split, conservation and regression coverage."
         }
       ],
-      "currentTaskId": "M6-T04",
+      "currentTaskId": "M6-T05",
       "completedTaskIds": [
         "M6-T01",
         "M6-T02",
-        "M6-T03"
+        "M6-T03",
+        "M6-T04"
       ],
       "blockedBy": [],
       "milestones": [
@@ -332,7 +333,7 @@
           "goal": "Implement sustained-effect potency/duration split.",
           "primaryConcept": "sustained effect presentation",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-review",
+          "status": "completed",
           "dependsOn": [
             "M6-T03"
           ],
@@ -358,7 +359,7 @@
           "goal": "Add configurable potency-duration bias with default 0.5.",
           "primaryConcept": "potency-duration bias",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "planned",
+          "status": "in-review",
           "dependsOn": [
             "M6-T04"
           ],
@@ -367,7 +368,17 @@
             "default is 0.5",
             "focused tests cover the default"
           ],
-          "stopBoundary": "Do not implement instant-effect rules."
+          "stopBoundary": "Do not implement instant-effect rules.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/sustained-effect-bias"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/53"
+            }
+          ]
         },
         {
           "id": "M6-T06",
@@ -458,20 +469,20 @@
         }
       ],
       "checkpoint": {
-        "summary": "M6-T03 concentration derivation completed with no new compile or GameTest regressions. M6-T04 neutral sustained potency-duration split is implemented in TotemAlchemy PR #52 and awaiting its Build.",
-        "currentTaskId": "M6-T04",
-        "branch": "feature/sustained-effect-split",
-        "head": "71a68c59b226cc3dc071f9f7e5f5a578f47d884a",
+        "summary": "M6-T04 sustained-effect split completed with no new compile or GameTest regressions. M6-T05 configurable potency-duration bias is implemented in TotemAlchemy PR #53 and awaiting its Build.",
+        "currentTaskId": "M6-T05",
+        "branch": "feature/sustained-effect-bias",
+        "head": "b863db79e5bc4df06cf8b1eac2bc089a8b1f998a",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
           "src/gametest/java/dev/totem/alchemy/gametest/AlchemyMixtureGameTest.java",
           "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureState.java"
         ],
-        "validation": "M6-T03 Build had no compile error and only the four documented inherited GameTest failures. M6-T04 Build pending.",
+        "validation": "M6-T04 Build had no compile error and only the four documented inherited GameTest failures. M6-T05 Build pending.",
         "remainingRisks": [
           "Repository-wide CI remains red from four inherited regressions outside M6."
         ],
-        "nextTask": "M6-T05"
+        "nextTask": "M6-T06"
       }
     }
   ]
