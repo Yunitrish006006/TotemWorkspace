@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-07T13:00:00+08:00",
-  "activeWorkId": "totem-alchemy-m2-reaction-authority-tail",
+  "updatedAt": "2026-10-07T13:12:00+08:00",
+  "activeWorkId": "totem-alchemy-m3-liquid-composition",
   "workItems": [
     {
       "id": "totem-workspace-bounded-execution",
@@ -799,7 +799,7 @@
       "id": "totem-alchemy-m2-reaction-authority-tail",
       "title": "TotemAlchemy M2 Reaction authority tail",
       "objective": "Finish the remaining reaction-registry authority tasks before starting liquid composition work.",
-      "status": "in-progress",
+      "status": "completed",
       "planSource": {
         "repository": "Yunitrish006006/TotemAlchemy",
         "path": "docs/alchemy-next-task-plan.md",
@@ -812,10 +812,11 @@
           "purpose": "Complete reaction extension merging, downstream readers, and registry regression."
         }
       ],
-      "currentTaskId": "M2-T16",
+      "currentTaskId": null,
       "completedTaskIds": [
         "M2-T14",
-        "M2-T15"
+        "M2-T15",
+        "M2-T16"
       ],
       "blockedBy": [],
       "milestones": [
@@ -889,7 +890,7 @@
           "goal": "Run the full reaction-registry regression pass.",
           "primaryConcept": "reaction registry validation",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-review",
+          "status": "completed",
           "dependsOn": [
             "M2-T15"
           ],
@@ -910,8 +911,8 @@
         }
       ],
       "checkpoint": {
-        "summary": "M2-T15 Manual/Discovery merged-registry readers completed with no new compile or GameTest regressions. M2-T16 end-to-end reaction-registry regression handoff is implemented in TotemAlchemy PR #64 and awaiting its Build.",
-        "currentTaskId": "M2-T16",
+        "summary": "M2 reaction authority tail is complete. M2-T14 through M2-T16 are implemented and validated with no new compile or GameTest regressions beyond the four documented inherited failures.",
+        "currentTaskId": null,
         "branch": "feature/reaction-registry-regression-pass",
         "head": "3f7d7b28e0f17684d7f6dec0df2f9bbd2d9f5468",
         "filesChanged": [
@@ -919,12 +920,221 @@
           "src/gametest/java/dev/totem/alchemy/gametest/ReactionRegistryMigrationGameTest.java",
           "test-artifacts/m2-reaction-registry-validation.md"
         ],
-        "validation": "M2-T15 Build had no compile errors and only the four documented inherited GameTest failures. M2-T16 Build pending.",
+        "validation": "M2-T16 Build had no compile errors and only the four documented inherited GameTest failures.",
         "remainingRisks": [
           "Repository-wide CI remains red from four inherited regressions outside M2.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
         "nextTask": "M3-T01"
+      }
+    },
+    {
+      "id": "totem-alchemy-m3-liquid-composition",
+      "title": "TotemAlchemy M3 Liquid composition model",
+      "objective": "Introduce an explicit conserved liquid-composition model and persist it through mixture state, merge, extraction, serialization, and vanilla potion import.",
+      "status": "in-progress",
+      "planSource": {
+        "repository": "Yunitrish006006/TotemAlchemy",
+        "path": "docs/alchemy-next-task-plan.md",
+        "note": "Authoritative M3 task plan."
+      },
+      "targetRepositories": [
+        {
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "moduleId": "totem-alchemy",
+          "purpose": "Implement liquid composition value/state/persistence behavior."
+        }
+      ],
+      "currentTaskId": "M3-T01",
+      "completedTaskIds": [],
+      "blockedBy": [],
+      "milestones": [
+        {
+          "id": "M3",
+          "title": "Liquid composition model",
+          "tasks": [
+            "M3-T01",
+            "M3-T02",
+            "M3-T03",
+            "M3-T04",
+            "M3-T05",
+            "M3-T06",
+            "M3-T07",
+            "M3-T08",
+            "M3-T09",
+            "M3-T10"
+          ]
+        }
+      ],
+      "tasks": [
+        {
+          "id": "M3-T01",
+          "title": "LiquidComposition value",
+          "goal": "Add LiquidComposition value object.",
+          "primaryConcept": "liquid composition value object",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "in-review",
+          "dependsOn": [
+            "M2-T16"
+          ],
+          "doneCriteria": [
+            "Immutable liquid-id component storage exists.",
+            "Focused unit tests cover value semantics and invalid amounts."
+          ],
+          "stopBoundary": "Do not normalize/order components or wire composition into mixture state."
+        },
+        {
+          "id": "M3-T02",
+          "title": "Normalize and order",
+          "goal": "Add normalize/epsilon/deterministic ordering.",
+          "primaryConcept": "composition normalization",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "planned",
+          "dependsOn": [
+            "M3-T01"
+          ],
+          "doneCriteria": [
+            "Composition can normalize, epsilon-prune, and expose deterministic ordering."
+          ],
+          "stopBoundary": "Do not store composition in AlchemyMixtureState."
+        },
+        {
+          "id": "M3-T03",
+          "title": "Store composition",
+          "goal": "Store composition in AlchemyMixtureState.",
+          "primaryConcept": "mixture composition state",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "planned",
+          "dependsOn": [
+            "M3-T02"
+          ],
+          "doneCriteria": [
+            "Mixture state owns liquid composition."
+          ],
+          "stopBoundary": "Do not change copy/reset or merge behavior yet."
+        },
+        {
+          "id": "M3-T04",
+          "title": "Copy and reset",
+          "goal": "Preserve composition through copy/reset.",
+          "primaryConcept": "composition lifecycle",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "planned",
+          "dependsOn": [
+            "M3-T03"
+          ],
+          "doneCriteria": [
+            "Copy preserves composition; reset behavior is explicit."
+          ],
+          "stopBoundary": "Do not change merge/extract."
+        },
+        {
+          "id": "M3-T05",
+          "title": "Merge composition",
+          "goal": "Volume-weight composition in mergeFrom.",
+          "primaryConcept": "composition merge",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "planned",
+          "dependsOn": [
+            "M3-T04"
+          ],
+          "doneCriteria": [
+            "mergeFrom volume-weights liquid composition."
+          ],
+          "stopBoundary": "Do not change extraction."
+        },
+        {
+          "id": "M3-T06",
+          "title": "Extract composition",
+          "goal": "Preserve ratios through extractUnits.",
+          "primaryConcept": "composition extraction",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "planned",
+          "dependsOn": [
+            "M3-T05"
+          ],
+          "doneCriteria": [
+            "Extraction preserves composition ratios."
+          ],
+          "stopBoundary": "Do not serialize yet."
+        },
+        {
+          "id": "M3-T07",
+          "title": "Serialize composition",
+          "goal": "Add deterministic L| serialization.",
+          "primaryConcept": "composition serialization",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "planned",
+          "dependsOn": [
+            "M3-T06"
+          ],
+          "doneCriteria": [
+            "Composition serializes deterministically."
+          ],
+          "stopBoundary": "Do not add legacy migration decode."
+        },
+        {
+          "id": "M3-T08",
+          "title": "Decode and migrate",
+          "goal": "Decode L| and migrate legacy non-empty mixtures to Water.",
+          "primaryConcept": "composition migration",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "planned",
+          "dependsOn": [
+            "M3-T07"
+          ],
+          "doneCriteria": [
+            "L| decodes and legacy mixtures migrate to Water."
+          ],
+          "stopBoundary": "Do not alter vanilla potion import."
+        },
+        {
+          "id": "M3-T09",
+          "title": "Vanilla potion import",
+          "goal": "Import vanilla potion containers as Water 100%.",
+          "primaryConcept": "vanilla liquid import",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "planned",
+          "dependsOn": [
+            "M3-T08"
+          ],
+          "doneCriteria": [
+            "Vanilla potion input has Water 100% composition."
+          ],
+          "stopBoundary": "Do not perform broad regression cleanup."
+        },
+        {
+          "id": "M3-T10",
+          "title": "Composition regression",
+          "goal": "Liquid-composition regression pass with gameplay unchanged.",
+          "primaryConcept": "composition regression",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "planned",
+          "dependsOn": [
+            "M3-T09"
+          ],
+          "doneCriteria": [
+            "M3 composition behavior is regression-covered without gameplay changes."
+          ],
+          "stopBoundary": "Do not begin M4."
+        }
+      ],
+      "checkpoint": {
+        "summary": "M3-T01 LiquidComposition value object is implemented in TotemAlchemy PR #65 and awaiting Build.",
+        "currentTaskId": "M3-T01",
+        "branch": "feature/liquid-composition-value",
+        "head": "ed7b474c3a41bd8ac2b8c280fd9ef2fd1055beef",
+        "filesChanged": [
+          "docs/alchemy-next-task-plan.md",
+          "src/main/java/dev/totem/alchemy/mixture/LiquidComposition.java",
+          "src/test/java/dev/totem/alchemy/mixture/LiquidCompositionTest.java"
+        ],
+        "validation": "M2 is fully validated against the known inherited baseline. M3-T01 Build pending.",
+        "remainingRisks": [
+          "Normalization, epsilon pruning, and canonical ordering are intentionally deferred to M3-T02.",
+          "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
+        ],
+        "nextTask": "M3-T02"
       }
     }
   ]
