@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-07T09:45:00+08:00",
+  "updatedAt": "2026-10-07T09:55:00+08:00",
   "activeWorkId": "totem-alchemy-m6-effect-dose",
   "workItems": [
     {
@@ -231,14 +231,15 @@
           "purpose": "Implement EffectDose quantity, standard dose, concentration, presentation split, conservation and regression coverage."
         }
       ],
-      "currentTaskId": "M6-T07",
+      "currentTaskId": "M6-T08",
       "completedTaskIds": [
         "M6-T01",
         "M6-T02",
         "M6-T03",
         "M6-T04",
         "M6-T05",
-        "M6-T06"
+        "M6-T06",
+        "M6-T07"
       ],
       "blockedBy": [],
       "milestones": [
@@ -414,7 +415,7 @@
           "goal": "Verify dilution conserves total EffectDose.",
           "primaryConcept": "dilution conservation",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-review",
+          "status": "completed",
           "dependsOn": [
             "M6-T03"
           ],
@@ -440,7 +441,7 @@
           "goal": "Verify merge/extract conserve EffectDose.",
           "primaryConcept": "merge/extract conservation",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "planned",
+          "status": "in-review",
           "dependsOn": [
             "M6-T07"
           ],
@@ -449,7 +450,17 @@
             "merge restores conserved total",
             "focused regression passes"
           ],
-          "stopBoundary": "Do not add concentration caps."
+          "stopBoundary": "Do not add concentration caps.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/effect-dose-merge-extract-conservation"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/56"
+            }
+          ]
         },
         {
           "id": "M6-T09",
@@ -491,19 +502,19 @@
         }
       ],
       "checkpoint": {
-        "summary": "M6-T05 and M6-T06 completed with no new compile or GameTest regressions. M6-T07 dilution conservation is implemented as focused regression coverage in TotemAlchemy PR #55 and awaiting its Build.",
-        "currentTaskId": "M6-T07",
-        "branch": "feature/effect-dose-dilution-conservation",
-        "head": "0307bdc05f036fa487c3bc38808727275b469fdb",
+        "summary": "M6-T07 dilution conservation completed with no new compile or GameTest regressions. M6-T08 merge/extract conservation is implemented as focused regression coverage in TotemAlchemy PR #56 and awaiting its Build.",
+        "currentTaskId": "M6-T08",
+        "branch": "feature/effect-dose-merge-extract-conservation",
+        "head": "ebc264c701261f489d0e4f6e0a4b7aa6b33d3517",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
           "src/gametest/java/dev/totem/alchemy/gametest/AlchemyMixtureGameTest.java"
         ],
-        "validation": "M6-T05 and M6-T06 Builds had no compile errors and only the four documented inherited GameTest failures. M6-T07 Build pending.",
+        "validation": "M6-T07 Build had no compile errors and only the four documented inherited GameTest failures. M6-T08 Build pending.",
         "remainingRisks": [
           "Repository-wide CI remains red from four inherited regressions outside M6."
         ],
-        "nextTask": "M6-T08"
+        "nextTask": "M6-T09"
       }
     }
   ]
