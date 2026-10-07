@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-07T22:03:50+08:00",
+  "updatedAt": "2026-10-07T23:37:49+08:00",
   "activeWorkId": "totem-alchemy-m4-activated-base-composition",
   "workItems": [
     {
@@ -1256,13 +1256,14 @@
           "purpose": "Implement activated base composition value/state/persistence behavior."
         }
       ],
-      "currentTaskId": "M4-T06",
+      "currentTaskId": "M4-T07",
       "completedTaskIds": [
         "M4-T01",
         "M4-T02",
         "M4-T03",
         "M4-T04",
-        "M4-T05"
+        "M4-T05",
+        "M4-T06"
       ],
       "blockedBy": [],
       "milestones": [
@@ -1416,14 +1417,24 @@
           "goal": "Split base units proportionally through extract.",
           "primaryConcept": "activated base extraction conservation",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "M4-T05"
           ],
           "doneCriteria": [
             "Extraction proportionally splits activated base units and conserves totals."
           ],
-          "stopBoundary": "Do not serialize yet."
+          "stopBoundary": "Do not serialize yet.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/activated-base-extract"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/80"
+            }
+          ]
         },
         {
           "id": "M4-T07",
@@ -1431,14 +1442,24 @@
           "goal": "Add deterministic A| serialization.",
           "primaryConcept": "activated base serialization",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "todo",
+          "status": "in-progress",
           "dependsOn": [
             "M4-T06"
           ],
           "doneCriteria": [
             "Activated base composition serializes deterministically with A| records."
           ],
-          "stopBoundary": "Do not migrate legacy baseActivated state."
+          "stopBoundary": "Do not migrate legacy baseActivated state.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/activated-base-serialization"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/81"
+            }
+          ]
         },
         {
           "id": "M4-T08",
@@ -1487,22 +1508,22 @@
         }
       ],
       "checkpoint": {
-        "summary": "M4-T05 activated-base merge conservation validated with no new compile or GameTest regressions. M4-T06 proportional extraction conservation is implemented in TotemAlchemy PR #80 and awaiting Build.",
-        "currentTaskId": "M4-T06",
-        "branch": "feature/activated-base-extract",
-        "head": "3dc8f5272db16d656dd30575dda9a319bc1e8703",
+        "summary": "M4-T06 proportional activated-base extraction validated with no new compile or GameTest regressions. M4-T07 deterministic A| serialization is implemented in TotemAlchemy PR #81 and awaiting Build.",
+        "currentTaskId": "M4-T07",
+        "branch": "feature/activated-base-serialization",
+        "head": "4befcb50de99956244f7c3b8c445a4ae09f04144",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
           "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureState.java",
           "src/gametest/java/dev/totem/alchemy/gametest/AlchemyMixtureGameTest.java"
         ],
-        "validation": "M4-T05 Build had no compile errors and only the four documented inherited GameTest failures. M4-T06 Build pending.",
+        "validation": "M4-T06 Build had no compile errors and only the four documented inherited GameTest failures. M4-T07 Build pending.",
         "remainingRisks": [
-          "A| activated-base persistence remains deferred to M4-T07.",
-          "Legacy baseActivated migration remains deferred to M4-T08.",
+          "A| decode and legacy baseActivated migration remain deferred to M4-T08.",
+          "baseActivated compatibility derivation remains deferred to M4-T09.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
-        "nextTask": "M4-T07"
+        "nextTask": "M4-T08"
       }
     }
   ]
