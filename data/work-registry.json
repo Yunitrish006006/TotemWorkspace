@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-07T14:06:00+08:00",
+  "updatedAt": "2026-10-07T14:20:00+08:00",
   "activeWorkId": "totem-alchemy-m3-liquid-composition",
   "workItems": [
     {
@@ -945,7 +945,7 @@
           "purpose": "Implement liquid composition value/state/persistence behavior."
         }
       ],
-      "currentTaskId": "M3-T08",
+      "currentTaskId": "M3-T09",
       "completedTaskIds": [
         "M3-T01",
         "M3-T02",
@@ -953,7 +953,8 @@
         "M3-T04",
         "M3-T05",
         "M3-T06",
-        "M3-T07"
+        "M3-T07",
+        "M3-T08"
       ],
       "blockedBy": [],
       "milestones": [
@@ -1147,7 +1148,7 @@
           "goal": "Decode L| and migrate legacy non-empty mixtures to Water.",
           "primaryConcept": "composition migration",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-review",
+          "status": "completed",
           "dependsOn": [
             "M3-T07"
           ],
@@ -1172,14 +1173,24 @@
           "goal": "Import vanilla potion containers as Water 100%.",
           "primaryConcept": "vanilla liquid import",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "planned",
+          "status": "in-review",
           "dependsOn": [
             "M3-T08"
           ],
           "doneCriteria": [
             "Vanilla potion input has Water 100% composition."
           ],
-          "stopBoundary": "Do not perform broad regression cleanup."
+          "stopBoundary": "Do not perform broad regression cleanup.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/vanilla-potion-water-composition-v2"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/73"
+            }
+          ]
         },
         {
           "id": "M3-T10",
@@ -1198,22 +1209,22 @@
         }
       ],
       "checkpoint": {
-        "summary": "M3-T08 L| decode and legacy Water migration initially exposed one new regression: modern non-empty states with unknown composition were indistinguishable from legacy no-composition states. The codec now emits an explicit empty L| sentinel for modern unknown composition, while only states with no L| marker migrate to Water 100%. Replacement Build queued.",
-        "currentTaskId": "M3-T08",
-        "branch": "feature/liquid-composition-decode",
-        "head": "4a400781000e1dfc5e70a3b7178b687266dc3b5d",
+        "summary": "M3-T08 L| decode and legacy Water migration completed after adding an explicit modern empty L| sentinel; replacement Build returned to the inherited four-failure baseline. M3-T09 vanilla potion Water-composition import is implemented in TotemAlchemy PR #73 and awaiting Build.",
+        "currentTaskId": "M3-T09",
+        "branch": "feature/vanilla-potion-water-composition-v2",
+        "head": "fb30724d5779f91dd55be2bebc7d876543655be6",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
-          "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureState.java",
+          "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureBottle.java",
           "src/gametest/java/dev/totem/alchemy/gametest/AlchemyMixtureGameTest.java"
         ],
-        "validation": "Initial M3-T08 Build had no compile errors but added one FlaskEnchantmentsGameTest failure because modern unknown composition was migrated as legacy Water. Explicit L| sentinel fix committed; replacement Build queued.",
+        "validation": "M3-T08 replacement Build had no compile errors and only the four documented inherited GameTest failures. M3-T09 Build pending.",
         "remainingRisks": [
-          "M3-T08 must return to the inherited four-failure baseline before M3-T09 is formalized.",
-          "Vanilla potion Water-composition import remains M3-T09.",
+          "Full M3 liquid-composition regression handoff remains M3-T10.",
+          "Totem-specific potion-like items are intentionally not assigned Water composition by M3-T09.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
-        "nextTask": "M3-T09"
+        "nextTask": "M3-T10"
       }
     }
   ]
