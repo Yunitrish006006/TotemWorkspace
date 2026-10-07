@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-07T11:03:00+08:00",
-  "activeWorkId": "totem-alchemy-m6-effect-dose",
+  "updatedAt": "2026-10-07T11:12:00+08:00",
+  "activeWorkId": "totem-alchemy-m7-station-resolvers",
   "workItems": [
     {
       "id": "totem-workspace-bounded-execution",
@@ -218,7 +218,7 @@
       "id": "totem-alchemy-m6-effect-dose",
       "title": "TotemAlchemy M6 EffectDose and concentration",
       "objective": "Continue the TotemAlchemy 26.3 chemistry rewrite using the repository roadmap as the authoritative full plan, completing M6 as bounded independently verifiable micro-tasks before dependent M7 station-output work.",
-      "status": "in-progress",
+      "status": "completed",
       "planSource": {
         "repository": "Yunitrish006006/TotemAlchemy",
         "path": "docs/alchemy-next-task-plan.md",
@@ -231,7 +231,7 @@
           "purpose": "Implement EffectDose quantity, standard dose, concentration, presentation split, conservation and regression coverage."
         }
       ],
-      "currentTaskId": "M6-T10",
+      "currentTaskId": null,
       "completedTaskIds": [
         "M6-T01",
         "M6-T02",
@@ -241,7 +241,8 @@
         "M6-T06",
         "M6-T07",
         "M6-T08",
-        "M6-T09"
+        "M6-T09",
+        "M6-T10"
       ],
       "blockedBy": [],
       "milestones": [
@@ -498,7 +499,7 @@
           "goal": "Run the bounded EffectDose regression pass.",
           "primaryConcept": "M6 regression verification",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-review",
+          "status": "completed",
           "dependsOn": [
             "M6-T05",
             "M6-T06",
@@ -524,19 +525,246 @@
         }
       ],
       "checkpoint": {
-        "summary": "M6-T09 normal-recipe concentration cap completed with no new compile or GameTest regressions. M6-T10 regression handoff is implemented in TotemAlchemy PR #58 and awaiting its Build.",
-        "currentTaskId": "M6-T10",
+        "summary": "M6 EffectDose and concentration milestone is complete. M6-T01 through M6-T10 are implemented and validated with no new compile or GameTest regressions beyond the four documented inherited failures.",
+        "currentTaskId": null,
         "branch": "feature/effect-dose-regression-pass",
         "head": "561d483a6107714a1d74eab65c664194e3a61d5a",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
           "test-artifacts/m6-effect-dose-validation.md"
         ],
-        "validation": "M6-T09 Build had no compile errors and only the four documented inherited GameTest failures. M6-T10 Build pending.",
+        "validation": "M6-T10 Build had no compile errors and only the four documented inherited GameTest failures.",
         "remainingRisks": [
           "Repository-wide CI remains red from four inherited regressions outside M6."
         ],
         "nextTask": "M7-T08"
+      }
+    },
+    {
+      "id": "totem-alchemy-m7-station-resolvers",
+      "title": "TotemAlchemy M7 Station resolvers",
+      "objective": "Finish Brewing Stand and Alchemy Cauldron station-resolution behavior after the M6 EffectDose model, preserving deterministic Brewing Stand outcomes and probabilistic Cauldron outcomes.",
+      "status": "in-progress",
+      "planSource": {
+        "repository": "Yunitrish006006/TotemAlchemy",
+        "path": "docs/alchemy-next-task-plan.md",
+        "note": "Authoritative M7 task plan."
+      },
+      "targetRepositories": [
+        {
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "moduleId": "totem-alchemy",
+          "purpose": "Complete station-specific output, parity, and cleanup."
+        }
+      ],
+      "currentTaskId": "M7-T08",
+      "completedTaskIds": [
+        "M7-T01",
+        "M7-T02",
+        "M7-T04",
+        "M7-T05",
+        "M7-T06",
+        "M7-T07"
+      ],
+      "blockedBy": [
+        "M7-T03 requires an explicit Brewing Stand station bonus balance value."
+      ],
+      "milestones": [
+        {
+          "id": "M7",
+          "title": "Station resolvers",
+          "tasks": [
+            "M7-T01",
+            "M7-T02",
+            "M7-T03",
+            "M7-T04",
+            "M7-T05",
+            "M7-T06",
+            "M7-T07",
+            "M7-T08",
+            "M7-T09",
+            "M7-T10"
+          ]
+        }
+      ],
+      "tasks": [
+        {
+          "id": "M7-T01",
+          "title": "Station context/API",
+          "goal": "Define station context/API.",
+          "primaryConcept": "station context",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "completed",
+          "dependsOn": [],
+          "doneCriteria": [
+            "Station context exists."
+          ],
+          "stopBoundary": "Do not alter success calculation."
+        },
+        {
+          "id": "M7-T02",
+          "title": "Central success calculation",
+          "goal": "Centralize final success-chance calculation.",
+          "primaryConcept": "success resolver",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "completed",
+          "dependsOn": [
+            "M7-T01"
+          ],
+          "doneCriteria": [
+            "Success chance resolves centrally."
+          ],
+          "stopBoundary": "Do not set balance bonus."
+        },
+        {
+          "id": "M7-T03",
+          "title": "Brewing Stand success bonus",
+          "goal": "Add Brewing Stand station success bonus.",
+          "primaryConcept": "station bonus balance",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "blocked",
+          "dependsOn": [
+            "M7-T02"
+          ],
+          "doneCriteria": [
+            "Explicit bonus value is chosen and applied."
+          ],
+          "stopBoundary": "Do not infer the balance value."
+        },
+        {
+          "id": "M7-T04",
+          "title": "Vanilla 100 percent",
+          "goal": "Guarantee native vanilla Brewing Stand recipes reach 100%.",
+          "primaryConcept": "vanilla success guarantee",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "completed",
+          "dependsOn": [
+            "M7-T02"
+          ],
+          "doneCriteria": [
+            "Native vanilla recipes reach 100%."
+          ],
+          "stopBoundary": "Do not change custom outcome selection."
+        },
+        {
+          "id": "M7-T05",
+          "title": "Deterministic primary outcome",
+          "goal": "Brewing Stand selects deterministic highest-chance outcome.",
+          "primaryConcept": "deterministic Brewing Stand outcome",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "completed",
+          "dependsOn": [
+            "M7-T02"
+          ],
+          "doneCriteria": [
+            "Highest-chance outcome selected deterministically."
+          ],
+          "stopBoundary": "Do not define tie break."
+        },
+        {
+          "id": "M7-T06",
+          "title": "Tie break",
+          "goal": "Implement chance/priority/resource-ID tie break.",
+          "primaryConcept": "deterministic tie break",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "completed",
+          "dependsOn": [
+            "M7-T05"
+          ],
+          "doneCriteria": [
+            "Tie break is deterministic."
+          ],
+          "stopBoundary": "Do not change Cauldron probability."
+        },
+        {
+          "id": "M7-T07",
+          "title": "Cauldron probabilistic outcomes",
+          "goal": "Cauldron keeps full probabilistic outcome resolution.",
+          "primaryConcept": "Cauldron probability",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "completed",
+          "dependsOn": [
+            "M7-T06"
+          ],
+          "doneCriteria": [
+            "Independent probabilistic outcome set preserved."
+          ],
+          "stopBoundary": "Do not change Brewing Stand output dose."
+        },
+        {
+          "id": "M7-T08",
+          "title": "Brewing Stand standard dose",
+          "goal": "Brewing Stand emits standard dose/concentration.",
+          "primaryConcept": "station output EffectDose",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "in-review",
+          "dependsOn": [
+            "M6-T10",
+            "M7-T07"
+          ],
+          "doneCriteria": [
+            "One Brewing Stand bottle emits registered standard quantity and concentration.",
+            "Focused test adds no new regression."
+          ],
+          "stopBoundary": "Do not begin cross-station parity or cleanup.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/brewing-stand-standard-dose"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/59"
+            }
+          ]
+        },
+        {
+          "id": "M7-T09",
+          "title": "Cross-station parity",
+          "goal": "Cross-station parity test for standard primary outcomes.",
+          "primaryConcept": "station parity",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "planned",
+          "dependsOn": [
+            "M7-T08"
+          ],
+          "doneCriteria": [
+            "Standard primary outcome matches between stations where semantics should match."
+          ],
+          "stopBoundary": "Do not remove obsolete paths."
+        },
+        {
+          "id": "M7-T10",
+          "title": "Brewing Stand path cleanup",
+          "goal": "Remove obsolete direct Brewing Stand chance/outcome paths.",
+          "primaryConcept": "station path cleanup",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "planned",
+          "dependsOn": [
+            "M7-T09"
+          ],
+          "doneCriteria": [
+            "Obsolete direct paths removed without behavior change."
+          ],
+          "stopBoundary": "Do not resolve M7-T03 balance implicitly."
+        }
+      ],
+      "checkpoint": {
+        "summary": "M7-T08 is implemented in TotemAlchemy PR #59. Brewing Stand outcome production now explicitly uses one bottle-equivalent standard EffectDose and registered standard lookup.",
+        "currentTaskId": "M7-T08",
+        "branch": "feature/brewing-stand-standard-dose",
+        "head": "9eed5b752c1fbd40cab17657baf0cdfa3f5ab983",
+        "filesChanged": [
+          "docs/alchemy-next-task-plan.md",
+          "src/gametest/java/dev/totem/alchemy/gametest/BrewingMigrationGameTest.java",
+          "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureBrewing.java"
+        ],
+        "validation": "M6 is fully validated against the known inherited baseline. M7-T08 Build pending.",
+        "remainingRisks": [
+          "M7-T03 remains blocked on an explicit Brewing Stand success-bonus balance value.",
+          "Repository-wide CI remains red from four inherited regressions outside M7-T08."
+        ],
+        "nextTask": "M7-T09"
       }
     }
   ]
