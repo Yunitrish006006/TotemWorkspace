@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-07T12:08:00+08:00",
+  "updatedAt": "2026-10-07T12:15:00+08:00",
   "activeWorkId": "totem-alchemy-m7-station-resolvers",
   "workItems": [
     {
@@ -772,10 +772,10 @@
         }
       ],
       "checkpoint": {
-        "summary": "M7-T10 cleanup initially exposed compile regressions in two remaining GameTests that still referenced removed direct chance/outcome APIs. Those tests were migrated to BrewingStationPolicy and activeOutcomes().getFirst(); PR #61 rerun is in progress.",
+        "summary": "M7-T10 cleanup compile errors were fixed. A follow-up GameTest failure came from an overly narrow test fixture that required nativeVanillaRecipe=true even for deterministic modifiers; the fixture now accepts either native vanilla or deterministic modifier guaranteed paths. New CI has not started yet for the latest head.",
         "currentTaskId": "M7-T10",
         "branch": "feature/brewing-station-path-cleanup",
-        "head": "cb967684159d2f74236a8efe4ede9ec4a253e9bd",
+        "head": "d6154410a7f26aa151cb286ea7d3b0bfa2144076",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
           "src/main/java/dev/totem/alchemy/alchemy/VanillaBrewingChance.java",
@@ -787,11 +787,11 @@
           "src/gametest/java/dev/totem/alchemy/gametest/PotionBrewingRegressionGameTest.java",
           "src/gametest/java/dev/totem/alchemy/gametest/ReactionRegistryMigrationGameTest.java"
         ],
-        "validation": "First PR #61 Build found cleanup-caused compile errors in two GameTests. Both residual legacy references are fixed; rerun Build 37570100484 is in progress.",
+        "validation": "Latest head d6154410 fixes the guaranteed-path fixture after Build 37570100484 showed one cleanup-caused GameTest failure and no compile errors. New Build pending trigger.",
         "remainingRisks": [
           "M7-T03 remains blocked on an explicit Brewing Stand station success-bonus balance value.",
-          "Repository-wide CI has four documented inherited failures once compile succeeds.",
-          "After M7-T10 validation, dependency order should resume at M2-T14 before M3/M8."
+          "Repository-wide CI has four documented inherited failures once M7-T10-specific regressions are cleared.",
+          "After M7-T10 validation, dependency order resumes at M2-T14."
         ],
         "nextTask": "M2-T14"
       }
