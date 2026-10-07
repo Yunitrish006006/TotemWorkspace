@@ -932,7 +932,7 @@
       "id": "totem-alchemy-m3-liquid-composition",
       "title": "TotemAlchemy M3 Liquid composition model",
       "objective": "Introduce an explicit conserved liquid-composition model and persist it through mixture state, merge, extraction, serialization, and vanilla potion import.",
-      "status": "in-progress",
+      "status": "completed",
       "planSource": {
         "repository": "Yunitrish006006/TotemAlchemy",
         "path": "docs/alchemy-next-task-plan.md",
@@ -945,7 +945,7 @@
           "purpose": "Implement liquid composition value/state/persistence behavior."
         }
       ],
-      "currentTaskId": "M3-T10",
+      "currentTaskId": null,
       "completedTaskIds": [
         "M3-T01",
         "M3-T02",
@@ -955,7 +955,8 @@
         "M3-T06",
         "M3-T07",
         "M3-T08",
-        "M3-T09"
+        "M3-T09",
+        "M3-T10"
       ],
       "blockedBy": [],
       "milestones": [
@@ -1199,7 +1200,7 @@
           "goal": "Liquid-composition regression pass with gameplay unchanged.",
           "primaryConcept": "composition regression",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-review",
+          "status": "completed",
           "dependsOn": [
             "M3-T09"
           ],
@@ -1220,8 +1221,8 @@
         }
       ],
       "checkpoint": {
-        "summary": "M3-T09 vanilla potion Water-composition import completed with no new compile or GameTest regressions. M3-T10 end-to-end liquid-composition regression handoff is implemented in TotemAlchemy PR #74 and awaiting Build.",
-        "currentTaskId": "M3-T10",
+        "summary": "M3 liquid composition is complete. M3-T01 through M3-T10 are implemented and validated with no new compile or GameTest regressions beyond the four documented inherited failures.",
+        "currentTaskId": null,
         "branch": "feature/liquid-composition-regression-pass",
         "head": "964ca40c12fb0a6152bf6a738c80689ade0cfd5b",
         "filesChanged": [
@@ -1229,9 +1230,9 @@
           "src/gametest/java/dev/totem/alchemy/gametest/AlchemyMixtureGameTest.java",
           "test-artifacts/m3-liquid-composition-validation.md"
         ],
-        "validation": "M3-T09 Build had no compile errors and only the four documented inherited GameTest failures. M3-T10 Build pending.",
+        "validation": "M3-T10 Build had no compile errors and only the four documented inherited GameTest failures.",
         "remainingRisks": [
-          "M3-T10 must return to the inherited four-failure baseline before M3 is formally completed.",
+          "Repository-wide CI remains red from four inherited regressions outside M3.",
           "M4 activated-base composition has not started.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
