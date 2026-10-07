@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-07T10:05:00+08:00",
+  "updatedAt": "2026-10-07T11:03:00+08:00",
   "activeWorkId": "totem-alchemy-m6-effect-dose",
   "workItems": [
     {
@@ -231,7 +231,7 @@
           "purpose": "Implement EffectDose quantity, standard dose, concentration, presentation split, conservation and regression coverage."
         }
       ],
-      "currentTaskId": "M6-T09",
+      "currentTaskId": "M6-T10",
       "completedTaskIds": [
         "M6-T01",
         "M6-T02",
@@ -240,7 +240,8 @@
         "M6-T05",
         "M6-T06",
         "M6-T07",
-        "M6-T08"
+        "M6-T08",
+        "M6-T09"
       ],
       "blockedBy": [],
       "milestones": [
@@ -469,7 +470,7 @@
           "goal": "Add concentration cap behavior for normal recipes.",
           "primaryConcept": "normal recipe concentration cap",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-review",
+          "status": "completed",
           "dependsOn": [
             "M6-T04",
             "M6-T06"
@@ -497,7 +498,7 @@
           "goal": "Run the bounded EffectDose regression pass.",
           "primaryConcept": "M6 regression verification",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "planned",
+          "status": "in-review",
           "dependsOn": [
             "M6-T05",
             "M6-T06",
@@ -509,25 +510,33 @@
             "no new regressions beyond documented inherited failures",
             "M7-T08 prerequisites are explicit"
           ],
-          "stopBoundary": "Do not begin M7-T08 in the same task."
+          "stopBoundary": "Do not begin M7-T08 in the same task.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/effect-dose-regression-pass"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/58"
+            }
+          ]
         }
       ],
       "checkpoint": {
-        "summary": "M6-T08 merge/extract conservation completed with no new compile or GameTest regressions. M6-T09 normal-recipe concentration cap is implemented in TotemAlchemy PR #57 and awaiting its Build.",
-        "currentTaskId": "M6-T09",
-        "branch": "feature/normal-recipe-concentration-cap",
-        "head": "c6c38a49a03cc9d487de0c6961245d630a94afba",
+        "summary": "M6-T09 normal-recipe concentration cap completed with no new compile or GameTest regressions. M6-T10 regression handoff is implemented in TotemAlchemy PR #58 and awaiting its Build.",
+        "currentTaskId": "M6-T10",
+        "branch": "feature/effect-dose-regression-pass",
+        "head": "561d483a6107714a1d74eab65c664194e3a61d5a",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
-          "src/gametest/java/dev/totem/alchemy/gametest/AlchemyMixtureGameTest.java",
-          "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureBrewing.java"
+          "test-artifacts/m6-effect-dose-validation.md"
         ],
-        "validation": "M6-T08 Build had no compile errors and only the four documented inherited GameTest failures. M6-T09 Build pending.",
+        "validation": "M6-T09 Build had no compile errors and only the four documented inherited GameTest failures. M6-T10 Build pending.",
         "remainingRisks": [
-          "Repository-wide CI remains red from four inherited regressions outside M6.",
-          "M6-T09 is the first M6 task that changes normal recipe runtime production behavior and must pass its focused cap test before M6 regression."
+          "Repository-wide CI remains red from four inherited regressions outside M6."
         ],
-        "nextTask": "M6-T10"
+        "nextTask": "M7-T08"
       }
     }
   ]
