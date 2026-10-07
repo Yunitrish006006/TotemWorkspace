@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-07T09:28:00+08:00",
+  "updatedAt": "2026-10-07T09:35:00+08:00",
   "activeWorkId": "totem-alchemy-m6-effect-dose",
   "workItems": [
     {
@@ -231,7 +231,7 @@
           "purpose": "Implement EffectDose quantity, standard dose, concentration, presentation split, conservation and regression coverage."
         }
       ],
-      "currentTaskId": "M6-T05",
+      "currentTaskId": "M6-T06",
       "completedTaskIds": [
         "M6-T01",
         "M6-T02",
@@ -386,7 +386,7 @@
           "goal": "Implement instant-effect concentration rule.",
           "primaryConcept": "instant effect concentration",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "planned",
+          "status": "in-review",
           "dependsOn": [
             "M6-T03"
           ],
@@ -394,7 +394,17 @@
             "instant effects use an explicit concentration rule",
             "sustained-effect behavior remains unchanged"
           ],
-          "stopBoundary": "Do not expand into dilution or merge regression work."
+          "stopBoundary": "Do not expand into dilution or merge regression work.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/instant-effect-concentration"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/54"
+            }
+          ]
         },
         {
           "id": "M6-T07",
@@ -469,20 +479,21 @@
         }
       ],
       "checkpoint": {
-        "summary": "M6-T04 sustained-effect split completed with no new compile or GameTest regressions. M6-T05 configurable potency-duration bias is implemented in TotemAlchemy PR #53 and awaiting its Build.",
-        "currentTaskId": "M6-T05",
-        "branch": "feature/sustained-effect-bias",
-        "head": "b863db79e5bc4df06cf8b1eac2bc089a8b1f998a",
+        "summary": "M6-T06 instant-effect concentration rule is implemented in TotemAlchemy PR #54. M6-T05 PR #53 Build was still running at the last check, so it remains in-review.",
+        "currentTaskId": "M6-T06",
+        "branch": "feature/instant-effect-concentration",
+        "head": "57fd1cb63c3dedc2f556c13021e4e6903741a8e8",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
           "src/gametest/java/dev/totem/alchemy/gametest/AlchemyMixtureGameTest.java",
           "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureState.java"
         ],
-        "validation": "M6-T04 Build had no compile error and only the four documented inherited GameTest failures. M6-T05 Build pending.",
+        "validation": "M6-T06 Build pending. M6-T05 Build still in progress at last check; inherited repository failures remain documented separately.",
         "remainingRisks": [
-          "Repository-wide CI remains red from four inherited regressions outside M6."
+          "M6-T05 validation is still pending.",
+          "Repository-wide CI remains red from four inherited regressions outside M6 unless a newer task introduces a distinct failure."
         ],
-        "nextTask": "M6-T06"
+        "nextTask": "M6-T07"
       }
     }
   ]
