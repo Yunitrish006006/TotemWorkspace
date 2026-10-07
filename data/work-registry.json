@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-07T13:52:00+08:00",
+  "updatedAt": "2026-10-07T13:58:00+08:00",
   "activeWorkId": "totem-alchemy-m3-liquid-composition",
   "workItems": [
     {
@@ -1187,19 +1187,19 @@
         }
       ],
       "checkpoint": {
-        "summary": "M3-T06 liquid composition extraction ratio preservation completed with no new compile or GameTest regressions. M3-T07 deterministic L| serialization is implemented in TotemAlchemy PR #71 and awaiting Build.",
+        "summary": "M3-T07 deterministic L| serialization implementation is complete. Initial Build exposed a focused GameTest compile regression caused by a missing java.util.List import; the import was fixed and the replacement Build is queued.",
         "currentTaskId": "M3-T07",
         "branch": "feature/liquid-composition-serialization",
-        "head": "c14b8d8cd7696d85d5454d3c10e3c6c65b68b5bc",
+        "head": "b73321e1c0b9903014b5d5b66612cf4a4fa3bee3",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
           "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureState.java",
           "src/gametest/java/dev/totem/alchemy/gametest/AlchemyMixtureGameTest.java"
         ],
-        "validation": "M3-T06 Build had no compile errors and only the four documented inherited GameTest failures. M3-T07 Build pending.",
+        "validation": "Initial M3-T07 Build failed only at compile time because AlchemyMixtureGameTest used List without importing java.util.List. Fix committed; replacement Build queued.",
         "remainingRisks": [
+          "M3-T07 must return to the inherited four-failure baseline before M3-T08 starts.",
           "L| decoder support and legacy non-empty mixture migration remain deferred to M3-T08.",
-          "Vanilla potion liquid import remains deferred to M3-T09.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
         "nextTask": "M3-T08"
