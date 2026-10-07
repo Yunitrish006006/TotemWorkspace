@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-07T14:20:00+08:00",
+  "updatedAt": "2026-10-07T15:56:00+08:00",
   "activeWorkId": "totem-alchemy-m3-liquid-composition",
   "workItems": [
     {
@@ -1237,6 +1237,226 @@
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
         "nextTask": "M4-T01"
+      }
+    },
+    {
+      "id": "totem-alchemy-m4-activated-base-composition",
+      "title": "TotemAlchemy M4 Activated base composition",
+      "objective": "Replace coarse activated-base state with an explicit conserved per-base unit composition that can later derive total activated units and concentration without changing ingredient yield.",
+      "status": "in-progress",
+      "planSource": {
+        "repository": "Yunitrish006006/TotemAlchemy",
+        "path": "docs/alchemy-next-task-plan.md",
+        "note": "Authoritative M4 task plan."
+      },
+      "targetRepositories": [
+        {
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "moduleId": "totem-alchemy",
+          "purpose": "Implement activated base composition value/state/persistence behavior."
+        }
+      ],
+      "currentTaskId": "M4-T01",
+      "completedTaskIds": [],
+      "blockedBy": [],
+      "milestones": [
+        {
+          "id": "M4",
+          "title": "Activated base composition",
+          "tasks": [
+            "M4-T01",
+            "M4-T02",
+            "M4-T03",
+            "M4-T04",
+            "M4-T05",
+            "M4-T06",
+            "M4-T07",
+            "M4-T08",
+            "M4-T09",
+            "M4-T10"
+          ]
+        }
+      ],
+      "tasks": [
+        {
+          "id": "M4-T01",
+          "title": "ActivatedBaseComposition value",
+          "goal": "Add ActivatedBaseComposition value object.",
+          "primaryConcept": "activated base composition value object",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "in-review",
+          "dependsOn": [
+            "M3-T10"
+          ],
+          "doneCriteria": [
+            "Immutable base-id to absolute-unit storage exists.",
+            "Focused unit tests cover deterministic value semantics and invalid units."
+          ],
+          "stopBoundary": "Do not wire composition into AlchemyMixtureState or derive aggregate units/concentration.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/activated-base-composition-value"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/75"
+            }
+          ]
+        },
+        {
+          "id": "M4-T02",
+          "title": "Store base composition",
+          "goal": "Store base units in AlchemyMixtureState.",
+          "primaryConcept": "activated base mixture state",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M4-T01"
+          ],
+          "doneCriteria": [
+            "Mixture state owns ActivatedBaseComposition with an explicit default."
+          ],
+          "stopBoundary": "Do not derive total activated units/concentration or alter copy/reset."
+        },
+        {
+          "id": "M4-T03",
+          "title": "Derive base concentration",
+          "goal": "Derive total activated units and base concentration.",
+          "primaryConcept": "activated base concentration",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M4-T02"
+          ],
+          "doneCriteria": [
+            "Total activated units and concentration are derived from composition and volume."
+          ],
+          "stopBoundary": "Do not change lifecycle conservation behavior."
+        },
+        {
+          "id": "M4-T04",
+          "title": "Copy and reset base composition",
+          "goal": "Preserve base units through copy/reset.",
+          "primaryConcept": "activated base lifecycle",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M4-T03"
+          ],
+          "doneCriteria": [
+            "Copy preserves base composition and reset clears it."
+          ],
+          "stopBoundary": "Do not change merge/extract."
+        },
+        {
+          "id": "M4-T05",
+          "title": "Merge base units",
+          "goal": "Conserve base units through merge.",
+          "primaryConcept": "activated base merge conservation",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M4-T04"
+          ],
+          "doneCriteria": [
+            "mergeFrom adds absolute activated base units without creating or destroying them."
+          ],
+          "stopBoundary": "Do not change extraction."
+        },
+        {
+          "id": "M4-T06",
+          "title": "Extract base units",
+          "goal": "Split base units proportionally through extract.",
+          "primaryConcept": "activated base extraction conservation",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M4-T05"
+          ],
+          "doneCriteria": [
+            "Extraction proportionally splits activated base units and conserves totals."
+          ],
+          "stopBoundary": "Do not serialize yet."
+        },
+        {
+          "id": "M4-T07",
+          "title": "Serialize base composition",
+          "goal": "Add deterministic A| serialization.",
+          "primaryConcept": "activated base serialization",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M4-T06"
+          ],
+          "doneCriteria": [
+            "Activated base composition serializes deterministically with A| records."
+          ],
+          "stopBoundary": "Do not migrate legacy baseActivated state."
+        },
+        {
+          "id": "M4-T08",
+          "title": "Migrate legacy activation",
+          "goal": "Migrate legacy baseActivated states.",
+          "primaryConcept": "activated base migration",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M4-T07"
+          ],
+          "doneCriteria": [
+            "Legacy persisted baseActivated states decode into explicit activated-base units."
+          ],
+          "stopBoundary": "Do not remove or derive the compatibility boolean yet."
+        },
+        {
+          "id": "M4-T09",
+          "title": "Derive compatibility activation",
+          "goal": "Make baseActivated a compatibility-derived value.",
+          "primaryConcept": "baseActivated compatibility facade",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M4-T08"
+          ],
+          "doneCriteria": [
+            "baseActivated reads are derived from explicit activated-base composition while compatibility setters remain bounded."
+          ],
+          "stopBoundary": "Do not change ingredient yield behavior."
+        },
+        {
+          "id": "M4-T10",
+          "title": "Base composition regression",
+          "goal": "Base-composition regression pass without changing ingredient yield.",
+          "primaryConcept": "activated base regression",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M4-T09"
+          ],
+          "doneCriteria": [
+            "M4 conservation/persistence/migration behavior is regression-covered with ingredient yield unchanged."
+          ],
+          "stopBoundary": "Do not begin M5."
+        }
+      ],
+      "checkpoint": {
+        "summary": "M4-T01 ActivatedBaseComposition value object is implemented in TotemAlchemy PR #75 and awaiting Build.",
+        "currentTaskId": "M4-T01",
+        "branch": "feature/activated-base-composition-value",
+        "head": "baadbe7681651f3ad6eeb5a77cb3cee2bdb17b2c",
+        "filesChanged": [
+          "docs/alchemy-next-task-plan.md",
+          "src/main/java/dev/totem/alchemy/mixture/ActivatedBaseComposition.java",
+          "src/test/java/dev/totem/alchemy/mixture/ActivatedBaseCompositionTest.java"
+        ],
+        "validation": "M3 is complete at inherited baseline. M4-T01 Build pending.",
+        "remainingRisks": [
+          "ActivatedBaseComposition is not yet stored in AlchemyMixtureState; M4-T02 owns state wiring.",
+          "Aggregate units and base concentration remain undefined until M4-T03.",
+          "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
+        ],
+        "nextTask": "M4-T02"
       }
     }
   ]
