@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-08T20:57:28+08:00",
-  "activeWorkId": "totem-alchemy-m5-base-activation-dose",
+  "updatedAt": "2026-10-08T21:03:00+08:00",
+  "activeWorkId": "totem-alchemy-m7-station-resolvers",
   "workItems": [
     {
       "id": "totem-workspace-bounded-execution",
@@ -773,7 +773,7 @@
         }
       ],
       "checkpoint": {
-        "summary": "M7-T10 Brewing Stand path cleanup completed with no new compile or GameTest regressions. M7 station work now has only M7-T03 remaining, blocked on an explicit station success-bonus balance value.",
+        "summary": "M7-T01, T02, and T04 through T10 are complete. M5 is now fully complete, leaving only M7-T03; it remains blocked on an explicit Brewing Stand station success-bonus balance value.",
         "currentTaskId": "M7-T03",
         "branch": "feature/brewing-station-path-cleanup",
         "head": "d6154410a7f26aa151cb286ea7d3b0bfa2144076",
@@ -1564,7 +1564,7 @@
       "id": "totem-alchemy-m5-base-activation-dose",
       "title": "TotemAlchemy M5 Base activation and ingredient dose",
       "objective": "Use explicit activated-base composition to resolve starter capacity and then introduce bounded ingredient-dose semantics without allowing dilution or repeated ingredients to create unlimited chemistry.",
-      "status": "in-progress",
+      "status": "completed",
       "planSource": {
         "repository": "Yunitrish006006/TotemAlchemy",
         "path": "docs/alchemy-next-task-plan.md",
@@ -1577,7 +1577,7 @@
           "purpose": "Implement unactivated-unit starter resolution, reaction capacity and ingredient dose behavior."
         }
       ],
-      "currentTaskId": "M5-T10",
+      "currentTaskId": null,
       "completedTaskIds": [
         "M5-T01",
         "M5-T02",
@@ -1587,7 +1587,8 @@
         "M5-T06",
         "M5-T07",
         "M5-T08",
-        "M5-T09"
+        "M5-T09",
+        "M5-T10"
       ],
       "blockedBy": [],
       "milestones": [
@@ -1843,7 +1844,7 @@
           "goal": "Test that the same base cannot generate unlimited repeated dose.",
           "primaryConcept": "finite base capacity regression",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "M5-T09"
           ],
@@ -1864,8 +1865,8 @@
         }
       ],
       "checkpoint": {
-        "summary": "M5-T09 one-third-base dose 1/2/3 matrix validated with no new compile or GameTest regressions beyond the four documented inherited failures. M5-T10 finite-base repeated-dose regression is implemented in TotemAlchemy PR #94 and awaiting Build.",
-        "currentTaskId": "M5-T10",
+        "summary": "M5 Base activation and ingredient dose is complete. M5-T01 through M5-T10 are implemented and validated with no new compile or GameTest regressions beyond the four documented inherited failures.",
+        "currentTaskId": null,
         "branch": "test/finite-base-dose-regression",
         "head": "b6160f155a89343c440d337b6985748e66f1b6a0",
         "filesChanged": [
@@ -1873,11 +1874,11 @@
           "src/gametest/java/dev/totem/alchemy/gametest/AlchemyMixtureGameTest.java",
           "test-artifacts/m5-base-dose-validation.md"
         ],
-        "validation": "M5-T09 Build #231 had no compile errors and only the four documented inherited GameTest failures. M5-T10 Build pending.",
+        "validation": "M5-T10 Build #232 had no compile errors and only the four documented inherited GameTest failures.",
         "remainingRisks": [
-          "M5-T10 relies on the existing normal-recipe EffectDose ceiling as the cumulative bound across completed/repeated reactions; CI confirmation is pending.",
-          "Current legacy ingredient max_dose values are not rebalanced by M5.",
-          "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
+          "Repository-wide CI remains red from the four inherited regressions outside M5.",
+          "Current legacy ingredient max_dose values were intentionally not rebalanced by M5.",
+          "M7-T03 remains blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
         "nextTask": "M7-T03"
       }
