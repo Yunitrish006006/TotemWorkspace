@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-08T23:24:07+08:00",
+  "updatedAt": "2026-10-08T23:28:27+08:00",
   "activeWorkId": "totem-alchemy-m8-liquid-registry",
   "workItems": [
     {
@@ -1900,7 +1900,7 @@
           "purpose": "Define liquid models, baseline liquids, weighted property resolution, and runtime liquid-property modifiers."
         }
       ],
-      "currentTaskId": "M8-T08",
+      "currentTaskId": "M8-T09",
       "completedTaskIds": [
         "M8-T01",
         "M8-T02",
@@ -1908,7 +1908,8 @@
         "M8-T04",
         "M8-T05",
         "M8-T06",
-        "M8-T07"
+        "M8-T07",
+        "M8-T08"
       ],
       "blockedBy": [],
       "milestones": [
@@ -2110,7 +2111,7 @@
           "goal": "Apply liquid duration/potency modifiers.",
           "primaryConcept": "liquid-driven EffectDose presentation",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "M8-T07"
           ],
@@ -2135,36 +2136,44 @@
           "goal": "Run the liquid-property regression pass.",
           "primaryConcept": "M8 liquid regression coverage",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "todo",
+          "status": "in-progress",
           "dependsOn": [
             "M8-T08"
           ],
           "doneCriteria": [
             "Water/Milk/Honey and mixed-property behavior have focused regression coverage."
           ],
-          "stopBoundary": "Do not begin M9."
+          "stopBoundary": "Do not begin M9.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "test/liquid-property-regression-pass"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/103"
+            }
+          ]
         }
       ],
       "checkpoint": {
-        "summary": "M8-T07 liquid reaction-speed scheduling validated with no new compile or GameTest regressions beyond the four documented inherited failures. M8-T08 liquid duration/potency portable-effect presentation is implemented in TotemAlchemy PR #102 and awaiting Build.",
-        "currentTaskId": "M8-T08",
-        "branch": "feature/liquid-effect-presentation",
-        "head": "cc8c7c5fd8696792e8effc25bb63fff98a23f85a",
+        "summary": "M8-T08 liquid duration/potency portable-effect presentation validated with no new compile or GameTest regressions beyond the four documented inherited failures. M8-T09 final liquid-property regression pass is implemented in TotemAlchemy PR #103 and awaiting Build.",
+        "currentTaskId": "M8-T09",
+        "branch": "test/liquid-property-regression-pass",
+        "head": "98c9c672774a383739071a7c5f173489df8f5b0a",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
-          "src/main/java/dev/totem/alchemy/liquid/LiquidEffectPresentationPolicy.java",
-          "src/main/java/dev/totem/alchemy/liquid/LiquidProperties.java",
-          "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureBottle.java",
-          "src/test/java/dev/totem/alchemy/liquid/LiquidEffectPresentationPolicyTest.java"
+          "src/test/java/dev/totem/alchemy/liquid/LiquidPropertyRegressionTest.java",
+          "test-artifacts/m8-liquid-properties-validation.md"
         ],
-        "validation": "M8-T07 Build #239 had no compile errors and only the four documented inherited GameTest failures. M8-T08 Build pending.",
+        "validation": "M8-T08 Build #240 had no compile errors and only the four documented inherited GameTest failures. M8-T09 Build pending.",
         "remainingRisks": [
-          "Water, Milk, and Honey remain neutral, so current gameplay duration/potency remains unchanged until explicit non-neutral balance multipliers are chosen.",
-          "M8-T08 changes portable presentation only; canonical EffectDose quantity remains conserved in mixture state.",
-          "M8-T09 still needs the full liquid-property regression pass.",
-          "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
+          "Water, Milk, and Honey intentionally remain neutral until explicit non-neutral balance multipliers are chosen.",
+          "M9 container adapters have not started.",
+          "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value.",
+          "Repository-wide CI remains red from the four documented inherited regressions outside M8."
         ],
-        "nextTask": "M8-T09"
+        "nextTask": "M9-T01"
       }
     }
   ]
