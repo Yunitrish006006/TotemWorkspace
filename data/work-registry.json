@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-08T13:08:32+08:00",
+  "updatedAt": "2026-10-08T13:14:02+08:00",
   "activeWorkId": "totem-alchemy-m5-base-activation-dose",
   "workItems": [
     {
@@ -1577,10 +1577,11 @@
           "purpose": "Implement unactivated-unit starter resolution, reaction capacity and ingredient dose behavior."
         }
       ],
-      "currentTaskId": "M5-T03",
+      "currentTaskId": "M5-T04",
       "completedTaskIds": [
         "M5-T01",
-        "M5-T02"
+        "M5-T02",
+        "M5-T03"
       ],
       "blockedBy": [],
       "milestones": [
@@ -1661,7 +1662,7 @@
           "goal": "Audit completedStages and existing reaction-capacity semantics.",
           "primaryConcept": "reaction capacity audit",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "M5-T02"
           ],
@@ -1686,14 +1687,24 @@
           "goal": "Define reaction-capacity consumption/transformation rules.",
           "primaryConcept": "reaction capacity accounting",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "todo",
+          "status": "in-progress",
           "dependsOn": [
             "M5-T03"
           ],
           "doneCriteria": [
             "Capacity consumption/transformation has one explicit conserved rule."
           ],
-          "stopBoundary": "Do not add pending-reaction dose yet."
+          "stopBoundary": "Do not add pending-reaction dose yet.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/base-reaction-capacity-rules"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/88"
+            }
+          ]
         },
         {
           "id": "M5-T05",
@@ -1787,22 +1798,23 @@
         }
       ],
       "checkpoint": {
-        "summary": "M5-T02 dilution invariant validated with no new compile or GameTest regressions beyond the four documented inherited failures. M5-T03 completed-stage/reaction-capacity audit is implemented in TotemAlchemy PR #87 and awaiting Build.",
-        "currentTaskId": "M5-T03",
-        "branch": "feature/reaction-capacity-audit",
-        "head": "3b480eeb6b0308e3c51a1570a82922a51c64d9a3",
+        "summary": "M5-T03 reaction-capacity audit validated with no new compile or GameTest regressions beyond the four documented inherited failures. M5-T04 base-reaction capacity consumption/transformation rules are implemented in TotemAlchemy PR #88 and awaiting Build.",
+        "currentTaskId": "M5-T04",
+        "branch": "feature/base-reaction-capacity-rules",
+        "head": "3ef9f01d03dded99941bf77798bb7dfce7e261f9",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
-          "src/gametest/java/dev/totem/alchemy/gametest/MixtureV2GameTest.java",
-          "test-artifacts/m5-reaction-capacity-audit.md"
+          "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureState.java",
+          "src/gametest/java/dev/totem/alchemy/gametest/AlchemyMixtureGameTest.java",
+          "test-artifacts/m5-base-reaction-capacity-rules.md"
         ],
-        "validation": "M5-T02 Build #224 had no compile errors and only the four documented inherited GameTest failures. M5-T03 Build pending.",
+        "validation": "M5-T03 Build #225 had no compile errors and only the four documented inherited GameTest failures. M5-T04 Build pending.",
         "remainingRisks": [
-          "completedStages is confirmed as timing/history rather than conserved reaction capacity; M5-T04 must define explicit capacity accounting instead of inferring it from stage count.",
-          "M5-T03 requires CI confirmation before M5-T04.",
+          "M5-T04 defines and exposes base-reaction capacity transformation but does not yet wire it into Cauldron or Brewing Stand runtime.",
+          "Ingredient pending-reaction dose and max_dose remain separate later M5 tasks.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
-        "nextTask": "M5-T04"
+        "nextTask": "M5-T05"
       }
     }
   ]
