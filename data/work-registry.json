@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-08T11:23:29+08:00",
+  "updatedAt": "2026-10-08T11:20:00+08:00",
   "activeWorkId": "totem-alchemy-m4-activated-base-composition",
   "workItems": [
     {
@@ -1519,17 +1519,18 @@
         }
       ],
       "checkpoint": {
-        "summary": "M4-T07 deterministic A| serialization validated with no new compile or GameTest regressions. M4-T08 legacy activated-base migration is implemented in TotemAlchemy PR #82 and awaiting Build.",
+        "summary": "M4-T08 Build #218 exposed one new empty-flask round-trip regression. The migration boundary is repaired by emitting an explicit empty A| sentinel for modern empty activated-base composition, so only streams with no A| marker migrate as legacy. TotemAlchemy PR #82 head is awaiting Build #220.",
         "currentTaskId": "M4-T08",
         "branch": "feature/activated-base-migration",
-        "head": "48b650a791381f104761ad50b4d076eba3f356f4",
+        "head": "82dd46e59d0219e6182150ab6908a053eed46125",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
           "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureState.java",
           "src/gametest/java/dev/totem/alchemy/gametest/AlchemyMixtureGameTest.java"
         ],
-        "validation": "M4-T07 Build had no compile errors and only the four documented inherited GameTest failures. M4-T08 Build pending.",
+        "validation": "Build #218 had the four documented inherited GameTest failures plus one new FlaskEnchantmentsGameTest empty-fill round-trip failure. The new failure was repaired using the same explicit-empty-marker pattern as M3-T08. Build #220 pending.",
         "remainingRisks": [
+          "M4-T08 cannot be marked complete until Build #220 confirms the flask regression is gone.",
           "baseActivated compatibility derivation remains deferred to M4-T09.",
           "M4 regression consolidation remains deferred to M4-T10.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
