@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-08T11:20:00+08:00",
+  "updatedAt": "2026-10-08T12:21:23+08:00",
   "activeWorkId": "totem-alchemy-m4-activated-base-composition",
   "workItems": [
     {
@@ -1256,7 +1256,7 @@
           "purpose": "Implement activated base composition value/state/persistence behavior."
         }
       ],
-      "currentTaskId": "M4-T08",
+      "currentTaskId": "M4-T09",
       "completedTaskIds": [
         "M4-T01",
         "M4-T02",
@@ -1264,7 +1264,8 @@
         "M4-T04",
         "M4-T05",
         "M4-T06",
-        "M4-T07"
+        "M4-T07",
+        "M4-T08"
       ],
       "blockedBy": [],
       "milestones": [
@@ -1468,7 +1469,7 @@
           "goal": "Migrate legacy baseActivated states.",
           "primaryConcept": "activated base migration",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "M4-T07"
           ],
@@ -1493,14 +1494,24 @@
           "goal": "Make baseActivated a compatibility-derived value.",
           "primaryConcept": "baseActivated compatibility facade",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "todo",
+          "status": "in-progress",
           "dependsOn": [
             "M4-T08"
           ],
           "doneCriteria": [
             "baseActivated reads are derived from explicit activated-base composition while compatibility setters remain bounded."
           ],
-          "stopBoundary": "Do not change ingredient yield behavior."
+          "stopBoundary": "Do not change ingredient yield behavior.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/base-activated-compatibility"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/83"
+            }
+          ]
         },
         {
           "id": "M4-T10",
@@ -1519,23 +1530,22 @@
         }
       ],
       "checkpoint": {
-        "summary": "M4-T08 Build #218 exposed one new empty-flask round-trip regression. The migration boundary is repaired by emitting an explicit empty A| sentinel for modern empty activated-base composition, so only streams with no A| marker migrate as legacy. TotemAlchemy PR #82 head is awaiting Build #220.",
-        "currentTaskId": "M4-T08",
-        "branch": "feature/activated-base-migration",
-        "head": "82dd46e59d0219e6182150ab6908a053eed46125",
+        "summary": "M4-T08 legacy activated-base migration validated after the explicit-empty A| sentinel repair; Build #220 has no new compile or GameTest regressions beyond the four documented inherited failures. M4-T09 baseActivated compatibility derivation is implemented in TotemAlchemy PR #83 and awaiting Build.",
+        "currentTaskId": "M4-T09",
+        "branch": "feature/base-activated-compatibility",
+        "head": "674be958ba368c23b53901e42be11372d8abc6b3",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
           "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureState.java",
           "src/gametest/java/dev/totem/alchemy/gametest/AlchemyMixtureGameTest.java"
         ],
-        "validation": "Build #218 had the four documented inherited GameTest failures plus one new FlaskEnchantmentsGameTest empty-fill round-trip failure. The new failure was repaired using the same explicit-empty-marker pattern as M3-T08. Build #220 pending.",
+        "validation": "M4-T08 Build #220 had no compile errors and only the four documented inherited GameTest failures. M4-T09 Build pending.",
         "remainingRisks": [
-          "M4-T08 cannot be marked complete until Build #220 confirms the flask regression is gone.",
-          "baseActivated compatibility derivation remains deferred to M4-T09.",
+          "M4-T09 compatibility facade requires CI confirmation before M4-T10.",
           "M4 regression consolidation remains deferred to M4-T10.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
-        "nextTask": "M4-T09"
+        "nextTask": "M4-T10"
       }
     }
   ]
