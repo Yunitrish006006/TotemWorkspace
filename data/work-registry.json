@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-08T13:23:06+08:00",
+  "updatedAt": "2026-10-08T20:21:10+08:00",
   "activeWorkId": "totem-alchemy-m5-base-activation-dose",
   "workItems": [
     {
@@ -1577,12 +1577,13 @@
           "purpose": "Implement unactivated-unit starter resolution, reaction capacity and ingredient dose behavior."
         }
       ],
-      "currentTaskId": "M5-T05",
+      "currentTaskId": "M5-T06",
       "completedTaskIds": [
         "M5-T01",
         "M5-T02",
         "M5-T03",
-        "M5-T04"
+        "M5-T04",
+        "M5-T05"
       ],
       "blockedBy": [],
       "milestones": [
@@ -1713,7 +1714,7 @@
           "goal": "Add dose to pending reaction state.",
           "primaryConcept": "pending ingredient dose state",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "M5-T04"
           ],
@@ -1738,14 +1739,24 @@
           "goal": "Repeated same ingredient increments dose instead of being rejected.",
           "primaryConcept": "same-ingredient dose accumulation",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "todo",
+          "status": "in-progress",
           "dependsOn": [
             "M5-T05"
           ],
           "doneCriteria": [
             "Compatible repeated ingredient additions increase the existing pending dose."
           ],
-          "stopBoundary": "Do not enforce max_dose yet."
+          "stopBoundary": "Do not enforce max_dose yet.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/repeated-ingredient-dose"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/90"
+            }
+          ]
         },
         {
           "id": "M5-T07",
@@ -1809,22 +1820,23 @@
         }
       ],
       "checkpoint": {
-        "summary": "M5-T04 base-reaction capacity transformation validated with no new compile or GameTest regressions beyond the four documented inherited failures. M5-T05 explicit pending-reaction dose state is implemented in TotemAlchemy PR #89 and awaiting Build.",
-        "currentTaskId": "M5-T05",
-        "branch": "feature/pending-reaction-dose-state",
-        "head": "b46e388ceced20af9b8cc0928bd3b48581a305eb",
+        "summary": "M5-T05 explicit pending-reaction dose state validated with no new compile or GameTest regressions beyond the four documented inherited failures. M5-T06 repeated pending outcome ingredients now accumulate dose on the existing reaction in TotemAlchemy PR #90 and await Build.",
+        "currentTaskId": "M5-T06",
+        "branch": "feature/repeated-ingredient-dose",
+        "head": "302473e17b9d24368db70166bb8f51c8717e6fc0",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
           "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureState.java",
-          "src/test/java/dev/totem/alchemy/mixture/AlchemyMixtureTimingTest.java"
+          "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureBrewing.java",
+          "src/gametest/java/dev/totem/alchemy/gametest/MixtureV2GameTest.java"
         ],
-        "validation": "M5-T04 Build #226 had no compile errors and only the four documented inherited GameTest failures. M5-T05 Build pending.",
+        "validation": "M5-T05 Build #227 had no compile errors and only the four documented inherited GameTest failures. M5-T06 Build pending.",
         "remainingRisks": [
-          "M5-T05 adds/persists dose state only; repeated same-ingredient scheduling still remains blocked until M5-T06.",
-          "Dose merge semantics currently preserve the maximum per-reaction dose to avoid split/recombine duplication; active accumulation policy remains M5-T06.",
+          "M5-T06 allows repeated pending outcome ingredients to increase dose without a limit; M5-T07 must enforce reaction max_dose.",
+          "Repeated insertion intentionally preserves the original selected outcome chemistry and progress; EffectDose scaling remains deferred to M5-T08.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
-        "nextTask": "M5-T06"
+        "nextTask": "M5-T07"
       }
     }
   ]
