@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-08T13:02:03+08:00",
+  "updatedAt": "2026-10-08T13:08:32+08:00",
   "activeWorkId": "totem-alchemy-m5-base-activation-dose",
   "workItems": [
     {
@@ -1577,9 +1577,10 @@
           "purpose": "Implement unactivated-unit starter resolution, reaction capacity and ingredient dose behavior."
         }
       ],
-      "currentTaskId": "M5-T02",
+      "currentTaskId": "M5-T03",
       "completedTaskIds": [
-        "M5-T01"
+        "M5-T01",
+        "M5-T02"
       ],
       "blockedBy": [],
       "milestones": [
@@ -1635,7 +1636,7 @@
           "goal": "Prevent dilution from creating activated base.",
           "primaryConcept": "activated-base dilution invariant",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "M5-T01"
           ],
@@ -1660,14 +1661,24 @@
           "goal": "Audit completedStages and existing reaction-capacity semantics.",
           "primaryConcept": "reaction capacity audit",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "todo",
+          "status": "in-progress",
           "dependsOn": [
             "M5-T02"
           ],
           "doneCriteria": [
             "Existing completed-stage and repeat-reaction constraints are documented and covered before mutation."
           ],
-          "stopBoundary": "Do not implement new capacity rules."
+          "stopBoundary": "Do not implement new capacity rules.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/reaction-capacity-audit"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/87"
+            }
+          ]
         },
         {
           "id": "M5-T04",
@@ -1776,21 +1787,22 @@
         }
       ],
       "checkpoint": {
-        "summary": "M5-T01 starter resolution against unactivated units validated with no new compile or GameTest regressions beyond the four documented inherited failures. M5-T02 dilution invariant is implemented in TotemAlchemy PR #86 and awaiting Build.",
-        "currentTaskId": "M5-T02",
-        "branch": "feature/activated-base-dilution-invariant",
-        "head": "27013a77a37129fc21d1d3835dc3955439e49df6",
+        "summary": "M5-T02 dilution invariant validated with no new compile or GameTest regressions beyond the four documented inherited failures. M5-T03 completed-stage/reaction-capacity audit is implemented in TotemAlchemy PR #87 and awaiting Build.",
+        "currentTaskId": "M5-T03",
+        "branch": "feature/reaction-capacity-audit",
+        "head": "3b480eeb6b0308e3c51a1570a82922a51c64d9a3",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
-          "src/gametest/java/dev/totem/alchemy/gametest/AlchemyMixtureGameTest.java"
+          "src/gametest/java/dev/totem/alchemy/gametest/MixtureV2GameTest.java",
+          "test-artifacts/m5-reaction-capacity-audit.md"
         ],
-        "validation": "M5-T01 Build #223 had no compile errors and only the four documented inherited GameTest failures. M5-T02 Build pending.",
+        "validation": "M5-T02 Build #224 had no compile errors and only the four documented inherited GameTest failures. M5-T03 Build pending.",
         "remainingRisks": [
-          "M5-T02 currently locks the dilution invariant against the existing absolute-unit merge implementation; CI confirmation is still required.",
-          "M5-T03 completed-stage/reaction-capacity audit has not started.",
+          "completedStages is confirmed as timing/history rather than conserved reaction capacity; M5-T04 must define explicit capacity accounting instead of inferring it from stage count.",
+          "M5-T03 requires CI confirmation before M5-T04.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
-        "nextTask": "M5-T03"
+        "nextTask": "M5-T04"
       }
     }
   ]
