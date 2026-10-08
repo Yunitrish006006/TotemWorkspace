@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-08T23:28:27+08:00",
-  "activeWorkId": "totem-alchemy-m8-liquid-registry",
+  "updatedAt": "2026-10-08T23:39:24+08:00",
+  "activeWorkId": "totem-alchemy-m9-container-adapters",
   "workItems": [
     {
       "id": "totem-workspace-bounded-execution",
@@ -1887,7 +1887,7 @@
       "id": "totem-alchemy-m8-liquid-registry",
       "title": "TotemAlchemy M8 Liquid registry and properties",
       "objective": "Introduce explicit Alchemy liquid definitions and weighted liquid properties without coupling container adapters or signature-brew logic into the liquid model.",
-      "status": "in-progress",
+      "status": "completed",
       "planSource": {
         "repository": "Yunitrish006006/TotemAlchemy",
         "path": "docs/alchemy-next-task-plan.md",
@@ -1900,7 +1900,7 @@
           "purpose": "Define liquid models, baseline liquids, weighted property resolution, and runtime liquid-property modifiers."
         }
       ],
-      "currentTaskId": "M8-T09",
+      "currentTaskId": null,
       "completedTaskIds": [
         "M8-T01",
         "M8-T02",
@@ -1909,7 +1909,8 @@
         "M8-T05",
         "M8-T06",
         "M8-T07",
-        "M8-T08"
+        "M8-T08",
+        "M8-T09"
       ],
       "blockedBy": [],
       "milestones": [
@@ -2136,7 +2137,7 @@
           "goal": "Run the liquid-property regression pass.",
           "primaryConcept": "M8 liquid regression coverage",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "M8-T08"
           ],
@@ -2157,8 +2158,8 @@
         }
       ],
       "checkpoint": {
-        "summary": "M8-T08 liquid duration/potency portable-effect presentation validated with no new compile or GameTest regressions beyond the four documented inherited failures. M8-T09 final liquid-property regression pass is implemented in TotemAlchemy PR #103 and awaiting Build.",
-        "currentTaskId": "M8-T09",
+        "summary": "M8 Liquid registry and properties is complete. M8-T01 through M8-T09 are implemented and validated with no new compile or GameTest regressions beyond the four documented inherited failures.",
+        "currentTaskId": null,
         "branch": "test/liquid-property-regression-pass",
         "head": "98c9c672774a383739071a7c5f173489df8f5b0a",
         "filesChanged": [
@@ -2166,14 +2167,201 @@
           "src/test/java/dev/totem/alchemy/liquid/LiquidPropertyRegressionTest.java",
           "test-artifacts/m8-liquid-properties-validation.md"
         ],
-        "validation": "M8-T08 Build #240 had no compile errors and only the four documented inherited GameTest failures. M8-T09 Build pending.",
+        "validation": "M8-T09 Build #241 had no compile errors and only the four documented inherited GameTest failures.",
         "remainingRisks": [
-          "Water, Milk, and Honey intentionally remain neutral until explicit non-neutral balance multipliers are chosen.",
-          "M9 container adapters have not started.",
-          "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value.",
-          "Repository-wide CI remains red from the four documented inherited regressions outside M8."
+          "Water, Milk, and Honey remain intentionally neutral until explicit non-neutral balance multipliers are chosen.",
+          "Repository-wide CI remains red from the four documented inherited regressions outside M8.",
+          "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
         "nextTask": "M9-T01"
+      }
+    },
+    {
+      "id": "totem-alchemy-m9-container-adapters",
+      "title": "TotemAlchemy M9 Container adapters",
+      "objective": "Route portable Minecraft containers through one explicit ItemStack ↔ AlchemyMixtureState transfer boundary while preserving full mixture state and container-specific capacity semantics.",
+      "status": "in-progress",
+      "planSource": {
+        "repository": "Yunitrish006006/TotemAlchemy",
+        "path": "docs/alchemy-next-task-plan.md",
+        "note": "Authoritative M9 task plan."
+      },
+      "targetRepositories": [
+        {
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "moduleId": "totem-alchemy",
+          "purpose": "Define container transfer adapters for bottles, buckets, flask, potion compatibility, and mixed-liquid cauldron transfers."
+        }
+      ],
+      "currentTaskId": "M9-T01",
+      "completedTaskIds": [],
+      "blockedBy": [],
+      "milestones": [
+        {
+          "id": "M9",
+          "title": "Container adapters",
+          "tasks": [
+            "M9-T01",
+            "M9-T02",
+            "M9-T03",
+            "M9-T04",
+            "M9-T05",
+            "M9-T06",
+            "M9-T07",
+            "M9-T08"
+          ]
+        }
+      ],
+      "tasks": [
+        {
+          "id": "M9-T01",
+          "title": "Container adapter boundary",
+          "goal": "Define ItemStack ↔ liquid adapter boundary.",
+          "primaryConcept": "pure ItemStack/mixture transfer contract",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "in-progress",
+          "dependsOn": [
+            "M8-T09"
+          ],
+          "doneCriteria": [
+            "Portable container transfers use one explicit drain/fill adapter contract without registering concrete container behavior yet."
+          ],
+          "stopBoundary": "Do not implement Water Bottle, buckets, Honey Bottle, Large Flask, or potion compatibility adapters.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/liquid-container-adapter-boundary"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/104"
+            }
+          ]
+        },
+        {
+          "id": "M9-T02",
+          "title": "Water Bottle adapter",
+          "goal": "Add Water Bottle adapter.",
+          "primaryConcept": "one-unit Water Bottle transfer",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M9-T01"
+          ],
+          "doneCriteria": [
+            "Water Bottle and Glass Bottle convert through the adapter boundary with one Water unit."
+          ],
+          "stopBoundary": "Do not add bucket adapters."
+        },
+        {
+          "id": "M9-T03",
+          "title": "Water Bucket adapter",
+          "goal": "Add Water Bucket adapter.",
+          "primaryConcept": "three-unit Water Bucket transfer",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M9-T02"
+          ],
+          "doneCriteria": [
+            "Water Bucket and Bucket convert through the adapter boundary with bucket-volume Water."
+          ],
+          "stopBoundary": "Do not add Milk Bucket."
+        },
+        {
+          "id": "M9-T04",
+          "title": "Milk Bucket adapter",
+          "goal": "Add Milk Bucket adapter.",
+          "primaryConcept": "three-unit Milk Bucket transfer",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M9-T03"
+          ],
+          "doneCriteria": [
+            "Milk Bucket and Bucket convert through the adapter boundary with Milk composition."
+          ],
+          "stopBoundary": "Do not add Honey Bottle."
+        },
+        {
+          "id": "M9-T05",
+          "title": "Honey Bottle adapter",
+          "goal": "Add Honey Bottle adapter.",
+          "primaryConcept": "one-unit Honey Bottle transfer",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M9-T04"
+          ],
+          "doneCriteria": [
+            "Honey Bottle and Glass Bottle convert through the adapter boundary with Honey composition."
+          ],
+          "stopBoundary": "Do not migrate Large Flask."
+        },
+        {
+          "id": "M9-T06",
+          "title": "Large Flask adapter",
+          "goal": "Add Large Flask full-mixture adapter.",
+          "primaryConcept": "full persistent mixture container transfer",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M9-T05"
+          ],
+          "doneCriteria": [
+            "Large Flask reads/writes full AlchemyMixtureState through the adapter boundary and respects enchanted capacity."
+          ],
+          "stopBoundary": "Do not migrate potion bottle compatibility."
+        },
+        {
+          "id": "M9-T07",
+          "title": "Potion compatibility adapter",
+          "goal": "Add potion bottle import/export compatibility.",
+          "primaryConcept": "vanilla/custom potion container compatibility",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M9-T06"
+          ],
+          "doneCriteria": [
+            "Potion, splash, and lingering containers import/export mixture state through the adapter boundary without losing canonical effects."
+          ],
+          "stopBoundary": "Do not begin mixed-cauldron regression pass."
+        },
+        {
+          "id": "M9-T08",
+          "title": "Mixed-liquid transfer regression",
+          "goal": "Add mixed-liquid cauldron fill/extract tests.",
+          "primaryConcept": "container/cauldron mixed-liquid transfer regression",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M9-T07"
+          ],
+          "doneCriteria": [
+            "Mixed-liquid fill and extraction conserve volume/composition/full mixture state across supported containers."
+          ],
+          "stopBoundary": "Do not begin M10."
+        }
+      ],
+      "checkpoint": {
+        "summary": "M8 is fully complete. M9-T01 pure ItemStack ↔ AlchemyMixtureState drain/fill adapter boundary is implemented in TotemAlchemy PR #104 and awaiting Build.",
+        "currentTaskId": "M9-T01",
+        "branch": "feature/liquid-container-adapter-boundary",
+        "head": "57fdd306dc949367627c0ecb0dfeb7d07cc2e144",
+        "filesChanged": [
+          "docs/alchemy-next-task-plan.md",
+          "src/main/java/dev/totem/alchemy/container/LiquidContainerAdapter.java",
+          "src/main/java/dev/totem/alchemy/container/LiquidContainerAdapters.java",
+          "src/test/java/dev/totem/alchemy/container/LiquidContainerAdaptersTest.java"
+        ],
+        "validation": "M8-T09 Build #241 had no compile errors and only the four documented inherited GameTest failures. M9-T01 Build pending.",
+        "remainingRisks": [
+          "M9-T01 intentionally registers zero concrete adapters; gameplay behavior remains on existing direct container paths until later M9 tasks migrate them.",
+          "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value.",
+          "Repository-wide CI remains red from the four documented inherited regressions."
+        ],
+        "nextTask": "M9-T02"
       }
     }
   ]
