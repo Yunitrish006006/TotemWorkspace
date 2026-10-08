@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-08T12:41:34+08:00",
-  "activeWorkId": "totem-alchemy-m4-activated-base-composition",
+  "updatedAt": "2026-10-08T12:48:08+08:00",
+  "activeWorkId": "totem-alchemy-m5-base-activation-dose",
   "workItems": [
     {
       "id": "totem-workspace-bounded-execution",
@@ -1243,7 +1243,7 @@
       "id": "totem-alchemy-m4-activated-base-composition",
       "title": "TotemAlchemy M4 Activated base composition",
       "objective": "Replace coarse activated-base state with an explicit conserved per-base unit composition that can later derive total activated units and concentration without changing ingredient yield.",
-      "status": "in-progress",
+      "status": "completed",
       "planSource": {
         "repository": "Yunitrish006006/TotemAlchemy",
         "path": "docs/alchemy-next-task-plan.md",
@@ -1256,7 +1256,7 @@
           "purpose": "Implement activated base composition value/state/persistence behavior."
         }
       ],
-      "currentTaskId": "M4-T10",
+      "currentTaskId": null,
       "completedTaskIds": [
         "M4-T01",
         "M4-T02",
@@ -1266,7 +1266,8 @@
         "M4-T06",
         "M4-T07",
         "M4-T08",
-        "M4-T09"
+        "M4-T09",
+        "M4-T10"
       ],
       "blockedBy": [],
       "milestones": [
@@ -1520,7 +1521,7 @@
           "goal": "Base-composition regression pass without changing ingredient yield.",
           "primaryConcept": "activated base regression",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "M4-T09"
           ],
@@ -1541,8 +1542,8 @@
         }
       ],
       "checkpoint": {
-        "summary": "M4-T09 baseActivated compatibility derivation validated with no new compile or GameTest regressions beyond the four documented inherited failures. M4-T10 end-to-end activated-base regression coverage and validation handoff are implemented in TotemAlchemy PR #84 and awaiting Build.",
-        "currentTaskId": "M4-T10",
+        "summary": "M4 activated-base composition is complete. M4-T01 through M4-T10 are implemented and validated with no new compile or GameTest regressions beyond the four documented inherited failures.",
+        "currentTaskId": null,
         "branch": "feature/activated-base-regression-pass",
         "head": "68e4ae9e80b9e367f5258b30bc3439980273ea1d",
         "filesChanged": [
@@ -1550,13 +1551,236 @@
           "src/gametest/java/dev/totem/alchemy/gametest/AlchemyMixtureGameTest.java",
           "test-artifacts/m4-activated-base-validation.md"
         ],
-        "validation": "M4-T09 Build #221 had no compile errors and only the four documented inherited GameTest failures. M4-T10 Build pending.",
+        "validation": "M4-T10 Build #222 reached GameTests and failed only the four documented inherited regressions: optional datapack default state, OFF/OFF aggregate state, vanilla awkward+sugar swiftness, and manual chapter page count.",
         "remainingRisks": [
-          "M4-T10 requires CI confirmation before the M4 milestone can be marked complete.",
-          "M5 base activation and ingredient-dose behavior has not started; M4 intentionally leaves ingredient yield unchanged.",
+          "Repository-wide CI remains red from four inherited regressions outside M4.",
+          "M5 base activation and ingredient-dose behavior is not yet complete.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
         "nextTask": "M5-T01"
+      }
+    },
+    {
+      "id": "totem-alchemy-m5-base-activation-dose",
+      "title": "TotemAlchemy M5 Base activation and ingredient dose",
+      "objective": "Use explicit activated-base composition to resolve starter capacity and then introduce bounded ingredient-dose semantics without allowing dilution or repeated ingredients to create unlimited chemistry.",
+      "status": "in-progress",
+      "planSource": {
+        "repository": "Yunitrish006006/TotemAlchemy",
+        "path": "docs/alchemy-next-task-plan.md",
+        "note": "Authoritative M5 task plan."
+      },
+      "targetRepositories": [
+        {
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "moduleId": "totem-alchemy",
+          "purpose": "Implement unactivated-unit starter resolution, reaction capacity and ingredient dose behavior."
+        }
+      ],
+      "currentTaskId": "M5-T01",
+      "completedTaskIds": [],
+      "blockedBy": [],
+      "milestones": [
+        {
+          "id": "M5",
+          "title": "Base activation and ingredient dose",
+          "tasks": [
+            "M5-T01",
+            "M5-T02",
+            "M5-T03",
+            "M5-T04",
+            "M5-T05",
+            "M5-T06",
+            "M5-T07",
+            "M5-T08",
+            "M5-T09",
+            "M5-T10"
+          ]
+        }
+      ],
+      "tasks": [
+        {
+          "id": "M5-T01",
+          "title": "Resolve starter reactions against unactivated units",
+          "goal": "Resolve BaseReaction starter candidates using remaining unactivated mixture units and liquid requirements.",
+          "primaryConcept": "starter resolution against unactivated capacity",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "in-progress",
+          "dependsOn": [
+            "M4-T10"
+          ],
+          "doneCriteria": [
+            "Mixture state exposes non-negative unactivated units from volume minus activated-base units.",
+            "Starter resolution rejects fully activated mixtures.",
+            "Resolution respects liquid minimums and existing exact/tag priority order.",
+            "Resolved activation yield cannot exceed available unactivated units."
+          ],
+          "stopBoundary": "Do not wire station runtime, change dilution semantics, consume reaction capacity, or add ingredient dose/max-dose yet.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/starter-unactivated-unit-resolution"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/85"
+            }
+          ]
+        },
+        {
+          "id": "M5-T02",
+          "title": "Prevent dilution activation",
+          "goal": "Prevent dilution from creating activated base.",
+          "primaryConcept": "activated-base dilution invariant",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M5-T01"
+          ],
+          "doneCriteria": [
+            "Adding unactivated liquid increases volume without increasing activated-base units."
+          ],
+          "stopBoundary": "Do not redesign completed-stage capacity or ingredient dose."
+        },
+        {
+          "id": "M5-T03",
+          "title": "Audit reaction capacity",
+          "goal": "Audit completedStages and existing reaction-capacity semantics.",
+          "primaryConcept": "reaction capacity audit",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M5-T02"
+          ],
+          "doneCriteria": [
+            "Existing completed-stage and repeat-reaction constraints are documented and covered before mutation."
+          ],
+          "stopBoundary": "Do not implement new capacity rules."
+        },
+        {
+          "id": "M5-T04",
+          "title": "Define reaction capacity rules",
+          "goal": "Define reaction-capacity consumption/transformation rules.",
+          "primaryConcept": "reaction capacity accounting",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M5-T03"
+          ],
+          "doneCriteria": [
+            "Capacity consumption/transformation has one explicit conserved rule."
+          ],
+          "stopBoundary": "Do not add pending-reaction dose yet."
+        },
+        {
+          "id": "M5-T05",
+          "title": "Pending reaction dose",
+          "goal": "Add dose to pending reaction state.",
+          "primaryConcept": "pending ingredient dose state",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M5-T04"
+          ],
+          "doneCriteria": [
+            "Pending reactions persist an explicit dose value through lifecycle and serialization."
+          ],
+          "stopBoundary": "Do not permit repeated dose accumulation yet."
+        },
+        {
+          "id": "M5-T06",
+          "title": "Repeated ingredient dose",
+          "goal": "Repeated same ingredient increments dose instead of being rejected.",
+          "primaryConcept": "same-ingredient dose accumulation",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M5-T05"
+          ],
+          "doneCriteria": [
+            "Compatible repeated ingredient additions increase the existing pending dose."
+          ],
+          "stopBoundary": "Do not enforce max_dose yet."
+        },
+        {
+          "id": "M5-T07",
+          "title": "Maximum dose",
+          "goal": "Add max_dose and reject excess dose.",
+          "primaryConcept": "dose limit enforcement",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M5-T06"
+          ],
+          "doneCriteria": [
+            "Reaction registry max_dose bounds accumulated dose and excess is rejected."
+          ],
+          "stopBoundary": "Do not apply base concentration to effect yield yet."
+        },
+        {
+          "id": "M5-T08",
+          "title": "Base concentration effect yield",
+          "goal": "Apply base concentration to produced effect quantity.",
+          "primaryConcept": "base-concentration yield scaling",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M5-T07"
+          ],
+          "doneCriteria": [
+            "Produced EffectDose scales from explicit base concentration without violating conserved accounting."
+          ],
+          "stopBoundary": "Do not perform the M5 matrix/regression pass."
+        },
+        {
+          "id": "M5-T09",
+          "title": "33% base dose matrix",
+          "goal": "Test 33% base with dose 1/2/3.",
+          "primaryConcept": "base concentration and dose matrix",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M5-T08"
+          ],
+          "doneCriteria": [
+            "Focused tests cover 33% base at doses 1, 2, and 3."
+          ],
+          "stopBoundary": "Do not perform unlimited-repeat regression yet."
+        },
+        {
+          "id": "M5-T10",
+          "title": "Finite base capacity regression",
+          "goal": "Test that the same base cannot generate unlimited repeated dose.",
+          "primaryConcept": "finite base capacity regression",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M5-T09"
+          ],
+          "doneCriteria": [
+            "Repeated ingredient use cannot generate EffectDose beyond available base/capacity rules."
+          ],
+          "stopBoundary": "Do not begin M8 or unrelated chemistry milestones."
+        }
+      ],
+      "checkpoint": {
+        "summary": "M4 is complete. M5-T01 starter resolution against unactivated units is implemented in TotemAlchemy PR #85 and awaiting Build.",
+        "currentTaskId": "M5-T01",
+        "branch": "feature/starter-unactivated-unit-resolution",
+        "head": "c3d06bd6221031dfd1d982b22c9b699d1778191b",
+        "filesChanged": [
+          "docs/alchemy-next-task-plan.md",
+          "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureState.java",
+          "src/main/java/dev/totem/alchemy/reaction/AlchemyReactionResolver.java",
+          "src/test/java/dev/totem/alchemy/reaction/AlchemyReactionResolverTest.java"
+        ],
+        "validation": "M4-T10 Build #222 had only the four documented inherited GameTest failures. M5-T01 Build pending.",
+        "remainingRisks": [
+          "M5-T01 is resolver-only; station runtime wiring and dilution behavior remain deferred to later M5 tasks.",
+          "Base-reaction datapack content migration remains scheduled for M10.",
+          "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
+        ],
+        "nextTask": "M5-T02"
       }
     }
   ]
