@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-08T21:03:00+08:00",
-  "activeWorkId": "totem-alchemy-m7-station-resolvers",
+  "updatedAt": "2026-10-08T21:13:14+08:00",
+  "activeWorkId": "totem-alchemy-m8-liquid-registry",
   "workItems": [
     {
       "id": "totem-workspace-bounded-execution",
@@ -1881,6 +1881,209 @@
           "M7-T03 remains blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
         "nextTask": "M7-T03"
+      }
+    },
+    {
+      "id": "totem-alchemy-m8-liquid-registry",
+      "title": "TotemAlchemy M8 Liquid registry and properties",
+      "objective": "Introduce explicit Alchemy liquid definitions and weighted liquid properties without coupling container adapters or signature-brew logic into the liquid model.",
+      "status": "in-progress",
+      "planSource": {
+        "repository": "Yunitrish006006/TotemAlchemy",
+        "path": "docs/alchemy-next-task-plan.md",
+        "note": "Authoritative M8 task plan."
+      },
+      "targetRepositories": [
+        {
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "moduleId": "totem-alchemy",
+          "purpose": "Define liquid models, baseline liquids, weighted property resolution, and runtime liquid-property modifiers."
+        }
+      ],
+      "currentTaskId": "M8-T01",
+      "completedTaskIds": [],
+      "blockedBy": [],
+      "milestones": [
+        {
+          "id": "M8",
+          "title": "Liquid registry and properties",
+          "tasks": [
+            "M8-T01",
+            "M8-T02",
+            "M8-T03",
+            "M8-T04",
+            "M8-T05",
+            "M8-T06",
+            "M8-T07",
+            "M8-T08",
+            "M8-T09"
+          ]
+        }
+      ],
+      "tasks": [
+        {
+          "id": "M8-T01",
+          "title": "Liquid property model",
+          "goal": "Define AlchemyLiquid and LiquidProperties.",
+          "primaryConcept": "immutable liquid property model",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "in-progress",
+          "dependsOn": [
+            "M5-T10"
+          ],
+          "doneCriteria": [
+            "Alchemy liquid identity and neutral property multipliers have explicit validated immutable value models."
+          ],
+          "stopBoundary": "Do not register Water or add runtime property resolution.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/liquid-property-model"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/95"
+            }
+          ]
+        },
+        {
+          "id": "M8-T02",
+          "title": "Water baseline",
+          "goal": "Register Water baseline.",
+          "primaryConcept": "neutral Water liquid registration",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M8-T01"
+          ],
+          "doneCriteria": [
+            "Water resolves as a registered neutral Alchemy liquid."
+          ],
+          "stopBoundary": "Do not register Milk or Honey."
+        },
+        {
+          "id": "M8-T03",
+          "title": "Milk liquid",
+          "goal": "Register Milk.",
+          "primaryConcept": "Milk liquid registration",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M8-T02"
+          ],
+          "doneCriteria": [
+            "Milk resolves through the Alchemy liquid registry with explicit properties."
+          ],
+          "stopBoundary": "Do not register Honey."
+        },
+        {
+          "id": "M8-T04",
+          "title": "Honey liquid",
+          "goal": "Register Honey.",
+          "primaryConcept": "Honey liquid registration",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M8-T03"
+          ],
+          "doneCriteria": [
+            "Honey resolves through the Alchemy liquid registry with explicit properties."
+          ],
+          "stopBoundary": "Do not implement mixed-liquid weighting."
+        },
+        {
+          "id": "M8-T05",
+          "title": "Weighted liquid properties",
+          "goal": "Resolve mixed-liquid properties by composition weight.",
+          "primaryConcept": "weighted mixed-liquid property resolution",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M8-T04"
+          ],
+          "doneCriteria": [
+            "LiquidComposition resolves one deterministic weighted LiquidProperties result."
+          ],
+          "stopBoundary": "Do not apply properties to runtime stability or reaction speed."
+        },
+        {
+          "id": "M8-T06",
+          "title": "Stability modifier",
+          "goal": "Apply liquid stability modifier.",
+          "primaryConcept": "liquid-driven stability behavior",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M8-T05"
+          ],
+          "doneCriteria": [
+            "Resolved liquid properties affect stability through one bounded rule."
+          ],
+          "stopBoundary": "Do not apply reaction-speed or effect modifiers."
+        },
+        {
+          "id": "M8-T07",
+          "title": "Reaction speed modifier",
+          "goal": "Apply liquid reaction-speed modifier.",
+          "primaryConcept": "liquid-driven reaction timing",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M8-T06"
+          ],
+          "doneCriteria": [
+            "Resolved liquid properties affect reaction processing time deterministically."
+          ],
+          "stopBoundary": "Do not apply duration/potency modifiers."
+        },
+        {
+          "id": "M8-T08",
+          "title": "Duration and potency modifiers",
+          "goal": "Apply liquid duration/potency modifiers.",
+          "primaryConcept": "liquid-driven EffectDose presentation",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M8-T07"
+          ],
+          "doneCriteria": [
+            "Resolved liquid properties affect duration/potency without violating EffectDose accounting."
+          ],
+          "stopBoundary": "Do not start M9 container adapters."
+        },
+        {
+          "id": "M8-T09",
+          "title": "Liquid property regression pass",
+          "goal": "Run the liquid-property regression pass.",
+          "primaryConcept": "M8 liquid regression coverage",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M8-T08"
+          ],
+          "doneCriteria": [
+            "Water/Milk/Honey and mixed-property behavior have focused regression coverage."
+          ],
+          "stopBoundary": "Do not begin M9."
+        }
+      ],
+      "checkpoint": {
+        "summary": "M7-T03 remains independently blocked on station bonus balance. M8-T01 immutable AlchemyLiquid/LiquidProperties models are implemented in TotemAlchemy PR #95 and awaiting Build.",
+        "currentTaskId": "M8-T01",
+        "branch": "feature/liquid-property-model",
+        "head": "2e937bfc2293bd7f5c2b7f903589d9989d985651",
+        "filesChanged": [
+          "docs/alchemy-next-task-plan.md",
+          "src/main/java/dev/totem/alchemy/liquid/AlchemyLiquid.java",
+          "src/main/java/dev/totem/alchemy/liquid/LiquidProperties.java",
+          "src/test/java/dev/totem/alchemy/liquid/AlchemyLiquidTest.java"
+        ],
+        "validation": "M8-T01 Build pending.",
+        "remainingRisks": [
+          "M8-T01 defines factor semantics only; Water/Milk/Honey values and registry behavior remain later M8 tasks.",
+          "M7-T03 remains blocked until a Brewing Stand station success-bonus value is explicitly chosen."
+        ],
+        "nextTask": "M8-T02"
       }
     }
   ]
