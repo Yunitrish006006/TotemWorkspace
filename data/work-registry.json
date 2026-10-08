@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-08T12:48:08+08:00",
+  "updatedAt": "2026-10-08T13:02:03+08:00",
   "activeWorkId": "totem-alchemy-m5-base-activation-dose",
   "workItems": [
     {
@@ -1577,8 +1577,10 @@
           "purpose": "Implement unactivated-unit starter resolution, reaction capacity and ingredient dose behavior."
         }
       ],
-      "currentTaskId": "M5-T01",
-      "completedTaskIds": [],
+      "currentTaskId": "M5-T02",
+      "completedTaskIds": [
+        "M5-T01"
+      ],
       "blockedBy": [],
       "milestones": [
         {
@@ -1605,7 +1607,7 @@
           "goal": "Resolve BaseReaction starter candidates using remaining unactivated mixture units and liquid requirements.",
           "primaryConcept": "starter resolution against unactivated capacity",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "M4-T10"
           ],
@@ -1633,14 +1635,24 @@
           "goal": "Prevent dilution from creating activated base.",
           "primaryConcept": "activated-base dilution invariant",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "todo",
+          "status": "in-progress",
           "dependsOn": [
             "M5-T01"
           ],
           "doneCriteria": [
             "Adding unactivated liquid increases volume without increasing activated-base units."
           ],
-          "stopBoundary": "Do not redesign completed-stage capacity or ingredient dose."
+          "stopBoundary": "Do not redesign completed-stage capacity or ingredient dose.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/activated-base-dilution-invariant"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/86"
+            }
+          ]
         },
         {
           "id": "M5-T03",
@@ -1764,23 +1776,21 @@
         }
       ],
       "checkpoint": {
-        "summary": "M4 is complete. M5-T01 starter resolution against unactivated units is implemented in TotemAlchemy PR #85 and awaiting Build.",
-        "currentTaskId": "M5-T01",
-        "branch": "feature/starter-unactivated-unit-resolution",
-        "head": "c3d06bd6221031dfd1d982b22c9b699d1778191b",
+        "summary": "M5-T01 starter resolution against unactivated units validated with no new compile or GameTest regressions beyond the four documented inherited failures. M5-T02 dilution invariant is implemented in TotemAlchemy PR #86 and awaiting Build.",
+        "currentTaskId": "M5-T02",
+        "branch": "feature/activated-base-dilution-invariant",
+        "head": "27013a77a37129fc21d1d3835dc3955439e49df6",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
-          "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureState.java",
-          "src/main/java/dev/totem/alchemy/reaction/AlchemyReactionResolver.java",
-          "src/test/java/dev/totem/alchemy/reaction/AlchemyReactionResolverTest.java"
+          "src/gametest/java/dev/totem/alchemy/gametest/AlchemyMixtureGameTest.java"
         ],
-        "validation": "M4-T10 Build #222 had only the four documented inherited GameTest failures. M5-T01 Build pending.",
+        "validation": "M5-T01 Build #223 had no compile errors and only the four documented inherited GameTest failures. M5-T02 Build pending.",
         "remainingRisks": [
-          "M5-T01 is resolver-only; station runtime wiring and dilution behavior remain deferred to later M5 tasks.",
-          "Base-reaction datapack content migration remains scheduled for M10.",
+          "M5-T02 currently locks the dilution invariant against the existing absolute-unit merge implementation; CI confirmation is still required.",
+          "M5-T03 completed-stage/reaction-capacity audit has not started.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
-        "nextTask": "M5-T02"
+        "nextTask": "M5-T03"
       }
     }
   ]
