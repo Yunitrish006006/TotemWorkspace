@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-08T23:47:36+08:00",
+  "updatedAt": "2026-10-08T23:57:00+08:00",
   "activeWorkId": "totem-alchemy-m9-container-adapters",
   "workItems": [
     {
@@ -2193,9 +2193,10 @@
           "purpose": "Define container transfer adapters for bottles, buckets, flask, potion compatibility, and mixed-liquid cauldron transfers."
         }
       ],
-      "currentTaskId": "M9-T02",
+      "currentTaskId": "M9-T03",
       "completedTaskIds": [
-        "M9-T01"
+        "M9-T01",
+        "M9-T02"
       ],
       "blockedBy": [],
       "milestones": [
@@ -2246,7 +2247,7 @@
           "goal": "Add Water Bottle adapter.",
           "primaryConcept": "one-unit Water Bottle transfer",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "M9-T01"
           ],
@@ -2271,14 +2272,24 @@
           "goal": "Add Water Bucket adapter.",
           "primaryConcept": "three-unit Water Bucket transfer",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "todo",
+          "status": "in-progress",
           "dependsOn": [
             "M9-T02"
           ],
           "doneCriteria": [
             "Water Bucket and Bucket convert through the adapter boundary with bucket-volume Water."
           ],
-          "stopBoundary": "Do not add Milk Bucket."
+          "stopBoundary": "Do not add Milk Bucket.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/water-bucket-adapter"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/106"
+            }
+          ]
         },
         {
           "id": "M9-T04",
@@ -2357,25 +2368,25 @@
         }
       ],
       "checkpoint": {
-        "summary": "M9-T01 liquid container adapter boundary validated with no new compile or GameTest regressions beyond the four documented inherited failures. M9-T02 Water Bottle adapter is implemented in TotemAlchemy PR #105 and awaiting Build.",
-        "currentTaskId": "M9-T02",
-        "branch": "feature/water-bottle-adapter",
-        "head": "f37431b454585c754304da1720f4d3741435f106",
+        "summary": "M9-T02 Water Bottle adapter validated with no new compile or GameTest regressions beyond the four documented inherited failures. M9-T03 Water Bucket adapter is implemented in TotemAlchemy PR #106 and awaiting Build.",
+        "currentTaskId": "M9-T03",
+        "branch": "feature/water-bucket-adapter",
+        "head": "3a5bff8c67113ed013d75b1b79a8c06baf0ddc2e",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
           "src/main/java/dev/totem/alchemy/container/LiquidContainerAdapters.java",
-          "src/main/java/dev/totem/alchemy/container/WaterBottleContainerAdapter.java",
+          "src/main/java/dev/totem/alchemy/container/WaterBucketContainerAdapter.java",
           "src/test/java/dev/totem/alchemy/container/LiquidContainerAdaptersTest.java",
-          "src/test/java/dev/totem/alchemy/container/WaterBottleContainerAdapterTest.java"
+          "src/test/java/dev/totem/alchemy/container/WaterBucketContainerAdapterTest.java"
         ],
-        "validation": "M9-T01 Build #242 had no compile errors and only the four documented inherited GameTest failures. M9-T02 Build pending.",
+        "validation": "M9-T02 Build #243 had no compile errors and only the four documented inherited GameTest failures. M9-T03 Build pending.",
         "remainingRisks": [
-          "Water Bottle adapter is registered but existing player/cauldron interaction code has not yet been migrated to the adapter dispatcher.",
-          "Water Bucket, Milk Bucket, Honey Bottle, Large Flask, and generic potion compatibility remain later M9 tasks.",
+          "Water Bottle and Water Bucket adapters are registered, but existing player/cauldron interaction code has not yet been migrated to the adapter dispatcher.",
+          "Milk Bucket, Honey Bottle, Large Flask, and generic potion compatibility remain later M9 tasks.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value.",
           "Repository-wide CI remains red from the four documented inherited regressions."
         ],
-        "nextTask": "M9-T03"
+        "nextTask": "M9-T04"
       }
     }
   ]
