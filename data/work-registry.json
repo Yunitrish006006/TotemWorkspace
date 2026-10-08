@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-08T21:13:14+08:00",
+  "updatedAt": "2026-10-08T21:19:04+08:00",
   "activeWorkId": "totem-alchemy-m8-liquid-registry",
   "workItems": [
     {
@@ -1900,8 +1900,10 @@
           "purpose": "Define liquid models, baseline liquids, weighted property resolution, and runtime liquid-property modifiers."
         }
       ],
-      "currentTaskId": "M8-T01",
-      "completedTaskIds": [],
+      "currentTaskId": "M8-T02",
+      "completedTaskIds": [
+        "M8-T01"
+      ],
       "blockedBy": [],
       "milestones": [
         {
@@ -1927,7 +1929,7 @@
           "goal": "Define AlchemyLiquid and LiquidProperties.",
           "primaryConcept": "immutable liquid property model",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "M5-T10"
           ],
@@ -1952,14 +1954,24 @@
           "goal": "Register Water baseline.",
           "primaryConcept": "neutral Water liquid registration",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "todo",
+          "status": "in-progress",
           "dependsOn": [
             "M8-T01"
           ],
           "doneCriteria": [
             "Water resolves as a registered neutral Alchemy liquid."
           ],
-          "stopBoundary": "Do not register Milk or Honey."
+          "stopBoundary": "Do not register Milk or Honey.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/water-liquid-baseline"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/96"
+            }
+          ]
         },
         {
           "id": "M8-T03",
@@ -2068,22 +2080,22 @@
         }
       ],
       "checkpoint": {
-        "summary": "M7-T03 remains independently blocked on station bonus balance. M8-T01 immutable AlchemyLiquid/LiquidProperties models are implemented in TotemAlchemy PR #95 and awaiting Build.",
-        "currentTaskId": "M8-T01",
-        "branch": "feature/liquid-property-model",
-        "head": "2e937bfc2293bd7f5c2b7f903589d9989d985651",
+        "summary": "M8-T01 immutable AlchemyLiquid/LiquidProperties models validated with no new compile or GameTest regressions beyond the four documented inherited failures. M8-T02 neutral Water baseline is implemented in TotemAlchemy PR #96 and awaiting Build.",
+        "currentTaskId": "M8-T02",
+        "branch": "feature/water-liquid-baseline",
+        "head": "f592c2bcbcfc944be244262a29615a839b556df3",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
-          "src/main/java/dev/totem/alchemy/liquid/AlchemyLiquid.java",
-          "src/main/java/dev/totem/alchemy/liquid/LiquidProperties.java",
-          "src/test/java/dev/totem/alchemy/liquid/AlchemyLiquidTest.java"
+          "src/main/java/dev/totem/alchemy/liquid/AlchemyLiquids.java",
+          "src/test/java/dev/totem/alchemy/liquid/AlchemyLiquidsTest.java"
         ],
-        "validation": "M8-T01 Build pending.",
+        "validation": "M8-T01 Build #233 had no compile errors and only the four documented inherited GameTest failures. M8-T02 Build pending.",
         "remainingRisks": [
-          "M8-T01 defines factor semantics only; Water/Milk/Honey values and registry behavior remain later M8 tasks.",
-          "M7-T03 remains blocked until a Brewing Stand station success-bonus value is explicitly chosen."
+          "M8-T02 registers only neutral Water; Milk/Honey property values remain later M8 tasks.",
+          "Liquid properties are not applied to mixture runtime until M8-T05 through M8-T08.",
+          "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
-        "nextTask": "M8-T02"
+        "nextTask": "M8-T03"
       }
     }
   ]
