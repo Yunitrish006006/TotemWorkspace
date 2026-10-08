@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-08T20:43:13+08:00",
+  "updatedAt": "2026-10-08T20:47:43+08:00",
   "activeWorkId": "totem-alchemy-m5-base-activation-dose",
   "workItems": [
     {
@@ -1577,7 +1577,7 @@
           "purpose": "Implement unactivated-unit starter resolution, reaction capacity and ingredient dose behavior."
         }
       ],
-      "currentTaskId": "M5-T08",
+      "currentTaskId": "M5-T09",
       "completedTaskIds": [
         "M5-T01",
         "M5-T02",
@@ -1585,7 +1585,8 @@
         "M5-T04",
         "M5-T05",
         "M5-T06",
-        "M5-T07"
+        "M5-T07",
+        "M5-T08"
       ],
       "blockedBy": [],
       "milestones": [
@@ -1791,7 +1792,7 @@
           "goal": "Apply base concentration to produced effect quantity.",
           "primaryConcept": "base-concentration yield scaling",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "M5-T07"
           ],
@@ -1816,14 +1817,24 @@
           "goal": "Test 33% base with dose 1/2/3.",
           "primaryConcept": "base concentration and dose matrix",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "todo",
+          "status": "in-progress",
           "dependsOn": [
             "M5-T08"
           ],
           "doneCriteria": [
             "Focused tests cover 33% base at doses 1, 2, and 3."
           ],
-          "stopBoundary": "Do not perform unlimited-repeat regression yet."
+          "stopBoundary": "Do not perform unlimited-repeat regression yet.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "test/one-third-base-dose-matrix"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/93"
+            }
+          ]
         },
         {
           "id": "M5-T10",
@@ -1842,23 +1853,21 @@
         }
       ],
       "checkpoint": {
-        "summary": "M5-T07 registry-backed max_dose enforcement validated with no new compile or GameTest regressions beyond the four documented inherited failures. M5-T08 base-concentration/dose/effectYield scaling of produced EffectDose quantity is implemented in TotemAlchemy PR #92 and awaiting Build.",
-        "currentTaskId": "M5-T08",
-        "branch": "feature/base-concentration-effect-yield",
-        "head": "8e8b22cc59d6b00e8ccc0dc283115696044551fd",
+        "summary": "M5-T08 base-concentration/dose/effectYield EffectDose scaling validated with no new compile or GameTest regressions beyond the four documented inherited failures. M5-T09 one-third-base dose 1/2/3 matrix is implemented in TotemAlchemy PR #93 and awaiting Build.",
+        "currentTaskId": "M5-T09",
+        "branch": "test/one-third-base-dose-matrix",
+        "head": "1dbe6209da4fa39d4edf39d5f5c5f02ae79f5cff",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
-          "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureBrewing.java",
-          "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureState.java",
           "src/gametest/java/dev/totem/alchemy/gametest/AlchemyMixtureGameTest.java"
         ],
-        "validation": "M5-T07 Build #229 had no compile errors and only the four documented inherited GameTest failures. M5-T08 Build pending.",
+        "validation": "M5-T08 Build #230 had no compile errors and only the four documented inherited GameTest failures. M5-T09 Build pending.",
         "remainingRisks": [
-          "M5-T08 applies quantity scaling only to registry-backed IngredientReaction completions; non-registry vanilla/modifier target quantities intentionally remain unchanged.",
-          "M5-T09 still needs the explicit 33% base dose 1/2/3 matrix to validate the formula at the milestone target concentration.",
+          "M5-T09 validates the 33% base dose 1/2/3 yield matrix without changing configured ingredient max_dose values.",
+          "M5-T10 still needs the finite-base regression proving repeated dose cannot generate unlimited EffectDose from the same base capacity.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
-        "nextTask": "M5-T09"
+        "nextTask": "M5-T10"
       }
     }
   ]
