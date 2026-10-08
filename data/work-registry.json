@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-08T21:31:37+08:00",
+  "updatedAt": "2026-10-08T22:39:12+08:00",
   "activeWorkId": "totem-alchemy-m8-liquid-registry",
   "workItems": [
     {
@@ -1900,11 +1900,12 @@
           "purpose": "Define liquid models, baseline liquids, weighted property resolution, and runtime liquid-property modifiers."
         }
       ],
-      "currentTaskId": "M8-T04",
+      "currentTaskId": "M8-T05",
       "completedTaskIds": [
         "M8-T01",
         "M8-T02",
-        "M8-T03"
+        "M8-T03",
+        "M8-T04"
       ],
       "blockedBy": [],
       "milestones": [
@@ -2006,7 +2007,7 @@
           "goal": "Register Honey.",
           "primaryConcept": "Honey liquid registration",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "M8-T03"
           ],
@@ -2031,14 +2032,24 @@
           "goal": "Resolve mixed-liquid properties by composition weight.",
           "primaryConcept": "weighted mixed-liquid property resolution",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "todo",
+          "status": "in-progress",
           "dependsOn": [
             "M8-T04"
           ],
           "doneCriteria": [
             "LiquidComposition resolves one deterministic weighted LiquidProperties result."
           ],
-          "stopBoundary": "Do not apply properties to runtime stability or reaction speed."
+          "stopBoundary": "Do not apply properties to runtime stability or reaction speed.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/weighted-liquid-properties"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/99"
+            }
+          ]
         },
         {
           "id": "M8-T06",
@@ -2102,23 +2113,23 @@
         }
       ],
       "checkpoint": {
-        "summary": "M8-T03 neutral Milk registration validated with no new compile or GameTest regressions beyond the four documented inherited failures. M8-T04 neutral Honey registration is implemented in TotemAlchemy PR #98 and awaiting Build.",
-        "currentTaskId": "M8-T04",
-        "branch": "feature/honey-liquid-baseline",
-        "head": "962cd369dcc26ea2c995e456c77787b198f50ba3",
+        "summary": "M8-T04 neutral Honey registration validated with no new compile or GameTest regressions beyond the four documented inherited failures. M8-T05 deterministic weighted LiquidProperties resolution is implemented in TotemAlchemy PR #99 and awaiting Build.",
+        "currentTaskId": "M8-T05",
+        "branch": "feature/weighted-liquid-properties",
+        "head": "fa97038ac3aa6b278c40cefeb7e2cc3278c310ec",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
-          "src/main/java/dev/totem/alchemy/liquid/AlchemyLiquids.java",
-          "src/test/java/dev/totem/alchemy/liquid/AlchemyLiquidsTest.java"
+          "src/main/java/dev/totem/alchemy/liquid/LiquidPropertyResolver.java",
+          "src/test/java/dev/totem/alchemy/liquid/LiquidPropertyResolverTest.java"
         ],
-        "validation": "M8-T03 Build #235 had no compile errors and only the four documented inherited GameTest failures. M8-T04 Build pending.",
+        "validation": "M8-T04 Build #236 had no compile errors and only the four documented inherited GameTest failures. M8-T05 Build pending.",
         "remainingRisks": [
-          "Honey is intentionally registered with neutral properties because no Honey-specific balance multipliers are specified yet.",
-          "Honey Bottle ↔ liquid mapping remains M9-T05.",
-          "Mixed-liquid weighting begins in M8-T05; runtime property application remains M8-T06 through M8-T08.",
+          "Water, Milk, and Honey are still neutral until explicit balance multipliers are chosen.",
+          "Unknown liquid ids intentionally contribute neutral weight instead of being ignored.",
+          "Resolved liquid properties are not applied to runtime until M8-T06 through M8-T08.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
-        "nextTask": "M8-T05"
+        "nextTask": "M8-T06"
       }
     }
   ]
