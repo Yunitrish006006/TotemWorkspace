@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-08T23:39:24+08:00",
+  "updatedAt": "2026-10-08T23:47:36+08:00",
   "activeWorkId": "totem-alchemy-m9-container-adapters",
   "workItems": [
     {
@@ -2193,8 +2193,10 @@
           "purpose": "Define container transfer adapters for bottles, buckets, flask, potion compatibility, and mixed-liquid cauldron transfers."
         }
       ],
-      "currentTaskId": "M9-T01",
-      "completedTaskIds": [],
+      "currentTaskId": "M9-T02",
+      "completedTaskIds": [
+        "M9-T01"
+      ],
       "blockedBy": [],
       "milestones": [
         {
@@ -2219,7 +2221,7 @@
           "goal": "Define ItemStack ↔ liquid adapter boundary.",
           "primaryConcept": "pure ItemStack/mixture transfer contract",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "M8-T09"
           ],
@@ -2244,14 +2246,24 @@
           "goal": "Add Water Bottle adapter.",
           "primaryConcept": "one-unit Water Bottle transfer",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "todo",
+          "status": "in-progress",
           "dependsOn": [
             "M9-T01"
           ],
           "doneCriteria": [
             "Water Bottle and Glass Bottle convert through the adapter boundary with one Water unit."
           ],
-          "stopBoundary": "Do not add bucket adapters."
+          "stopBoundary": "Do not add bucket adapters.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/water-bottle-adapter"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/105"
+            }
+          ]
         },
         {
           "id": "M9-T03",
@@ -2345,23 +2357,25 @@
         }
       ],
       "checkpoint": {
-        "summary": "M8 is fully complete. M9-T01 pure ItemStack ↔ AlchemyMixtureState drain/fill adapter boundary is implemented in TotemAlchemy PR #104 and awaiting Build.",
-        "currentTaskId": "M9-T01",
-        "branch": "feature/liquid-container-adapter-boundary",
-        "head": "57fdd306dc949367627c0ecb0dfeb7d07cc2e144",
+        "summary": "M9-T01 liquid container adapter boundary validated with no new compile or GameTest regressions beyond the four documented inherited failures. M9-T02 Water Bottle adapter is implemented in TotemAlchemy PR #105 and awaiting Build.",
+        "currentTaskId": "M9-T02",
+        "branch": "feature/water-bottle-adapter",
+        "head": "f37431b454585c754304da1720f4d3741435f106",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
-          "src/main/java/dev/totem/alchemy/container/LiquidContainerAdapter.java",
           "src/main/java/dev/totem/alchemy/container/LiquidContainerAdapters.java",
-          "src/test/java/dev/totem/alchemy/container/LiquidContainerAdaptersTest.java"
+          "src/main/java/dev/totem/alchemy/container/WaterBottleContainerAdapter.java",
+          "src/test/java/dev/totem/alchemy/container/LiquidContainerAdaptersTest.java",
+          "src/test/java/dev/totem/alchemy/container/WaterBottleContainerAdapterTest.java"
         ],
-        "validation": "M8-T09 Build #241 had no compile errors and only the four documented inherited GameTest failures. M9-T01 Build pending.",
+        "validation": "M9-T01 Build #242 had no compile errors and only the four documented inherited GameTest failures. M9-T02 Build pending.",
         "remainingRisks": [
-          "M9-T01 intentionally registers zero concrete adapters; gameplay behavior remains on existing direct container paths until later M9 tasks migrate them.",
+          "Water Bottle adapter is registered but existing player/cauldron interaction code has not yet been migrated to the adapter dispatcher.",
+          "Water Bucket, Milk Bucket, Honey Bottle, Large Flask, and generic potion compatibility remain later M9 tasks.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value.",
           "Repository-wide CI remains red from the four documented inherited regressions."
         ],
-        "nextTask": "M9-T02"
+        "nextTask": "M9-T03"
       }
     }
   ]
