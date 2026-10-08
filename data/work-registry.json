@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-08T20:28:21+08:00",
+  "updatedAt": "2026-10-08T20:43:13+08:00",
   "activeWorkId": "totem-alchemy-m5-base-activation-dose",
   "workItems": [
     {
@@ -1577,14 +1577,15 @@
           "purpose": "Implement unactivated-unit starter resolution, reaction capacity and ingredient dose behavior."
         }
       ],
-      "currentTaskId": "M5-T07",
+      "currentTaskId": "M5-T08",
       "completedTaskIds": [
         "M5-T01",
         "M5-T02",
         "M5-T03",
         "M5-T04",
         "M5-T05",
-        "M5-T06"
+        "M5-T06",
+        "M5-T07"
       ],
       "blockedBy": [],
       "milestones": [
@@ -1765,7 +1766,7 @@
           "goal": "Add max_dose and reject excess dose.",
           "primaryConcept": "dose limit enforcement",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "M5-T06"
           ],
@@ -1790,14 +1791,24 @@
           "goal": "Apply base concentration to produced effect quantity.",
           "primaryConcept": "base-concentration yield scaling",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "todo",
+          "status": "in-progress",
           "dependsOn": [
             "M5-T07"
           ],
           "doneCriteria": [
             "Produced EffectDose scales from explicit base concentration without violating conserved accounting."
           ],
-          "stopBoundary": "Do not perform the M5 matrix/regression pass."
+          "stopBoundary": "Do not perform the M5 matrix/regression pass.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/base-concentration-effect-yield"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/92"
+            }
+          ]
         },
         {
           "id": "M5-T09",
@@ -1831,23 +1842,23 @@
         }
       ],
       "checkpoint": {
-        "summary": "M5-T06 repeated pending ingredient dose accumulation validated with no new compile or GameTest regressions beyond the four documented inherited failures. M5-T07 registry-backed max_dose enforcement is implemented in TotemAlchemy PR #91 and awaiting Build.",
-        "currentTaskId": "M5-T07",
-        "branch": "feature/pending-reaction-max-dose",
-        "head": "ca4ff5c278242c55fde5a889d0c233220d31c736",
+        "summary": "M5-T07 registry-backed max_dose enforcement validated with no new compile or GameTest regressions beyond the four documented inherited failures. M5-T08 base-concentration/dose/effectYield scaling of produced EffectDose quantity is implemented in TotemAlchemy PR #92 and awaiting Build.",
+        "currentTaskId": "M5-T08",
+        "branch": "feature/base-concentration-effect-yield",
+        "head": "8e8b22cc59d6b00e8ccc0dc283115696044551fd",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
-          "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureState.java",
           "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureBrewing.java",
-          "src/gametest/java/dev/totem/alchemy/gametest/MixtureV2GameTest.java"
+          "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureState.java",
+          "src/gametest/java/dev/totem/alchemy/gametest/AlchemyMixtureGameTest.java"
         ],
-        "validation": "M5-T06 Build #228 had no compile errors and only the four documented inherited GameTest failures. M5-T07 Build pending.",
+        "validation": "M5-T07 Build #229 had no compile errors and only the four documented inherited GameTest failures. M5-T08 Build pending.",
         "remainingRisks": [
-          "Current legacy ingredient reaction data commonly uses max_dose=1; M5-T07 enforces configured values but does not rebalance datapacks.",
-          "M5-T08 still needs to apply base concentration and accepted reaction dose to produced EffectDose quantity.",
+          "M5-T08 applies quantity scaling only to registry-backed IngredientReaction completions; non-registry vanilla/modifier target quantities intentionally remain unchanged.",
+          "M5-T09 still needs the explicit 33% base dose 1/2/3 matrix to validate the formula at the milestone target concentration.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
-        "nextTask": "M5-T08"
+        "nextTask": "M5-T09"
       }
     }
   ]
