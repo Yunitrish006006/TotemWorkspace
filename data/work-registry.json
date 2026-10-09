@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-09T12:07:48+08:00",
+  "updatedAt": "2026-10-09T12:23:47+08:00",
   "activeWorkId": "totem-alchemy-m10-datapack-content-migration",
   "workItems": [
     {
@@ -2460,8 +2460,10 @@
           "purpose": "Migrate base reactions, ingredient reactions, extensions, and Totem Brewing Stand recipes into Minecraft Alchemy and Totem Alchemy built-in packs."
         }
       ],
-      "currentTaskId": "M10-T01",
-      "completedTaskIds": [],
+      "currentTaskId": "M10-T02",
+      "completedTaskIds": [
+        "M10-T01"
+      ],
       "blockedBy": [],
       "milestones": [
         {
@@ -2486,7 +2488,7 @@
           "goal": "Move Minecraft base reactions into Minecraft Alchemy.",
           "primaryConcept": "optional-pack ownership of Minecraft base activation",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "M9-T08"
           ],
@@ -2511,14 +2513,24 @@
           "goal": "Move vanilla ingredient chemistry into Minecraft Alchemy.",
           "primaryConcept": "Minecraft ingredient reaction ownership",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "todo",
+          "status": "in-progress",
           "dependsOn": [
             "M10-T01"
           ],
           "doneCriteria": [
             "Vanilla ingredient reaction data is served from Minecraft Alchemy without changing approved reaction truth."
           ],
-          "stopBoundary": "Do not move Totem mushroom starter/base reactions."
+          "stopBoundary": "Do not move Totem mushroom starter/base reactions.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "content/minecraft-ingredient-chemistry"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/113"
+            }
+          ]
         },
         {
           "id": "M10-T03",
@@ -2612,27 +2624,26 @@
         }
       ],
       "checkpoint": {
-        "summary": "M9 is fully complete. M10-T01 Minecraft Nether Wart base chemistry has been moved into the Minecraft Alchemy built-in datapack and the cauldron starter authority now resolves BaseReaction data first. TotemAlchemy PR #112 is awaiting Build.",
-        "currentTaskId": "M10-T01",
-        "branch": "content/minecraft-base-reactions",
-        "head": "0e257e0e26c2082ebf62aba2a653c4d19aa5e983",
+        "summary": "M10-T01 Minecraft Nether Wart base chemistry validated with no new compile or GameTest regressions beyond the four documented inherited failures. M10-T02 moves all 50 Minecraft-source ingredient reactions into the Minecraft Alchemy built-in datapack, strips Totem-owned side outcomes for later M10-T05 extensions, and is implemented in TotemAlchemy PR #113 awaiting Build.",
+        "currentTaskId": "M10-T02",
+        "branch": "content/minecraft-ingredient-chemistry",
+        "head": "545edb873707470ec3185a0f5577a75d4414cd15",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
-          "src/gametest/java/dev/totem/alchemy/gametest/MinecraftBaseReactionMigrationGameTest.java",
-          "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureBrewing.java",
-          "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureState.java",
-          "src/main/resources/data/totem/alchemy/brewing_material_settings/defaults.json",
-          "src/main/resources/resourcepacks/minecraft_alchemy/data/minecraft_alchemy/alchemy/base_reactions/vanilla/nether_wart.json",
-          "src/test/java/dev/totem/alchemy/reaction/MinecraftBaseReactionPackTest.java"
+          "src/gametest/java/dev/totem/alchemy/gametest/AlchemyCauldronPersistenceGameTest.java",
+          "src/gametest/java/dev/totem/alchemy/gametest/ReactionRegistryMigrationGameTest.java",
+          "src/main/resources/resourcepacks/minecraft_alchemy/data/minecraft_alchemy/alchemy/ingredient_reactions/vanilla/*.json",
+          "src/test/java/dev/totem/alchemy/reaction/MinecraftIngredientReactionPackTest.java"
         ],
-        "validation": "M9-T08 Build #249 had no compile errors and only the four documented inherited GameTest failures. M10-T01 Build pending.",
+        "validation": "M10-T01 Build #250 had no compile errors and only the four documented inherited GameTest failures. M10-T02 Build pending.",
         "remainingRisks": [
-          "Vanilla ingredient reaction JSON remains in the always-on legacy data location until M10-T02.",
-          "Red Mushroom intentionally remains a legacy starter until M10-T03.",
+          "Totem-owned side outcomes stripped from Minecraft core reactions are intentionally absent until M10-T05 reaction extensions.",
+          "The three Totem-only ingredient reactions remain at the legacy always-on path until M10-T04.",
+          "Red Mushroom starter/base ownership remains legacy until M10-T03.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value.",
           "Repository-wide CI remains red from the four documented inherited regressions."
         ],
-        "nextTask": "M10-T02"
+        "nextTask": "M10-T03"
       }
     }
   ]
