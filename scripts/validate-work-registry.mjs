@@ -23,7 +23,12 @@ assert.ok(active);
 assert.equal(active.id, registry.activeWorkId);
 assert.ok(active.targetRepositories.some((entry) => entry.repository === "Yunitrish006006/TotemWorkspace"));
 assert.ok(active.tasks.length >= 2);
-assert.ok(active.tasks.some((task) => task.id === active.currentTaskId && task.status === "in-progress"));
+if (active.status === "completed") {
+  assert.equal(active.currentTaskId, null);
+  assert.ok(active.tasks.every((task) => task.status === "completed"));
+} else {
+  assert.ok(active.tasks.some((task) => task.id === active.currentTaskId && task.status === "in-progress"));
+}
 assert.ok(active.tasks.every((task) => task.goal && task.primaryConcept && task.doneCriteria.length && task.stopBoundary));
 
 const summary = workRegistrySummary(registry);
@@ -36,7 +41,7 @@ const progress = workProgressPayload(registry);
 assert.equal(progress.kind, "plan-state");
 assert.equal(progress.activeWorkId, active.id);
 assert.equal(progress.active.currentTaskId, active.currentTaskId);
-assert.equal(progress.active.currentTask.id, active.currentTaskId);
+assert.equal(progress.active.currentTask?.id ?? null, active.currentTaskId);
 assert.equal(progress.active.completedTasks, active.tasks.filter((task) => task.status === "completed").length);
 assert.equal(progress.active.totalTasks, active.tasks.length);
 assert.ok(progress.active.completionPercent >= 0 && progress.active.completionPercent <= 100);
