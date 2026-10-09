@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-09T11:41:39+08:00",
-  "activeWorkId": "totem-alchemy-m9-container-adapters",
+  "updatedAt": "2026-10-09T12:07:48+08:00",
+  "activeWorkId": "totem-alchemy-m10-datapack-content-migration",
   "workItems": [
     {
       "id": "totem-workspace-bounded-execution",
@@ -2180,7 +2180,7 @@
       "id": "totem-alchemy-m9-container-adapters",
       "title": "TotemAlchemy M9 Container adapters",
       "objective": "Route portable Minecraft containers through one explicit ItemStack ↔ AlchemyMixtureState transfer boundary while preserving full mixture state and container-specific capacity semantics.",
-      "status": "in-progress",
+      "status": "completed",
       "planSource": {
         "repository": "Yunitrish006006/TotemAlchemy",
         "path": "docs/alchemy-next-task-plan.md",
@@ -2193,7 +2193,7 @@
           "purpose": "Define container transfer adapters for bottles, buckets, flask, potion compatibility, and mixed-liquid cauldron transfers."
         }
       ],
-      "currentTaskId": "M9-T08",
+      "currentTaskId": null,
       "completedTaskIds": [
         "M9-T01",
         "M9-T02",
@@ -2201,7 +2201,8 @@
         "M9-T04",
         "M9-T05",
         "M9-T06",
-        "M9-T07"
+        "M9-T07",
+        "M9-T08"
       ],
       "blockedBy": [],
       "milestones": [
@@ -2402,7 +2403,7 @@
           "goal": "Add mixed-liquid cauldron fill/extract tests.",
           "primaryConcept": "container/cauldron mixed-liquid transfer regression",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "M9-T07"
           ],
@@ -2423,8 +2424,8 @@
         }
       ],
       "checkpoint": {
-        "summary": "M9-T07 vanilla potion container compatibility validated with no new compile or GameTest regressions beyond the four documented inherited failures. M9-T08 final mixed-liquid cauldron/container regression pass is implemented in TotemAlchemy PR #111 and awaiting Build.",
-        "currentTaskId": "M9-T08",
+        "summary": "M9 Container adapters is complete. M9-T01 through M9-T08 are implemented and validated with no new compile or GameTest regressions beyond the four documented inherited failures.",
+        "currentTaskId": null,
         "branch": "test/mixed-liquid-container-regression",
         "head": "770b4817929ab487256749b87e9519c6448079c3",
         "filesChanged": [
@@ -2434,14 +2435,204 @@
           "src/test/java/dev/totem/alchemy/container/WaterBucketContainerAdapterTest.java",
           "test-artifacts/m9-container-adapters-validation.md"
         ],
-        "validation": "M9-T07 Build #248 had no compile errors and only the four documented inherited GameTest failures. M9-T08 Build pending.",
+        "validation": "M9-T08 Build #249 had no compile errors and only the four documented inherited GameTest failures.",
         "remainingRisks": [
-          "M9-T08 must validate the new mixed-liquid GameTests before the milestone can be marked complete.",
-          "Honey/Milk right-click precedence is intentionally unchanged; M9 only defines container conversion and existing cauldron transfer regressions.",
+          "Repository-wide CI remains red from the four documented inherited regressions outside M9.",
+          "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
+        ],
+        "nextTask": "M10-T01"
+      }
+    },
+    {
+      "id": "totem-alchemy-m10-datapack-content-migration",
+      "title": "TotemAlchemy M10 Datapack content migration",
+      "objective": "Move Minecraft and Totem chemistry ownership into the optional built-in datapacks while preserving station behavior and explicit pack combinations.",
+      "status": "in-progress",
+      "planSource": {
+        "repository": "Yunitrish006006/TotemAlchemy",
+        "path": "docs/alchemy-next-task-plan.md",
+        "note": "Authoritative M10 task plan."
+      },
+      "targetRepositories": [
+        {
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "moduleId": "totem-alchemy",
+          "purpose": "Migrate base reactions, ingredient reactions, extensions, and Totem Brewing Stand recipes into Minecraft Alchemy and Totem Alchemy built-in packs."
+        }
+      ],
+      "currentTaskId": "M10-T01",
+      "completedTaskIds": [],
+      "blockedBy": [],
+      "milestones": [
+        {
+          "id": "M10",
+          "title": "Datapack content migration",
+          "tasks": [
+            "M10-T01",
+            "M10-T02",
+            "M10-T03",
+            "M10-T04",
+            "M10-T05",
+            "M10-T06",
+            "M10-T07",
+            "M10-T08"
+          ]
+        }
+      ],
+      "tasks": [
+        {
+          "id": "M10-T01",
+          "title": "Minecraft base reactions",
+          "goal": "Move Minecraft base reactions into Minecraft Alchemy.",
+          "primaryConcept": "optional-pack ownership of Minecraft base activation",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "in-progress",
+          "dependsOn": [
+            "M9-T08"
+          ],
+          "doneCriteria": [
+            "Minecraft base starter chemistry is owned by the Minecraft Alchemy built-in datapack and no longer leaks from the always-on legacy starter flag."
+          ],
+          "stopBoundary": "Do not move vanilla ingredient chemistry.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "content/minecraft-base-reactions"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/112"
+            }
+          ]
+        },
+        {
+          "id": "M10-T02",
+          "title": "Vanilla ingredient chemistry",
+          "goal": "Move vanilla ingredient chemistry into Minecraft Alchemy.",
+          "primaryConcept": "Minecraft ingredient reaction ownership",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M10-T01"
+          ],
+          "doneCriteria": [
+            "Vanilla ingredient reaction data is served from Minecraft Alchemy without changing approved reaction truth."
+          ],
+          "stopBoundary": "Do not move Totem mushroom starter/base reactions."
+        },
+        {
+          "id": "M10-T03",
+          "title": "Totem mushroom base reactions",
+          "goal": "Move Totem mushroom starter/base reactions into Totem Alchemy.",
+          "primaryConcept": "Totem starter/base ownership",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M10-T02"
+          ],
+          "doneCriteria": [
+            "Totem mushroom starter/base chemistry is owned by Totem Alchemy."
+          ],
+          "stopBoundary": "Do not move Totem-only ingredient reactions."
+        },
+        {
+          "id": "M10-T04",
+          "title": "Totem-only ingredients",
+          "goal": "Move Totem-only ingredients into Totem Alchemy.",
+          "primaryConcept": "Totem ingredient reaction ownership",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M10-T03"
+          ],
+          "doneCriteria": [
+            "Totem-only ingredient chemistry is owned by Totem Alchemy."
+          ],
+          "stopBoundary": "Do not migrate reaction extensions."
+        },
+        {
+          "id": "M10-T05",
+          "title": "Totem reaction extensions",
+          "goal": "Move Totem reaction extensions into Totem Alchemy.",
+          "primaryConcept": "additive Totem reaction extensions",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M10-T04"
+          ],
+          "doneCriteria": [
+            "Totem additive outcomes extend Minecraft-owned reactions only when Totem Alchemy is enabled."
+          ],
+          "stopBoundary": "Do not move Brewing Stand recipes."
+        },
+        {
+          "id": "M10-T06",
+          "title": "Totem Brewing Stand recipes",
+          "goal": "Move 48 Totem Brewing Stand recipes into Totem Alchemy.",
+          "primaryConcept": "Totem Brewing Stand recipe ownership",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M10-T05"
+          ],
+          "doneCriteria": [
+            "All 48 Totem Brewing Stand recipes are owned by Totem Alchemy."
+          ],
+          "stopBoundary": "Do not begin pack-combination regression."
+        },
+        {
+          "id": "M10-T07",
+          "title": "OFF/OFF leakage regression",
+          "goal": "Verify OFF/OFF contains no Totem recipe leakage.",
+          "primaryConcept": "pack-disabled isolation",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M10-T06"
+          ],
+          "doneCriteria": [
+            "OFF/OFF has no Totem recipe or chemistry leakage while vanilla Brewing Stand behavior remains intact."
+          ],
+          "stopBoundary": "Do not claim all four combinations yet."
+        },
+        {
+          "id": "M10-T08",
+          "title": "Four pack combinations",
+          "goal": "Verify all four pack combinations.",
+          "primaryConcept": "Minecraft Alchemy/Totem Alchemy combination matrix",
+          "repository": "Yunitrish006006/TotemAlchemy",
+          "status": "todo",
+          "dependsOn": [
+            "M10-T07"
+          ],
+          "doneCriteria": [
+            "OFF/OFF, ON/OFF, OFF/ON, and ON/ON each expose exactly the intended content."
+          ],
+          "stopBoundary": "Do not begin M11."
+        }
+      ],
+      "checkpoint": {
+        "summary": "M9 is fully complete. M10-T01 Minecraft Nether Wart base chemistry has been moved into the Minecraft Alchemy built-in datapack and the cauldron starter authority now resolves BaseReaction data first. TotemAlchemy PR #112 is awaiting Build.",
+        "currentTaskId": "M10-T01",
+        "branch": "content/minecraft-base-reactions",
+        "head": "0e257e0e26c2082ebf62aba2a653c4d19aa5e983",
+        "filesChanged": [
+          "docs/alchemy-next-task-plan.md",
+          "src/gametest/java/dev/totem/alchemy/gametest/MinecraftBaseReactionMigrationGameTest.java",
+          "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureBrewing.java",
+          "src/main/java/dev/totem/alchemy/mixture/AlchemyMixtureState.java",
+          "src/main/resources/data/totem/alchemy/brewing_material_settings/defaults.json",
+          "src/main/resources/resourcepacks/minecraft_alchemy/data/minecraft_alchemy/alchemy/base_reactions/vanilla/nether_wart.json",
+          "src/test/java/dev/totem/alchemy/reaction/MinecraftBaseReactionPackTest.java"
+        ],
+        "validation": "M9-T08 Build #249 had no compile errors and only the four documented inherited GameTest failures. M10-T01 Build pending.",
+        "remainingRisks": [
+          "Vanilla ingredient reaction JSON remains in the always-on legacy data location until M10-T02.",
+          "Red Mushroom intentionally remains a legacy starter until M10-T03.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value.",
           "Repository-wide CI remains red from the four documented inherited regressions."
         ],
-        "nextTask": "M10-T01"
+        "nextTask": "M10-T02"
       }
     }
   ]
