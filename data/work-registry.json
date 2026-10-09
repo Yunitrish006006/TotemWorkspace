@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-09T12:31:00+08:00",
+  "updatedAt": "2026-10-09T15:29:00+08:00",
   "activeWorkId": "totem-alchemy-m10-datapack-content-migration",
   "workItems": [
     {
@@ -2460,9 +2460,10 @@
           "purpose": "Migrate base reactions, ingredient reactions, extensions, and Totem Brewing Stand recipes into Minecraft Alchemy and Totem Alchemy built-in packs."
         }
       ],
-      "currentTaskId": "M10-T02",
+      "currentTaskId": "M10-T03",
       "completedTaskIds": [
-        "M10-T01"
+        "M10-T01",
+        "M10-T02"
       ],
       "blockedBy": [],
       "milestones": [
@@ -2513,7 +2514,7 @@
           "goal": "Move vanilla ingredient chemistry into Minecraft Alchemy.",
           "primaryConcept": "Minecraft ingredient reaction ownership",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "M10-T01"
           ],
@@ -2538,14 +2539,24 @@
           "goal": "Move Totem mushroom starter/base reactions into Totem Alchemy.",
           "primaryConcept": "Totem starter/base ownership",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "todo",
+          "status": "in-progress",
           "dependsOn": [
             "M10-T02"
           ],
           "doneCriteria": [
             "Totem mushroom starter/base chemistry is owned by Totem Alchemy."
           ],
-          "stopBoundary": "Do not move Totem-only ingredient reactions."
+          "stopBoundary": "Do not move Totem-only ingredient reactions.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "content/totem-mushroom-base-reactions"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/114"
+            }
+          ]
         },
         {
           "id": "M10-T04",
@@ -2624,28 +2635,29 @@
         }
       ],
       "checkpoint": {
-        "summary": "M10-T02 remains in progress. Build #251 exposed three new staged-ownership regressions after Totem side outcomes were removed from Minecraft core reactions; the failures were isolated to outdated test fixtures/roll counts and have been corrected on the same branch. A replacement Build is pending.",
-        "currentTaskId": "M10-T02",
-        "branch": "content/minecraft-ingredient-chemistry",
-        "head": "421857a94d45648f57c83b55f5104de1f4b62346",
+        "summary": "M10-T02 Minecraft ingredient migration validated in Build #253 with only four inherited GameTest failures. M10-T03 Totem Red Mushroom starter/base reaction now lives in the optional Totem Alchemy datapack; the always-on legacy starter flag is removed, and first-base Brewing Stand outcome precedence is registry driven. TotemAlchemy PR #114 awaits Build #254.",
+        "currentTaskId": "M10-T03",
+        "branch": "content/totem-mushroom-base-reactions",
+        "head": "7ecb53e9d8ac328f0d2f3000ba8253c54b36a89a",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
-          "src/gametest/java/dev/totem/alchemy/gametest/AlchemyCauldronPersistenceGameTest.java",
-          "src/gametest/java/dev/totem/alchemy/gametest/BrewingMigrationGameTest.java",
-          "src/gametest/java/dev/totem/alchemy/gametest/ReactionRegistryMigrationGameTest.java",
-          "src/gametest/java/dev/totem/alchemy/gametest/RestorativeBrewingGameTest.java",
-          "src/main/resources/resourcepacks/minecraft_alchemy/data/minecraft_alchemy/alchemy/ingredient_reactions/vanilla/*.json",
-          "src/test/java/dev/totem/alchemy/reaction/MinecraftIngredientReactionPackTest.java"
+          "src/gametest/java/dev/totem/alchemy/gametest/TotemMushroomBaseReactionMigrationGameTest.java",
+          "src/main/java/dev/totem/alchemy/alchemy/MultiOutcomeBrewing.java",
+          "src/main/resources/data/totem/alchemy/brewing_material_settings/defaults.json",
+          "src/main/resources/resourcepacks/totem_alchemy/data/totem_alchemy/alchemy/base_reactions/mushroom/red_mushroom.json",
+          "src/test/java/dev/totem/alchemy/reaction/MinecraftBaseReactionPackTest.java",
+          "src/test/java/dev/totem/alchemy/reaction/TotemMushroomBaseReactionPackTest.java"
         ],
-        "validation": "Build #251 had the four inherited failures plus three M10-T02-specific stale-regression failures: Brown Mushroom's remaining Regeneration/Poison core outcomes neutralized to one effect, Sugar's old three-roll fixture invoked legacy fallback after the Totem third outcome was removed, and that leftover fallback state contaminated the subsequent Apple probability check. Tests were corrected to Bamboo's non-opposed core pair and Sugar's two core independent rolls / 5.82% no-effect truth. Replacement Build pending.",
+        "validation": "M10-T02 Build #253 compiled and reported only the four documented inherited GameTest failures. M10-T03 Build #254 in progress.",
         "remainingRisks": [
-          "Totem-owned side outcomes remain intentionally absent until M10-T05 reaction extensions.",
-          "M10-T02 must pass replacement CI before completion.",
-          "The three Totem-only ingredient reactions remain legacy until M10-T04.",
-          "Red Mushroom starter/base ownership remains legacy until M10-T03.",
-          "M7-T03 remains blocked on an explicit Brewing Stand station success-bonus value."
+          "M10-T03 must be validated in Build #254 before its checkpoint is completed.",
+          "Red Mushroom fixed Brewing Stand recipe files remain in the legacy location until M10-T06; full OFF/OFF recipe leakage isolation is deferred to M10-T07.",
+          "The three Totem-only ingredient reactions remain always-on until M10-T04.",
+          "Totem side-outcome extensions remain absent until M10-T05.",
+          "M7-T03 remains blocked on explicit Brewing Stand station success-bonus value.",
+          "Repository-wide CI remains red from four known unrelated failures."
         ],
-        "nextTask": "M10-T03"
+        "nextTask": "M10-T04"
       }
     }
   ]
