@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-09T11:35:30+08:00",
+  "updatedAt": "2026-10-09T11:41:39+08:00",
   "activeWorkId": "totem-alchemy-m9-container-adapters",
   "workItems": [
     {
@@ -2193,14 +2193,15 @@
           "purpose": "Define container transfer adapters for bottles, buckets, flask, potion compatibility, and mixed-liquid cauldron transfers."
         }
       ],
-      "currentTaskId": "M9-T07",
+      "currentTaskId": "M9-T08",
       "completedTaskIds": [
         "M9-T01",
         "M9-T02",
         "M9-T03",
         "M9-T04",
         "M9-T05",
-        "M9-T06"
+        "M9-T06",
+        "M9-T07"
       ],
       "blockedBy": [],
       "milestones": [
@@ -2376,7 +2377,7 @@
           "goal": "Add potion bottle import/export compatibility.",
           "primaryConcept": "vanilla/custom potion container compatibility",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "M9-T06"
           ],
@@ -2401,37 +2402,46 @@
           "goal": "Add mixed-liquid cauldron fill/extract tests.",
           "primaryConcept": "container/cauldron mixed-liquid transfer regression",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "todo",
+          "status": "in-progress",
           "dependsOn": [
             "M9-T07"
           ],
           "doneCriteria": [
             "Mixed-liquid fill and extraction conserve volume/composition/full mixture state across supported containers."
           ],
-          "stopBoundary": "Do not begin M10."
+          "stopBoundary": "Do not begin M10.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "test/mixed-liquid-container-regression"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/111"
+            }
+          ]
         }
       ],
       "checkpoint": {
-        "summary": "M9-T06 Large Flask full-mixture adapter validated with no new compile or GameTest regressions beyond the four documented inherited failures. M9-T07 vanilla potion container import/export compatibility is implemented in TotemAlchemy PR #110 and awaiting Build.",
-        "currentTaskId": "M9-T07",
-        "branch": "feature/potion-container-compatibility",
-        "head": "52a9dff48b9d35cef636417af28bdb90017b7342",
+        "summary": "M9-T07 vanilla potion container compatibility validated with no new compile or GameTest regressions beyond the four documented inherited failures. M9-T08 final mixed-liquid cauldron/container regression pass is implemented in TotemAlchemy PR #111 and awaiting Build.",
+        "currentTaskId": "M9-T08",
+        "branch": "test/mixed-liquid-container-regression",
+        "head": "770b4817929ab487256749b87e9519c6448079c3",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
-          "src/main/java/dev/totem/alchemy/container/LiquidContainerAdapters.java",
-          "src/main/java/dev/totem/alchemy/container/PotionContainerAdapter.java",
-          "src/test/java/dev/totem/alchemy/container/LiquidContainerAdaptersTest.java",
-          "src/test/java/dev/totem/alchemy/container/PotionContainerAdapterTest.java"
+          "src/gametest/java/dev/totem/alchemy/gametest/MixedLiquidContainerGameTest.java",
+          "src/main/java/dev/totem/alchemy/container/WaterBucketContainerAdapter.java",
+          "src/test/java/dev/totem/alchemy/container/WaterBucketContainerAdapterTest.java",
+          "test-artifacts/m9-container-adapters-validation.md"
         ],
-        "validation": "M9-T06 Build #247 had no compile errors and only the four documented inherited GameTest failures. M9-T07 Build pending.",
+        "validation": "M9-T07 Build #248 had no compile errors and only the four documented inherited GameTest failures. M9-T08 Build pending.",
         "remainingRisks": [
-          "Container adapters are registered, but existing player/cauldron interaction code has not yet been comprehensively regression-tested through the adapter boundary.",
-          "M9-T08 still needs mixed-liquid cauldron fill/extract regression coverage and final M9 handoff.",
-          "Signature drink items remain intentionally outside generic potion compatibility.",
+          "M9-T08 must validate the new mixed-liquid GameTests before the milestone can be marked complete.",
+          "Honey/Milk right-click precedence is intentionally unchanged; M9 only defines container conversion and existing cauldron transfer regressions.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value.",
           "Repository-wide CI remains red from the four documented inherited regressions."
         ],
-        "nextTask": "M9-T08"
+        "nextTask": "M10-T01"
       }
     }
   ]
