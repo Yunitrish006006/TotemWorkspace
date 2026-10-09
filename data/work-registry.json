@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-09T00:18:37+08:00",
+  "updatedAt": "2026-10-09T09:28:28+08:00",
   "activeWorkId": "totem-alchemy-m9-container-adapters",
   "workItems": [
     {
@@ -2193,11 +2193,12 @@
           "purpose": "Define container transfer adapters for bottles, buckets, flask, potion compatibility, and mixed-liquid cauldron transfers."
         }
       ],
-      "currentTaskId": "M9-T04",
+      "currentTaskId": "M9-T05",
       "completedTaskIds": [
         "M9-T01",
         "M9-T02",
-        "M9-T03"
+        "M9-T03",
+        "M9-T04"
       ],
       "blockedBy": [],
       "milestones": [
@@ -2298,7 +2299,7 @@
           "goal": "Add Milk Bucket adapter.",
           "primaryConcept": "three-unit Milk Bucket transfer",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "M9-T03"
           ],
@@ -2323,14 +2324,24 @@
           "goal": "Add Honey Bottle adapter.",
           "primaryConcept": "one-unit Honey Bottle transfer",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "todo",
+          "status": "in-progress",
           "dependsOn": [
             "M9-T04"
           ],
           "doneCriteria": [
             "Honey Bottle and Glass Bottle convert through the adapter boundary with Honey composition."
           ],
-          "stopBoundary": "Do not migrate Large Flask."
+          "stopBoundary": "Do not migrate Large Flask.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/honey-bottle-adapter"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/108"
+            }
+          ]
         },
         {
           "id": "M9-T06",
@@ -2379,25 +2390,25 @@
         }
       ],
       "checkpoint": {
-        "summary": "M9-T03 Water Bucket adapter validated with no new compile or GameTest regressions beyond the four documented inherited failures. M9-T04 Milk Bucket adapter is implemented in TotemAlchemy PR #107 and awaiting Build.",
-        "currentTaskId": "M9-T04",
-        "branch": "feature/milk-bucket-adapter",
-        "head": "0e73a730e4df0aec06208a03c2cec938c8d465c3",
+        "summary": "M9-T04 Milk Bucket adapter validated with no new compile or GameTest regressions beyond the four documented inherited failures. M9-T05 Honey Bottle adapter is implemented in TotemAlchemy PR #108 and awaiting Build.",
+        "currentTaskId": "M9-T05",
+        "branch": "feature/honey-bottle-adapter",
+        "head": "3f3042b4aa9c851c9a5201d2aa4d3837bd546f0a",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
+          "src/main/java/dev/totem/alchemy/container/HoneyBottleContainerAdapter.java",
           "src/main/java/dev/totem/alchemy/container/LiquidContainerAdapters.java",
-          "src/main/java/dev/totem/alchemy/container/MilkBucketContainerAdapter.java",
-          "src/test/java/dev/totem/alchemy/container/LiquidContainerAdaptersTest.java",
-          "src/test/java/dev/totem/alchemy/container/MilkBucketContainerAdapterTest.java"
+          "src/test/java/dev/totem/alchemy/container/HoneyBottleContainerAdapterTest.java",
+          "src/test/java/dev/totem/alchemy/container/LiquidContainerAdaptersTest.java"
         ],
-        "validation": "M9-T03 Build #244 had no compile errors and only the four documented inherited GameTest failures. M9-T04 Build pending.",
+        "validation": "M9-T04 Build #245 had no compile errors and only the four documented inherited GameTest failures. M9-T05 Build pending.",
         "remainingRisks": [
-          "Water Bottle, Water Bucket, and Milk Bucket adapters are registered, but existing player/cauldron interaction code has not yet been migrated to the adapter dispatcher.",
-          "Honey Bottle, Large Flask, and generic potion compatibility remain later M9 tasks.",
+          "Water Bottle, Water Bucket, Milk Bucket, and Honey Bottle adapters are registered, but existing player/cauldron interaction code has not yet been migrated to the adapter dispatcher.",
+          "Large Flask and generic potion compatibility remain later M9 tasks.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value.",
           "Repository-wide CI remains red from the four documented inherited regressions."
         ],
-        "nextTask": "M9-T05"
+        "nextTask": "M9-T06"
       }
     }
   ]
