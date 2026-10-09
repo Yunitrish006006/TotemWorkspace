@@ -113,6 +113,8 @@ try {
   const fixtureWork = activeWorkItem(fixtureRegistry);
   fixtureWork.status = 'in-progress';
   fixtureWork.currentTaskId = fixtureWork.tasks[0].id;
+  fixtureWork.checkpoint.currentTaskId = fixtureWork.currentTaskId;
+  fixtureWork.checkpoint.nextTask = fixtureWork.currentTaskId;
   fixtureWork.completedTaskIds = [];
   fixtureWork.tasks.forEach((entry, index) => { entry.status = index === 0 ? 'in-progress' : 'planned'; });
   fs.mkdirSync(path.join(workspaceRoot, 'data'));
