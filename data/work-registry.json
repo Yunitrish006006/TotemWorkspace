@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-09T16:11:55+08:00",
+  "updatedAt": "2026-10-09T16:20:00+08:00",
   "activeWorkId": "totem-alchemy-m10-datapack-content-migration",
   "workItems": [
     {
@@ -2657,25 +2657,26 @@
         }
       ],
       "checkpoint": {
-        "summary": "M10-T04 Totem-only ingredient reaction migration validated in Build #255 with no new regressions beyond the four documented inherited failures. M10-T05 restores the 25 Totem-owned side outcomes as additive IngredientReactionExtension resources in Totem Alchemy, adds optional-target merge semantics for Totem-ON/Minecraft-OFF compatibility, and is implemented in TotemAlchemy PR #116 awaiting Build.",
+        "summary": "M10-T05 remains in progress. Build #256 exposed three staged-extension regressions caused by tests still assuming Minecraft-core-only outcome counts and two Sugar rolls while Totem extensions were enabled. The affected GameTests were made pack-state aware without changing production chemistry; replacement CI is pending.",
         "currentTaskId": "M10-T05",
         "branch": "content/totem-reaction-extensions",
-        "head": "5381c7fafea37069cd4fc66a9d9962798584e7ec",
+        "head": "6922d9fa2b7d334ff361fed1392dcaeb47fc19c4",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
+          "src/gametest/java/dev/totem/alchemy/gametest/AlchemyCauldronPersistenceGameTest.java",
           "src/gametest/java/dev/totem/alchemy/gametest/ReactionRegistryMigrationGameTest.java",
+          "src/gametest/java/dev/totem/alchemy/gametest/RestorativeBrewingGameTest.java",
           "src/main/java/dev/totem/alchemy/reaction/AlchemyReactionDataLoader.java",
           "src/main/resources/resourcepacks/totem_alchemy/data/totem_alchemy/alchemy/ingredient_reaction_extensions/minecraft/*.json",
           "src/test/java/dev/totem/alchemy/reaction/AlchemyReactionDataLoaderTest.java",
           "src/test/java/dev/totem/alchemy/reaction/TotemReactionExtensionPackTest.java"
         ],
-        "validation": "M10-T04 Build #255 had no compile errors and only the four documented inherited GameTest failures. M10-T05 Build pending.",
+        "validation": "Build #256 had the four inherited failures plus three M10-T05-specific stale-regression failures: Turtle Helmet/Red Mushroom outcome-count expectations still assumed core-only data, and the Sugar no-effect test supplied only two rolls while the enabled extension produced three outcomes. Tests were updated to follow Totem pack state. Replacement Build pending.",
         "remainingRisks": [
-          "M10-T05 must pass CI before completion.",
+          "M10-T05 must pass replacement CI before completion.",
           "The 48 Totem Brewing Stand recipes remain at the legacy always-on location until M10-T06.",
-          "Full OFF/OFF leakage isolation and the four pack-combination matrix remain M10-T07/T08.",
-          "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value.",
-          "Repository-wide CI remains red from the four documented inherited regressions."
+          "Full OFF/OFF leakage isolation and four pack-combination validation remain M10-T07/T08.",
+          "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
         ],
         "nextTask": "M10-T06"
       }
