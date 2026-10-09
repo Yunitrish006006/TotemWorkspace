@@ -103,6 +103,13 @@ assert.equal(small.execution.maxConcurrentWrites, 1);
 assert.equal(small.contextHints.modelPreference, "lightweight-preferred");
 assert.equal(small.execution.sharedContractStabilizationRequired, false);
 assert.equal(small.independentReviewRequired, false); // Merely having consumers does not mean a local typo changes their contract.
+assert.deepEqual(small.contextPressurePolicy.retrievalOrder,
+  ["symbol", "function-or-range", "file", "module", "cross-module", "workspace"]);
+assert.equal(small.contextPressurePolicy.maxFullSourceFilesPerFetch, 1);
+assert.equal(small.contextPressurePolicy.maxFullDiffsPerFetch, 1);
+assert.equal(small.contextPressurePolicy.truncatedOutputUsableAsEvidence, false);
+assert.equal(small.contextPressurePolicy.onTruncatedOutput, "discard-and-requery-narrower");
+assert.equal(small.contextPressurePolicy.broadWorkspaceScan, "last-resort");
 assert.ok(small.writeScope.every((scope) => scope.moduleId === "totem-alpha"));
 assert.ok(small.readScope.some((scope) => scope.moduleId === "totem-beta"));
 

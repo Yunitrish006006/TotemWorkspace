@@ -157,6 +157,211 @@ class WorkspaceModuleStatus {
   }
 }
 
+class WorkProgressRepository {
+  const WorkProgressRepository({
+    required this.repository,
+    required this.moduleId,
+    required this.purpose,
+  });
+
+  final String repository;
+  final String? moduleId;
+  final String purpose;
+
+  factory WorkProgressRepository.fromJson(Map<String, dynamic> json) =>
+      WorkProgressRepository(
+        repository: json['repository'] as String? ?? '',
+        moduleId: json['moduleId'] as String?,
+        purpose: json['purpose'] as String? ?? '',
+      );
+}
+
+class WorkProgressTask {
+  const WorkProgressTask({
+    required this.id,
+    required this.title,
+    required this.goal,
+    required this.status,
+    required this.repository,
+    required this.doneCriteria,
+    required this.stopBoundary,
+  });
+
+  final String id;
+  final String title;
+  final String goal;
+  final String status;
+  final String repository;
+  final List<String> doneCriteria;
+  final String stopBoundary;
+
+  factory WorkProgressTask.fromJson(Map<String, dynamic> json) =>
+      WorkProgressTask(
+        id: json['id'] as String? ?? '',
+        title: json['title'] as String? ?? '',
+        goal: json['goal'] as String? ?? '',
+        status: json['status'] as String? ?? 'planned',
+        repository: json['repository'] as String? ?? '',
+        doneCriteria: GraphData.strings(json['doneCriteria']),
+        stopBoundary: json['stopBoundary'] as String? ?? '',
+      );
+}
+
+class WorkProgressMilestone {
+  const WorkProgressMilestone({
+    required this.id,
+    required this.title,
+    required this.completedTasks,
+    required this.totalTasks,
+    required this.taskIds,
+  });
+
+  final String id;
+  final String title;
+  final int completedTasks;
+  final int totalTasks;
+  final List<String> taskIds;
+
+  factory WorkProgressMilestone.fromJson(Map<String, dynamic> json) =>
+      WorkProgressMilestone(
+        id: json['id'] as String? ?? '',
+        title: json['title'] as String? ?? '',
+        completedTasks: (json['completedTasks'] as num?)?.toInt() ?? 0,
+        totalTasks: (json['totalTasks'] as num?)?.toInt() ?? 0,
+        taskIds: GraphData.strings(json['taskIds']),
+      );
+}
+
+class WorkProgressCheckpoint {
+  const WorkProgressCheckpoint({
+    required this.summary,
+    required this.branch,
+    required this.head,
+    required this.nextTask,
+    required this.remainingRisks,
+  });
+
+  final String? summary;
+  final String? branch;
+  final String? head;
+  final String? nextTask;
+  final List<String> remainingRisks;
+
+  factory WorkProgressCheckpoint.fromJson(Map<String, dynamic> json) =>
+      WorkProgressCheckpoint(
+        summary: json['summary'] as String?,
+        branch: json['branch'] as String?,
+        head: json['head'] as String?,
+        nextTask: json['nextTask'] as String?,
+        remainingRisks: GraphData.strings(json['remainingRisks']),
+      );
+}
+
+class WorkProgressActive {
+  const WorkProgressActive({
+    required this.id,
+    required this.title,
+    required this.objective,
+    required this.status,
+    required this.currentTaskId,
+    required this.currentTask,
+    required this.completedTasks,
+    required this.totalTasks,
+    required this.completionPercent,
+    required this.targetRepositories,
+    required this.blockedBy,
+    required this.milestones,
+    required this.checkpoint,
+  });
+
+  final String id;
+  final String title;
+  final String objective;
+  final String status;
+  final String? currentTaskId;
+  final WorkProgressTask? currentTask;
+  final int completedTasks;
+  final int totalTasks;
+  final double completionPercent;
+  final List<WorkProgressRepository> targetRepositories;
+  final List<String> blockedBy;
+  final List<WorkProgressMilestone> milestones;
+  final WorkProgressCheckpoint? checkpoint;
+
+  factory WorkProgressActive.fromJson(Map<String, dynamic> json) {
+    final rawCurrentTask = json['currentTask'];
+    final rawCheckpoint = json['checkpoint'];
+    return WorkProgressActive(
+      id: json['id'] as String? ?? '',
+      title: json['title'] as String? ?? '',
+      objective: json['objective'] as String? ?? '',
+      status: json['status'] as String? ?? 'planned',
+      currentTaskId: json['currentTaskId'] as String?,
+      currentTask: rawCurrentTask is Map
+          ? WorkProgressTask.fromJson(
+              Map<String, dynamic>.from(rawCurrentTask),
+            )
+          : null,
+      completedTasks: (json['completedTasks'] as num?)?.toInt() ?? 0,
+      totalTasks: (json['totalTasks'] as num?)?.toInt() ?? 0,
+      completionPercent:
+          (json['completionPercent'] as num?)?.toDouble() ?? 0,
+      targetRepositories:
+          (json['targetRepositories'] as List? ?? const <Object>[])
+              .whereType<Map>()
+              .map(
+                (entry) => WorkProgressRepository.fromJson(
+                  Map<String, dynamic>.from(entry),
+                ),
+              )
+              .toList(growable: false),
+      blockedBy: GraphData.strings(json['blockedBy']),
+      milestones: (json['milestones'] as List? ?? const <Object>[])
+          .whereType<Map>()
+          .map(
+            (entry) => WorkProgressMilestone.fromJson(
+              Map<String, dynamic>.from(entry),
+            ),
+          )
+          .toList(growable: false),
+      checkpoint: rawCheckpoint is Map
+          ? WorkProgressCheckpoint.fromJson(
+              Map<String, dynamic>.from(rawCheckpoint),
+            )
+          : null,
+    );
+  }
+}
+
+class WorkProgressState {
+  const WorkProgressState({
+    required this.schemaVersion,
+    required this.generatedAt,
+    required this.kind,
+    required this.activeWorkId,
+    required this.active,
+  });
+
+  final int schemaVersion;
+  final String generatedAt;
+  final String kind;
+  final String? activeWorkId;
+  final WorkProgressActive? active;
+
+  factory WorkProgressState.fromJson(Map<String, dynamic> json) {
+    final rawActive = json['active'];
+    return WorkProgressState(
+      schemaVersion: (json['schemaVersion'] as num?)?.toInt() ?? 1,
+      generatedAt: json['generatedAt'] as String? ?? '',
+      kind: json['kind'] as String? ?? 'plan-state',
+      activeWorkId: json['activeWorkId'] as String?,
+      active: rawActive is Map
+          ? WorkProgressActive.fromJson(Map<String, dynamic>.from(rawActive))
+          : null,
+    );
+  }
+}
+
 class WorkspaceLiveStatus {
   const WorkspaceLiveStatus({
     required this.mode,
@@ -1259,6 +1464,16 @@ class LocalWorkspaceClient {
         .timeout(const Duration(seconds: 12));
     _requireSuccess(response, 'workspace status');
     return WorkspaceLiveStatus.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
+  }
+
+  Future<WorkProgressState> workProgress() async {
+    final response = await _client
+        .get(_uri('/api/work-progress'))
+        .timeout(const Duration(seconds: 5));
+    _requireSuccess(response, 'work progress');
+    return WorkProgressState.fromJson(
       jsonDecode(response.body) as Map<String, dynamic>,
     );
   }
