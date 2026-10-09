@@ -182,6 +182,16 @@ async function validateMcpServer() {
     assert.equal(orchestration.structuredContent?.assignments, undefined);
     assert.ok(orchestration.structuredContent?.execution.maxConcurrentWrites >= 1);
     assert.ok(orchestration.structuredContent?.waves.length >= 3);
+    assert.equal(orchestration.structuredContent?.microTaskPolicy?.unit, "one-primary-concept");
+    assert.equal(orchestration.structuredContent?.microTaskPolicy?.executionMode, "one-at-a-time");
+    assert.equal(orchestration.structuredContent?.microTaskPolicy?.requireFocusedValidation, true);
+    assert.equal(orchestration.structuredContent?.microTaskPolicy?.requireCheckpoint, true);
+    assert.equal(orchestration.structuredContent?.microTaskPolicy?.stopAfterEachTask, true);
+    assert.ok(orchestration.structuredContent?.microTaskPolicy?.requiredFields.includes("doneCriteria"));
+    assert.ok(orchestration.structuredContent?.microTaskPolicy?.requiredFields.includes("stopBoundary"));
+    assert.ok(orchestration.structuredContent?.microTaskPolicy?.splitTriggers.includes("context-budget-would-be-exceeded"));
+    assert.deepEqual(orchestration.structuredContent?.microTaskPolicy?.contextEscalation,
+      ["symbol", "function-or-range", "file", "module", "cross-module", "workspace"]);
 
     const architectPack = buildContextPack("修改 Observer Screen provider protocol", {
       audience: "architect",

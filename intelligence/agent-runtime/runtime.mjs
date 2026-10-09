@@ -10,6 +10,7 @@ import { buildOrchestrationPlan } from "../orchestration-plan.mjs";
 import { loadKnowledge } from "../workspace-knowledge.mjs";
 import { prepareTurnRouting, selectTurnPolicy } from "./turn-routing.mjs";
 import { probeCodexRuntime } from "../codex-runtime-probe.mjs";
+import { activeWorkItem, loadWorkRegistry, resumeCheckpointForTask } from "../work-registry.mjs";
 
 const MAX_PROMPT_LENGTH = 120_000;
 const MAX_IMAGE_INPUTS = 4;
@@ -28,6 +29,32 @@ function workspacePlan({ prompt, workspace }) {
   const moduleId = path.resolve(workspace) === path.resolve(knowledge.root) ? "totem-workspace"
     : knowledge.modules.find((module) => module.repoName === path.basename(workspace))?.id ?? null;
   return buildOrchestrationPlan({ query: prompt, moduleId, knowledge });
+}
+
+export function resolveActiveRuntimeTask(workspace, knowledge = loadKnowledge()) {
+  try {
+    const work = activeWorkItem(loadWorkRegistry(knowledge.root));
+    const task = work?.tasks?.find((entry) => entry.id === work.currentTaskId) ?? null;
+    if (!task || task.status !== "in-progress") return null;
+    const repositoryName = String(task.repository ?? "").split("/").at(-1);
+    if (!repositoryName || repositoryName !== path.basename(path.resolve(workspace))) return null;
+    return Object.freeze({
+      workId: work.id,
+      workTitle: work.title,
+      objective: work.objective,
+      taskId: task.id,
+      title: task.title,
+      goal: task.goal,
+      primaryConcept: task.primaryConcept,
+      repository: task.repository,
+      dependsOn: Object.freeze([...(task.dependsOn ?? [])]),
+      doneCriteria: Object.freeze([...(task.doneCriteria ?? [])]),
+      stopBoundary: task.stopBoundary,
+      resumeCheckpoint: resumeCheckpointForTask(knowledge.root, work.id, task.id)
+    });
+  } catch {
+    return null;
+  }
 }
 
 function expiredSession(message) {
@@ -77,20 +104,20 @@ export function imageInputs(imageUrls = []) {
   });
 }
 
-export function threadStartParams({ workspace, model = null, modelPolicy = null, orchestrationPlan = null, writableRoots = [workspace], readOnly = false, usageGuardMode = 'enforce' }) {
+export function threadStartParams({ workspace, model = null, modelPolicy = null, orchestrationPlan = null, activeWorkTask = null, writableRoots = [workspace], readOnly = false, usageGuardMode = 'enforce' }) {
   return compactObject({
     cwd: workspace,
     approvalPolicy: "on-request",
     approvalsReviewer: "user",
     sandbox: readOnly ? "read-only" : "workspace-write",
-    developerInstructions: buildDeveloperInstructions({ modelPolicy, plan: orchestrationPlan, usageGuardMode }),
+    developerInstructions: buildDeveloperInstructions({ modelPolicy, plan: orchestrationPlan, activeWorkTask, usageGuardMode }),
     model
   });
 }
 
-export function threadResumeParams({ threadId, workspace, model = null, modelPolicy = null, orchestrationPlan = null, writableRoots = [workspace], readOnly = false, usageGuardMode = 'enforce' }) {
+export function threadResumeParams({ threadId, workspace, model = null, modelPolicy = null, orchestrationPlan = null, activeWorkTask = null, writableRoots = [workspace], readOnly = false, usageGuardMode = 'enforce' }) {
   if (typeof threadId !== "string" || !threadId.trim()) throw new Error("Saved Codex session ID is invalid");
-  return compactObject({ threadId, ...threadStartParams({ workspace, model, modelPolicy, orchestrationPlan, writableRoots, readOnly, usageGuardMode }) });
+  return compactObject({ threadId, ...threadStartParams({ workspace, model, modelPolicy, orchestrationPlan, activeWorkTask, writableRoots, readOnly, usageGuardMode }) });
 }
 
 export function turnStartParams({ threadId, workspace, prompt, model = null, reasoningEffort = null, imageUrls = [], writableRoots = [workspace], readOnly = false }) {
@@ -596,6 +623,7 @@ export class CodexRunner {
     let safeReasoningEffort = validateReasoningEffort(reasoningEffort);
     const safeImageUrls = imageInputs(imageUrls).map((image) => image.url);
     let plan;
+    let activeWorkTask;
     let releaseWriteLease = () => {};
     let childStarted = false;
     let childClosed = false;
@@ -619,9 +647,10 @@ export class CodexRunner {
       if (!writableRoots.length) readOnly = true;
       if (!orchestrationPlan && this.#defaultPlanning && !boundedContext) boundedContext = boundedRuntimeContext(routing.query, plan);
       workspace = executionWorkspace(workspace, writableRoots, readOnly);
+      activeWorkTask = resolveActiveRuntimeTask(workspace);
       policy = freezeDecision(modelPolicy ?? selectTurnPolicy({ routing, plan, models: runtime.models, usage: runtime.usage,
         model: safeModel, effort: safeReasoningEffort,
-        extraContextTokens: Math.ceil((buildDeveloperInstructions({ plan, usageGuardMode: this.#usageGuardMode }).length
+        extraContextTokens: Math.ceil((buildDeveloperInstructions({ plan, activeWorkTask, usageGuardMode: this.#usageGuardMode }).length
           + (typeof boundedContext === "string" ? boundedContext.length : boundedContext ? JSON.stringify(boundedContext).length : 0)) / 4) }));
       try { await onModelPolicy(policy); } catch { /* Status sinks must not change execution. */ }
       try { await onProgress({ method: "bridge/modelPolicy", params: policy }); } catch { /* Best-effort status. */ }
@@ -850,7 +879,7 @@ export class CodexRunner {
         });
       };
       const startNewThread = () => {
-        request("thread/start", threadStartParams({ workspace, model: safeModel, modelPolicy: policy, orchestrationPlan: plan, writableRoots, readOnly, usageGuardMode: this.#usageGuardMode }), (message) => {
+        request("thread/start", threadStartParams({ workspace, model: safeModel, modelPolicy: policy, orchestrationPlan: plan, activeWorkTask, writableRoots, readOnly, usageGuardMode: this.#usageGuardMode }), (message) => {
           if (message.error) {
             fail(rpcError(message));
             return;
@@ -869,7 +898,7 @@ export class CodexRunner {
           startNewThread();
           return;
         }
-        request("thread/resume", threadResumeParams({ threadId: resumeSessionId, workspace, model: safeModel, modelPolicy: policy, orchestrationPlan: plan, writableRoots, readOnly, usageGuardMode: this.#usageGuardMode }), (message) => {
+        request("thread/resume", threadResumeParams({ threadId: resumeSessionId, workspace, model: safeModel, modelPolicy: policy, orchestrationPlan: plan, activeWorkTask, writableRoots, readOnly, usageGuardMode: this.#usageGuardMode }), (message) => {
           if (message.error) {
             if (!expiredSession(message)) { fail(rpcError(message)); return; }
             resetSavedSession = true;

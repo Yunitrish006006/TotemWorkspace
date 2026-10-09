@@ -30,6 +30,13 @@ import {
   replayVerificationStateAt
 } from "../intelligence/development-replay.mjs";
 import { createAgentAdapter } from "../intelligence/agent-adapter.mjs";
+import {
+  activeWorkItem,
+  captureRepositoryCheckpoint,
+  loadWorkRegistry,
+  persistRuntimeWorkSettlement,
+  workProgressPayload
+} from "../intelligence/work-registry.mjs";
 import { createConversationSync } from "../intelligence/conversation-sync.mjs";
 import {
   buildOrchestrationPlan,
@@ -783,6 +790,11 @@ async function handleApi(req, res, url, { agentAdapter, conversation, conversati
     return true;
   }
 
+  if (req.method === "GET" && pathname === "/api/work-progress") {
+    json(res, 200, workProgressPayload(loadWorkRegistry(ROOT)));
+    return true;
+  }
+
   if (req.method === "GET" && pathname === "/api/workspace-status") {
     json(res, 200, apiCache.workspaceStatus());
     return true;
@@ -1052,6 +1064,34 @@ export function createLocalViewerServer({
       liveRefreshModules.clear();
       liveRefreshTaskId = null;
       refreshWorkspaceChanges([], { taskId: task?.id ?? null });
+
+      const registry = loadWorkRegistry(knowledge.root);
+      const work = activeWorkItem(registry);
+      const current = work?.tasks?.find((entry) => entry.id === work.currentTaskId) ?? null;
+      if (current) {
+        const repoName = String(current.repository ?? "").split("/").at(-1);
+        const repositoryRoot = repoName === "TotemWorkspace"
+          ? knowledge.root
+          : path.join(reposRoot, repoName);
+        const repositoryState = captureRepositoryCheckpoint(repositoryRoot);
+        const replay = loadDevelopmentReplay(knowledge.root);
+        const validation = replay.events
+          .filter((event) => event.taskId === task?.id
+            && ["command_completed", "test_passed", "test_failed"].includes(event.type))
+          .slice(-40)
+          .map((event) => ({
+            type: event.type,
+            status: event.status ?? (event.type === "test_failed" ? "failed" : "success"),
+            summary: event.summary ?? event.command ?? event.test ?? event.type
+          }));
+        persistRuntimeWorkSettlement(knowledge.root, {
+          runtimeTaskId: task?.id ?? null,
+          state: task?.state,
+          repositoryState,
+          validation,
+          remainingRisks: task?.error ? [task.error] : []
+        });
+      }
       apiCache.invalidate();
     }
   });

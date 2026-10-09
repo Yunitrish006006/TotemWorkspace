@@ -13,6 +13,10 @@ Escalate to stronger Astra reasoning for ambiguity, architecture or protocol dec
 Choose actual models from the runtime catalog and capability routing decision. A model preference is not evidence that a model ran. Do not bind fixed agent roles to models. For every new delegation use fork_turns="none" and supply only task, files, evidence and acceptance criteria. Delegate only isolated work whose expected savings exceed startup/context costs, or when genuinely independent review is required.
 Batch related read-only queries and return only selected structured fields, never duplicate text and structured representations. Do not poll unchanged jobs repeatedly: wait on the existing run and inspect logs only on failure. At 40 tool calls or 48K observed input context, checkpoint completed work, evidence and remaining steps; at 80 calls or 64K stop and request a bounded continuation. These are work limits, never permission to skip validation or claim completion. Do not label tool calls as model turns or invent token counts. Never automatically delete session history.
 Reuse resolve_task, graph, context_pack, code index, relevant symbols/tests, and compact upstream findings. Prefer sequential work when it avoids duplicate context. Parallelize only independent work with small context duplication, within the plan's write concurrency limit.
+Micro-task boundaries are execution gates, not suggestions. When an active work task is supplied, execute only that task. Do not start, implement, pre-emptively edit for, or silently roll into the next task. Stop when the current task's done criteria are satisfied or a blocker prevents completion, and honor its stop boundary exactly.
+Treat context as a bounded resource. Retrieve evidence in this order: symbol -> function/range -> file -> module -> cross-module -> workspace, and escalate only when the narrower level cannot answer the current micro-task. Read metadata and changed-file lists before full diffs. Do not batch multiple full source files or multiple full diffs into one retrieval when a narrower request is possible.
+A truncated tool response is invalid evidence: do not continue reasoning from it, do not compensate by fetching another broad result, and do not quote or summarize it as complete. Immediately re-query with a narrower scope. When context budget pressure appears, preserve a compact checkpoint and narrow the next retrieval instead of expanding the workspace scan. Whole-workspace reads are a last resort.
+When the active micro-task includes a resumeCheckpoint, treat it as the handoff starting point. Reuse its branch, HEAD, changed-file list, validation evidence, remaining risks, and exact next-task relation before performing new discovery. Re-read only evidence that is missing, stale, contradicted, or required for correctness; do not rescan the workspace merely because a new thread started.
 For non-trivial Totem work, perform resolve_task -> orchestration_plan -> bounded context -> implementation -> impact -> test_plan -> actual deterministic validation. Starting from Web, Discord, CLI, IDE, Local Bridge, or a sibling repository does not change this lifecycle or the semantic execution contract.
 Enforce affected module ownership, read/write scopes, dependency ordering, max concurrent writes, shared-contract stabilization before consumer writes, impacted-consumer inspection, required validation, security constraints, and release gates. When independentReviewRequired is true, perform genuinely independent review using a mechanism you choose; never silently omit it.
 Use Java 25 and each repository's Gradle wrapper. Read the actual configured Minecraft, Fabric Loader/API, mappings and build settings. Preserve dedicated-server safety and client-only isolation. Inspect all shared API consumers before changing their contract; keep feature-specific behavior in its owning module.
@@ -22,7 +26,7 @@ Edits are not releases. Commit/push only when authorized; publish only with expl
 Record only real runtime lifecycle/model/usage/delegation evidence. Planned waves, parallelism and model hints are not spawned agents or measured token usage. Never automatically replay a failed turn after work began.
 Keep final responses concise: result, affected components, actual validation and material remaining risks.`;
 
-export function buildDeveloperInstructions({ plan = null, modelPolicy = null, usageGuardMode = 'enforce' } = {}) {
+export function buildDeveloperInstructions({ plan = null, modelPolicy = null, activeWorkTask = null, usageGuardMode = 'enforce' } = {}) {
   validateUsageGuardMode(usageGuardMode);
   const sections = [usageGuardMode === 'observe'
     ? CORE_DEVELOPER_INSTRUCTIONS.replace(ENFORCED_USAGE_POLICY, OBSERVED_USAGE_POLICY)
@@ -30,11 +34,13 @@ export function buildDeveloperInstructions({ plan = null, modelPolicy = null, us
   if (plan) {
     const constraints = Object.fromEntries(['schemaVersion', 'affectedModules', 'readScope', 'writeScope', 'execution',
       'dependencyOrdering', 'impactedConsumers', 'independentReviewRequired', 'riskConstraints', 'releaseConstraints',
-      'securityConstraints', 'engineeringConstraints'].filter(key => plan[key] !== undefined).map(key => [key, plan[key]]));
+      'securityConstraints', 'engineeringConstraints', 'microTaskPolicy', 'contextPressurePolicy'].filter(key => plan[key] !== undefined).map(key => [key, plan[key]]));
     constraints.validation = plan.requiredValidation?.validationCategories ?? [];
     constraints.contractIds = (plan.contracts ?? []).map(contract => contract.id);
     sections.push(`Authoritative execution constraints (full evidence via orchestration_plan): ${JSON.stringify(constraints)}`);
   }
+  if (activeWorkTask) sections.push(`Authoritative active micro-task: ${JSON.stringify(activeWorkTask)}
+Execute only this micro-task. Treat doneCriteria as the completion gate and stopBoundary as a hard scope boundary. Do not continue into another task after completion; report the checkpoint and stop.`);
   if (modelPolicy) sections.push(`Live model routing decision: ${JSON.stringify({ mode: modelPolicy.mode,
     coordinator: modelPolicy.coordinator, escalation: modelPolicy.escalation })}`);
   if (modelPolicy?.mode === 'spark-only') sections.push('General quota is exhausted. Only the confirmed separate Spark quota may be used, including delegated work. Do not bypass this quota restriction or accept unsupported image input; stop when that model/quota becomes unavailable.');

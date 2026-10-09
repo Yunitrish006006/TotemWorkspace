@@ -935,4 +935,93 @@ void main() {
       client.close();
     },
   );
+
+  test('work progress stays separate from runtime activity state', () async {
+    final requests = <http.Request>[];
+    final mock = MockClient((request) async {
+      requests.add(request);
+      if (request.url.path == '/api/work-progress') {
+        return http.Response(
+          jsonEncode(<String, Object?>{
+            'schemaVersion': 1,
+            'generatedAt': 'now',
+            'kind': 'plan-state',
+            'activeWorkId': 'workspace-hardening',
+            'active': <String, Object?>{
+              'id': 'workspace-hardening',
+              'title': 'Workspace hardening',
+              'objective': 'Keep work bounded and resumable',
+              'status': 'in-progress',
+              'currentTaskId': 'T6',
+              'currentTask': <String, Object?>{
+                'id': 'T6',
+                'title': 'Progress surface',
+                'goal': 'Show plan state',
+                'status': 'in-progress',
+                'repository': 'Example/TotemWorkspace',
+                'doneCriteria': <String>['API visible', 'UI visible'],
+                'stopBoundary': 'Do not mix runtime activity into plan state',
+              },
+              'completedTasks': 5,
+              'totalTasks': 6,
+              'completionPercent': 83.3,
+              'targetRepositories': <Object>[
+                <String, Object?>{
+                  'repository': 'Example/TotemWorkspace',
+                  'moduleId': 'totem-workspace',
+                  'purpose': 'coordination',
+                },
+              ],
+              'blockedBy': <String>[],
+              'milestones': <Object>[
+                <String, Object>{
+                  'id': 'M3',
+                  'title': 'Progress visibility',
+                  'completedTasks': 0,
+                  'totalTasks': 1,
+                  'taskIds': <String>['T6'],
+                },
+              ],
+              'checkpoint': <String, Object?>{
+                'summary': 'T5 validated',
+                'branch': 'feature/work-progress',
+                'head': 'abc',
+                'nextTask': 'T6',
+                'remainingRisks': <String>[],
+              },
+            },
+          }),
+          200,
+        );
+      }
+      return http.Response('not found', 404);
+    });
+    final client = LocalWorkspaceClient(
+      'http://127.0.0.1:18765',
+      client: mock,
+    );
+
+    final progress = await client.workProgress();
+    expect(progress.kind, 'plan-state');
+    expect(progress.activeWorkId, 'workspace-hardening');
+    expect(progress.active?.completedTasks, 5);
+    expect(progress.active?.totalTasks, 6);
+    expect(progress.active?.completionPercent, 83.3);
+    expect(progress.active?.currentTask?.id, 'T6');
+    expect(progress.active?.currentTask?.status, 'in-progress');
+    expect(
+      progress.active?.targetRepositories.single.repository,
+      'Example/TotemWorkspace',
+    );
+    expect(progress.active?.milestones.single.id, 'M3');
+    expect(progress.active?.checkpoint?.summary, 'T5 validated');
+    expect(
+      requests.singleWhere(
+        (request) => request.url.path == '/api/work-progress',
+      ).method,
+      'GET',
+    );
+    client.close();
+  });
+
 }
