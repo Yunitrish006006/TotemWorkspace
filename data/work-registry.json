@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-09T16:20:00+08:00",
+  "updatedAt": "2026-10-09T16:33:27+08:00",
   "activeWorkId": "totem-alchemy-m10-datapack-content-migration",
   "workItems": [
     {
@@ -2460,12 +2460,13 @@
           "purpose": "Migrate base reactions, ingredient reactions, extensions, and Totem Brewing Stand recipes into Minecraft Alchemy and Totem Alchemy built-in packs."
         }
       ],
-      "currentTaskId": "M10-T05",
+      "currentTaskId": "M10-T06",
       "completedTaskIds": [
         "M10-T01",
         "M10-T02",
         "M10-T03",
-        "M10-T04"
+        "M10-T04",
+        "M10-T05"
       ],
       "blockedBy": [],
       "milestones": [
@@ -2591,7 +2592,7 @@
           "goal": "Move Totem reaction extensions into Totem Alchemy.",
           "primaryConcept": "additive Totem reaction extensions",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "M10-T04"
           ],
@@ -2616,14 +2617,24 @@
           "goal": "Move 48 Totem Brewing Stand recipes into Totem Alchemy.",
           "primaryConcept": "Totem Brewing Stand recipe ownership",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "todo",
+          "status": "in-progress",
           "dependsOn": [
             "M10-T05"
           ],
           "doneCriteria": [
             "All 48 Totem Brewing Stand recipes are owned by Totem Alchemy."
           ],
-          "stopBoundary": "Do not begin pack-combination regression."
+          "stopBoundary": "Do not begin pack-combination regression.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "content/totem-brewing-stand-recipes"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/117"
+            }
+          ]
         },
         {
           "id": "M10-T07",
@@ -2657,28 +2668,26 @@
         }
       ],
       "checkpoint": {
-        "summary": "M10-T05 remains in progress. Build #256 exposed three staged-extension regressions caused by tests still assuming Minecraft-core-only outcome counts and two Sugar rolls while Totem extensions were enabled. The affected GameTests were made pack-state aware without changing production chemistry; replacement CI is pending.",
-        "currentTaskId": "M10-T05",
-        "branch": "content/totem-reaction-extensions",
-        "head": "6922d9fa2b7d334ff361fed1392dcaeb47fc19c4",
+        "summary": "M10-T05 reaction extensions validated in replacement Build #258 with no new regressions beyond the four documented inherited failures. M10-T06 moves all 48 fixed Totem Brewing Stand recipes unchanged into the optional Totem Alchemy datapack, updates fixed-recipe regressions to follow pack state, and is implemented in TotemAlchemy PR #117 awaiting Build.",
+        "currentTaskId": "M10-T06",
+        "branch": "content/totem-brewing-stand-recipes",
+        "head": "16468058cfa0c8dd76cd035d7368a9e365142047",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
           "src/gametest/java/dev/totem/alchemy/gametest/AlchemyCauldronPersistenceGameTest.java",
-          "src/gametest/java/dev/totem/alchemy/gametest/ReactionRegistryMigrationGameTest.java",
-          "src/gametest/java/dev/totem/alchemy/gametest/RestorativeBrewingGameTest.java",
-          "src/main/java/dev/totem/alchemy/reaction/AlchemyReactionDataLoader.java",
-          "src/main/resources/resourcepacks/totem_alchemy/data/totem_alchemy/alchemy/ingredient_reaction_extensions/minecraft/*.json",
-          "src/test/java/dev/totem/alchemy/reaction/AlchemyReactionDataLoaderTest.java",
-          "src/test/java/dev/totem/alchemy/reaction/TotemReactionExtensionPackTest.java"
+          "src/gametest/java/dev/totem/alchemy/gametest/BrewingMigrationGameTest.java",
+          "src/main/resources/resourcepacks/totem_alchemy/data/totem/recipe/brewing/*.json",
+          "src/test/java/dev/totem/alchemy/reaction/TotemBrewingRecipePackTest.java"
         ],
-        "validation": "Build #256 had the four inherited failures plus three M10-T05-specific stale-regression failures: Turtle Helmet/Red Mushroom outcome-count expectations still assumed core-only data, and the Sugar no-effect test supplied only two rolls while the enabled extension produced three outcomes. Tests were updated to follow Totem pack state. Replacement Build pending.",
+        "validation": "M10-T05 replacement Build #258 compiled and reported only the four documented inherited GameTest failures. M10-T06 Build pending.",
         "remainingRisks": [
-          "M10-T05 must pass replacement CI before completion.",
-          "The 48 Totem Brewing Stand recipes remain at the legacy always-on location until M10-T06.",
-          "Full OFF/OFF leakage isolation and four pack-combination validation remain M10-T07/T08.",
-          "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value."
+          "M10-T06 must pass CI before completion.",
+          "Default OFF/OFF optional-pack leakage remains intentionally unresolved until M10-T07.",
+          "The complete OFF/OFF, ON/OFF, OFF/ON, ON/ON pack matrix remains M10-T08.",
+          "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value.",
+          "Repository-wide CI remains red from the four documented inherited regressions."
         ],
-        "nextTask": "M10-T06"
+        "nextTask": "M10-T07"
       }
     }
   ]
