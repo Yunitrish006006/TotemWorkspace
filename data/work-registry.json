@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-09T09:28:28+08:00",
+  "updatedAt": "2026-10-09T09:58:53+08:00",
   "activeWorkId": "totem-alchemy-m9-container-adapters",
   "workItems": [
     {
@@ -2193,12 +2193,13 @@
           "purpose": "Define container transfer adapters for bottles, buckets, flask, potion compatibility, and mixed-liquid cauldron transfers."
         }
       ],
-      "currentTaskId": "M9-T05",
+      "currentTaskId": "M9-T06",
       "completedTaskIds": [
         "M9-T01",
         "M9-T02",
         "M9-T03",
-        "M9-T04"
+        "M9-T04",
+        "M9-T05"
       ],
       "blockedBy": [],
       "milestones": [
@@ -2324,7 +2325,7 @@
           "goal": "Add Honey Bottle adapter.",
           "primaryConcept": "one-unit Honey Bottle transfer",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "M9-T04"
           ],
@@ -2349,14 +2350,24 @@
           "goal": "Add Large Flask full-mixture adapter.",
           "primaryConcept": "full persistent mixture container transfer",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "todo",
+          "status": "in-progress",
           "dependsOn": [
             "M9-T05"
           ],
           "doneCriteria": [
             "Large Flask reads/writes full AlchemyMixtureState through the adapter boundary and respects enchanted capacity."
           ],
-          "stopBoundary": "Do not migrate potion bottle compatibility."
+          "stopBoundary": "Do not migrate potion bottle compatibility.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "feature/large-flask-adapter"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/109"
+            }
+          ]
         },
         {
           "id": "M9-T07",
@@ -2390,25 +2401,26 @@
         }
       ],
       "checkpoint": {
-        "summary": "M9-T04 Milk Bucket adapter validated with no new compile or GameTest regressions beyond the four documented inherited failures. M9-T05 Honey Bottle adapter is implemented in TotemAlchemy PR #108 and awaiting Build.",
-        "currentTaskId": "M9-T05",
-        "branch": "feature/honey-bottle-adapter",
-        "head": "3f3042b4aa9c851c9a5201d2aa4d3837bd546f0a",
+        "summary": "M9-T05 Honey Bottle adapter validated with no new compile or GameTest regressions beyond the four documented inherited failures. M9-T06 Large Flask full-mixture adapter is implemented in TotemAlchemy PR #109 and awaiting Build.",
+        "currentTaskId": "M9-T06",
+        "branch": "feature/large-flask-adapter",
+        "head": "2cd123631e95c5bcfcf0f3a043302a14d79af3ba",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
-          "src/main/java/dev/totem/alchemy/container/HoneyBottleContainerAdapter.java",
+          "src/gametest/java/dev/totem/alchemy/gametest/LargeFlaskContainerAdapterGameTest.java",
+          "src/main/java/dev/totem/alchemy/container/LargeFlaskContainerAdapter.java",
           "src/main/java/dev/totem/alchemy/container/LiquidContainerAdapters.java",
-          "src/test/java/dev/totem/alchemy/container/HoneyBottleContainerAdapterTest.java",
+          "src/test/java/dev/totem/alchemy/container/LargeFlaskContainerAdapterTest.java",
           "src/test/java/dev/totem/alchemy/container/LiquidContainerAdaptersTest.java"
         ],
-        "validation": "M9-T04 Build #245 had no compile errors and only the four documented inherited GameTest failures. M9-T05 Build pending.",
+        "validation": "M9-T05 Build #246 had no compile errors and only the four documented inherited GameTest failures. M9-T06 Build pending.",
         "remainingRisks": [
-          "Water Bottle, Water Bucket, Milk Bucket, and Honey Bottle adapters are registered, but existing player/cauldron interaction code has not yet been migrated to the adapter dispatcher.",
-          "Large Flask and generic potion compatibility remain later M9 tasks.",
+          "Large Flask adapter is registered, but existing player/cauldron interaction code has not yet been migrated to the adapter dispatcher.",
+          "Generic potion compatibility remains M9-T07.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value.",
           "Repository-wide CI remains red from the four documented inherited regressions."
         ],
-        "nextTask": "M9-T06"
+        "nextTask": "M9-T07"
       }
     }
   ]
