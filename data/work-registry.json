@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-09T15:52:36+08:00",
+  "updatedAt": "2026-10-09T16:11:55+08:00",
   "activeWorkId": "totem-alchemy-m10-datapack-content-migration",
   "workItems": [
     {
@@ -2460,11 +2460,12 @@
           "purpose": "Migrate base reactions, ingredient reactions, extensions, and Totem Brewing Stand recipes into Minecraft Alchemy and Totem Alchemy built-in packs."
         }
       ],
-      "currentTaskId": "M10-T04",
+      "currentTaskId": "M10-T05",
       "completedTaskIds": [
         "M10-T01",
         "M10-T02",
-        "M10-T03"
+        "M10-T03",
+        "M10-T04"
       ],
       "blockedBy": [],
       "milestones": [
@@ -2565,7 +2566,7 @@
           "goal": "Move Totem-only ingredients into Totem Alchemy.",
           "primaryConcept": "Totem ingredient reaction ownership",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "in-progress",
+          "status": "completed",
           "dependsOn": [
             "M10-T03"
           ],
@@ -2590,14 +2591,24 @@
           "goal": "Move Totem reaction extensions into Totem Alchemy.",
           "primaryConcept": "additive Totem reaction extensions",
           "repository": "Yunitrish006006/TotemAlchemy",
-          "status": "todo",
+          "status": "in-progress",
           "dependsOn": [
             "M10-T04"
           ],
           "doneCriteria": [
             "Totem additive outcomes extend Minecraft-owned reactions only when Totem Alchemy is enabled."
           ],
-          "stopBoundary": "Do not move Brewing Stand recipes."
+          "stopBoundary": "Do not move Brewing Stand recipes.",
+          "references": [
+            {
+              "type": "branch",
+              "value": "content/totem-reaction-extensions"
+            },
+            {
+              "type": "pull-request",
+              "value": "https://github.com/Yunitrish006006/TotemAlchemy/pull/116"
+            }
+          ]
         },
         {
           "id": "M10-T06",
@@ -2646,28 +2657,27 @@
         }
       ],
       "checkpoint": {
-        "summary": "M10-T03 Totem Red Mushroom base migration validated in Build #254 with no new regressions beyond the four documented inherited failures. M10-T04 moves Cocoa Powder, Pig Manure, and Wood Ash ingredient reactions unchanged into the optional Totem Alchemy datapack and is implemented in TotemAlchemy PR #115 awaiting Build.",
-        "currentTaskId": "M10-T04",
-        "branch": "content/totem-only-ingredient-chemistry",
-        "head": "4ba2b5d820f8ab1429a22eb527c8a88c66c34c2c",
+        "summary": "M10-T04 Totem-only ingredient reaction migration validated in Build #255 with no new regressions beyond the four documented inherited failures. M10-T05 restores the 25 Totem-owned side outcomes as additive IngredientReactionExtension resources in Totem Alchemy, adds optional-target merge semantics for Totem-ON/Minecraft-OFF compatibility, and is implemented in TotemAlchemy PR #116 awaiting Build.",
+        "currentTaskId": "M10-T05",
+        "branch": "content/totem-reaction-extensions",
+        "head": "5381c7fafea37069cd4fc66a9d9962798584e7ec",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
-          "src/gametest/java/dev/totem/alchemy/gametest/TotemOnlyIngredientReactionMigrationGameTest.java",
-          "src/main/resources/resourcepacks/totem_alchemy/data/totem_alchemy/alchemy/ingredient_reactions/totem/cocoa_powder.json",
-          "src/main/resources/resourcepacks/totem_alchemy/data/totem_alchemy/alchemy/ingredient_reactions/totem/pig_manure.json",
-          "src/main/resources/resourcepacks/totem_alchemy/data/totem_alchemy/alchemy/ingredient_reactions/totem/wood_ash.json",
-          "src/test/java/dev/totem/alchemy/reaction/MinecraftIngredientReactionPackTest.java",
-          "src/test/java/dev/totem/alchemy/reaction/TotemOnlyIngredientReactionPackTest.java"
+          "src/gametest/java/dev/totem/alchemy/gametest/ReactionRegistryMigrationGameTest.java",
+          "src/main/java/dev/totem/alchemy/reaction/AlchemyReactionDataLoader.java",
+          "src/main/resources/resourcepacks/totem_alchemy/data/totem_alchemy/alchemy/ingredient_reaction_extensions/minecraft/*.json",
+          "src/test/java/dev/totem/alchemy/reaction/AlchemyReactionDataLoaderTest.java",
+          "src/test/java/dev/totem/alchemy/reaction/TotemReactionExtensionPackTest.java"
         ],
-        "validation": "M10-T03 Build #254 had no compile errors and only the four documented inherited GameTest failures. M10-T04 Build pending.",
+        "validation": "M10-T04 Build #255 had no compile errors and only the four documented inherited GameTest failures. M10-T05 Build pending.",
         "remainingRisks": [
-          "Totem side outcomes stripped from Minecraft-owned core reactions remain intentionally absent until M10-T05.",
-          "M10-T04 must pass CI before completion.",
-          "The 48 Totem Brewing Stand recipes remain at their legacy always-on location until M10-T06.",
+          "M10-T05 must pass CI before completion.",
+          "The 48 Totem Brewing Stand recipes remain at the legacy always-on location until M10-T06.",
+          "Full OFF/OFF leakage isolation and the four pack-combination matrix remain M10-T07/T08.",
           "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value.",
           "Repository-wide CI remains red from the four documented inherited regressions."
         ],
-        "nextTask": "M10-T05"
+        "nextTask": "M10-T06"
       }
     }
   ]
