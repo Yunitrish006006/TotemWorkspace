@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "updatedAt": "2026-10-09T12:23:47+08:00",
+  "updatedAt": "2026-10-09T12:31:00+08:00",
   "activeWorkId": "totem-alchemy-m10-datapack-content-migration",
   "workItems": [
     {
@@ -2624,24 +2624,26 @@
         }
       ],
       "checkpoint": {
-        "summary": "M10-T01 Minecraft Nether Wart base chemistry validated with no new compile or GameTest regressions beyond the four documented inherited failures. M10-T02 moves all 50 Minecraft-source ingredient reactions into the Minecraft Alchemy built-in datapack, strips Totem-owned side outcomes for later M10-T05 extensions, and is implemented in TotemAlchemy PR #113 awaiting Build.",
+        "summary": "M10-T02 remains in progress. Build #251 exposed three new staged-ownership regressions after Totem side outcomes were removed from Minecraft core reactions; the failures were isolated to outdated test fixtures/roll counts and have been corrected on the same branch. A replacement Build is pending.",
         "currentTaskId": "M10-T02",
         "branch": "content/minecraft-ingredient-chemistry",
-        "head": "545edb873707470ec3185a0f5577a75d4414cd15",
+        "head": "421857a94d45648f57c83b55f5104de1f4b62346",
         "filesChanged": [
           "docs/alchemy-next-task-plan.md",
           "src/gametest/java/dev/totem/alchemy/gametest/AlchemyCauldronPersistenceGameTest.java",
+          "src/gametest/java/dev/totem/alchemy/gametest/BrewingMigrationGameTest.java",
           "src/gametest/java/dev/totem/alchemy/gametest/ReactionRegistryMigrationGameTest.java",
+          "src/gametest/java/dev/totem/alchemy/gametest/RestorativeBrewingGameTest.java",
           "src/main/resources/resourcepacks/minecraft_alchemy/data/minecraft_alchemy/alchemy/ingredient_reactions/vanilla/*.json",
           "src/test/java/dev/totem/alchemy/reaction/MinecraftIngredientReactionPackTest.java"
         ],
-        "validation": "M10-T01 Build #250 had no compile errors and only the four documented inherited GameTest failures. M10-T02 Build pending.",
+        "validation": "Build #251 had the four inherited failures plus three M10-T02-specific stale-regression failures: Brown Mushroom's remaining Regeneration/Poison core outcomes neutralized to one effect, Sugar's old three-roll fixture invoked legacy fallback after the Totem third outcome was removed, and that leftover fallback state contaminated the subsequent Apple probability check. Tests were corrected to Bamboo's non-opposed core pair and Sugar's two core independent rolls / 5.82% no-effect truth. Replacement Build pending.",
         "remainingRisks": [
-          "Totem-owned side outcomes stripped from Minecraft core reactions are intentionally absent until M10-T05 reaction extensions.",
-          "The three Totem-only ingredient reactions remain at the legacy always-on path until M10-T04.",
+          "Totem-owned side outcomes remain intentionally absent until M10-T05 reaction extensions.",
+          "M10-T02 must pass replacement CI before completion.",
+          "The three Totem-only ingredient reactions remain legacy until M10-T04.",
           "Red Mushroom starter/base ownership remains legacy until M10-T03.",
-          "M7-T03 remains independently blocked on an explicit Brewing Stand station success-bonus balance value.",
-          "Repository-wide CI remains red from the four documented inherited regressions."
+          "M7-T03 remains blocked on an explicit Brewing Stand station success-bonus value."
         ],
         "nextTask": "M10-T03"
       }
