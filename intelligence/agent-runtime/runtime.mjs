@@ -4,13 +4,14 @@ import path from "node:path";
 import { buildDeveloperInstructions } from "./runtime-policy.mjs";
 import { userInputFromRequest, userInputResponse } from "./user-input.mjs";
 import { createUsageGuard, validateUsageGuardMode } from "./usage-guard.mjs";
-import { boundedRuntimeContext, constrainedWriteRoots, executionWorkspace } from "./orchestration-context.mjs";
+import { boundedFollowupContext, boundedRuntimeContext, constrainReadOnlyPlan, constrainedWriteRoots, executionWorkspace } from "./orchestration-context.mjs";
 import { acquireRuntimeWriteLease } from "./write-leases.mjs";
 import { buildOrchestrationPlan } from "../orchestration-plan.mjs";
 import { loadKnowledge } from "../workspace-knowledge.mjs";
 import { prepareTurnRouting, selectTurnPolicy } from "./turn-routing.mjs";
+import { createTurnTelemetry, isCompactionEvent } from "./telemetry.mjs";
 import { probeCodexRuntime } from "../codex-runtime-probe.mjs";
-import { activeWorkItem, loadWorkRegistry, resumeCheckpointForTask } from "../work-registry.mjs";
+import { activeWorkItem, captureRepositoryCheckpoint, loadWorkRegistry, resumeCheckpointForTask } from "../work-registry.mjs";
 
 const MAX_PROMPT_LENGTH = 120_000;
 const MAX_IMAGE_INPUTS = 4;
@@ -24,20 +25,25 @@ function freezeDecision(value) {
   return value;
 }
 
-function workspacePlan({ prompt, workspace }) {
+export function workspacePlan({ prompt, workspace, routing = null }) {
   const knowledge = loadKnowledge();
-  const moduleId = path.resolve(workspace) === path.resolve(knowledge.root) ? "totem-workspace"
+  const moduleId = routing?.classification === "operational" ? "totem-workspace"
+    : path.resolve(workspace) === path.resolve(knowledge.root) ? "totem-workspace"
     : knowledge.modules.find((module) => module.repoName === path.basename(workspace))?.id ?? null;
   return buildOrchestrationPlan({ query: prompt, moduleId, knowledge });
 }
 
-export function resolveActiveRuntimeTask(workspace, knowledge = loadKnowledge()) {
+export function shouldInheritActiveTask(routing) {
+  return routing?.classification === "continuation" || routing?.classification === "ambiguous";
+}
+
+export function resolveActiveRuntimeTask(workspace = null, knowledge = loadKnowledge()) {
   try {
     const work = activeWorkItem(loadWorkRegistry(knowledge.root));
     const task = work?.tasks?.find((entry) => entry.id === work.currentTaskId) ?? null;
     if (!task || task.status !== "in-progress") return null;
     const repositoryName = String(task.repository ?? "").split("/").at(-1);
-    if (!repositoryName || repositoryName !== path.basename(path.resolve(workspace))) return null;
+    if (!repositoryName || (workspace && repositoryName !== path.basename(path.resolve(workspace)))) return null;
     return Object.freeze({
       workId: work.id,
       workTitle: work.title,
@@ -616,14 +622,17 @@ export class CodexRunner {
     });
   }
 
-  async execute({ key, workspace, prompt, model = null, reasoningEffort = null, imageUrls = [], resumeSessionId = null, onSessionId = () => {}, onProgress = () => {}, onApproval = () => {}, onUserInput = null, onModelPolicy = () => {}, orchestrationPlan = null, modelPolicy = null, boundedContext = null, writableRoots = null, readOnly = false, autoApproveGradle = true }) {
+  async execute({ key, workspace, prompt, model = null, reasoningEffort = null, imageUrls = [], resumeSessionId = null, resumeCheckpoint = null, onSessionId = () => {}, onProgress = () => {}, onUsageCheckpoint = () => {}, onApproval = () => {}, onUserInput = null, onModelPolicy = () => {}, orchestrationPlan = null, modelPolicy = null, boundedContext = null, writableRoots = null, readOnly = false, autoApproveGradle = true }) {
     if (this.isRunning(key)) throw new Error("A Codex task is already running for this workspace session");
     const safePrompt = validatePrompt(prompt);
     let safeModel = validateModel(model);
     let safeReasoningEffort = validateReasoningEffort(reasoningEffort);
     const safeImageUrls = imageInputs(imageUrls).map((image) => image.url);
     let plan;
+    let routedQuery = safePrompt;
+    let routingClassification = null;
     let activeWorkTask;
+    let checkpointMutable = false;
     let releaseWriteLease = () => {};
     let childStarted = false;
     let childClosed = false;
@@ -640,14 +649,28 @@ export class CodexRunner {
         throw new Error("Cannot recover the previous task scope and capabilities. Retry history recovery or start a new session; no work was started.");
       const routing = prepareTurnRouting({ text: safePrompt, newImages: safeImageUrls.length > 0,
         state: { ...runtime?.threadRoutingState, resumed: Boolean(resumeSessionId) } });
+      routingClassification = routing.classification;
+      routedQuery = routing.query;
       if (resumeSessionId && this.#defaultPlanning && !orchestrationPlan && routing.unknownContinuation)
         throw new Error("Cannot recover the previous task scope. Restate the task before resuming; no work was started.");
-      plan = orchestrationPlan ?? this.#plan({ prompt: routing.query, workspace });
+      plan = orchestrationPlan ?? this.#plan({ prompt: routing.query, workspace, routing });
+      if (routing.classification === "ambiguous") plan = constrainReadOnlyPlan(plan);
       if (!writableRoots) writableRoots = Array.isArray(plan?.writeScope) ? constrainedWriteRoots(plan) : this.#defaultPlanning ? [] : [workspace];
       if (!writableRoots.length) readOnly = true;
-      if (!orchestrationPlan && this.#defaultPlanning && !boundedContext) boundedContext = boundedRuntimeContext(routing.query, plan);
       workspace = executionWorkspace(workspace, writableRoots, readOnly);
-      activeWorkTask = resolveActiveRuntimeTask(workspace);
+      const inheritActiveTask = shouldInheritActiveTask(routing);
+      checkpointMutable = routing.classification === "continuation" || routing.classification === "development";
+      activeWorkTask = inheritActiveTask ? resolveActiveRuntimeTask(workspace) : null;
+      if (resumeSessionId && !boundedContext) {
+        boundedContext = routing.classification === "development"
+          ? boundedRuntimeContext(routing.query, plan)
+          : boundedFollowupContext(plan, {
+            activeWorkTask,
+            resumeCheckpoint: inheritActiveTask ? resumeCheckpoint : null,
+            repositoryState: inheritActiveTask ? captureRepositoryCheckpoint(workspace) : null
+          });
+      }
+      else if (!orchestrationPlan && this.#defaultPlanning && !boundedContext) boundedContext = boundedRuntimeContext(routing.query, plan);
       policy = freezeDecision(modelPolicy ?? selectTurnPolicy({ routing, plan, models: runtime.models, usage: runtime.usage,
         model: safeModel, effort: safeReasoningEffort,
         extraContextTokens: Math.ceil((buildDeveloperInstructions({ plan, activeWorkTask, usageGuardMode: this.#usageGuardMode }).length
@@ -696,12 +719,44 @@ export class CodexRunner {
       let lastAgentMessage = "";
       let actualModel = null;
       let usage = null;
+      let compactionCount = 0;
+      const seenCompactions = new Set();
+      const anonymousCompactions = new Map();
+      const identifiedCompactions = new Map();
       const usageGuard = createUsageGuard({ mode: this.#usageGuardMode });
       const pendingGuardEvents = [];
+      const pendingCompactionEvents = [];
       const pendingCompletions = [];
       let turnStartPending = false;
       let guardTurnId = null;
       const outputImagePaths = new Set();
+      const recordCompaction = event => {
+        const params = event.params ?? {};
+        const eventTurnId = params.turnId;
+        const prefix = `turn:${eventTurnId}:`;
+        const identity = params.item?.id ?? params.itemId ?? params.compactionId ?? params.id ?? null;
+        if (identity) {
+          const key = `${prefix}item:${identity}`;
+          if (seenCompactions.has(key)) return false;
+          seenCompactions.add(key);
+          const pendingAnonymous = anonymousCompactions.get(eventTurnId) ?? 0;
+          if (pendingAnonymous > 0) {
+            anonymousCompactions.set(eventTurnId, pendingAnonymous - 1);
+            return false;
+          }
+          identifiedCompactions.set(eventTurnId, (identifiedCompactions.get(eventTurnId) ?? 0) + 1);
+        } else {
+          const pendingIdentified = identifiedCompactions.get(eventTurnId) ?? 0;
+          if (pendingIdentified > 0) {
+            identifiedCompactions.set(eventTurnId, pendingIdentified - 1);
+            return false;
+          }
+          anonymousCompactions.set(eventTurnId, (anonymousCompactions.get(eventTurnId) ?? 0) + 1);
+        }
+        compactionCount++;
+        safeProgress(event);
+        return true;
+      };
       let lastError = "";
       let stderr = "";
       let resetSavedSession = false;
@@ -793,17 +848,20 @@ export class CodexRunner {
       const terminateChild = () => {
         if (childClosed) return Promise.resolve();
         if (termination) return termination;
+        const signalChild = signal => child.kill(signal);
         termination = new Promise((resolveStop, rejectStop) => {
-          const force = setTimeout(() => { if (!childClosed) { try { child.kill("SIGKILL"); } catch {} } }, 2000);
+          const force = setTimeout(() => { if (!childClosed) { try { signalChild("SIGKILL"); } catch {} } }, 2000);
           const deadline = setTimeout(() => rejectStop(new Error("App Server termination was not confirmed; workspace write lock retained until child close. Check local runtime state before manual cleanup.")), 4000);
           child.once("close", () => { clearTimeout(force); clearTimeout(deadline); resolveStop(); });
-          try { if (!child.killed) child.kill("SIGTERM"); } catch { /* Escalation remains bounded; retain the lease without close evidence. */ }
+          try { if (!child.killed) signalChild("SIGTERM"); } catch { /* Escalation remains bounded; retain the lease without close evidence. */ }
         });
         return termination;
       };
       const finish = async (result) => {
         if (settled) return;
         result.usageSummary = { ...usageGuard.snapshot(), reportedModel: actualModel, requestedEffort: safeReasoningEffort };
+        result.checkpointMutable = checkpointMutable;
+        result.telemetry = createTurnTelemetry({ tokenUsage: usage, boundedContext, compactionCount });
         if (result.usageSummary.stopped) {
           result.exitCode = 1;
           const state = result.usageSummary;
@@ -853,9 +911,15 @@ export class CodexRunner {
           if (message.error) {
             turnStartPending = false;
             pendingGuardEvents.length = 0;
+            pendingCompactionEvents.length = 0;
             pendingCompletions.length = 0;
             if (fromSavedSession && !resetSavedSession && !turnId && !workStarted && expiredSession(message)) {
+              if (routingClassification === "ambiguous") {
+                fail(new Error("The saved session expired and this request does not identify a bounded task. Restate the task; no new work was started."));
+                return;
+              }
               resetSavedSession = true;
+              boundedContext = boundedRuntimeContext(routedQuery, plan);
               safeProgress({ method: "bridge/sessionReset", params: { reason: "The saved session expired before its turn could start." } });
               startNewThread();
               return;
@@ -872,6 +936,11 @@ export class CodexRunner {
           guardTurnId = resolvedTurnId;
           turnStartPending = false;
           for (const event of pendingGuardEvents.splice(0)) observeActiveTurnUsage(event);
+          for (const event of pendingCompactionEvents.splice(0)) {
+            if (event.params?.threadId === threadId && event.params?.turnId === guardTurnId) {
+              recordCompaction(event);
+            }
+          }
           for (const event of pendingCompletions.splice(0)) {
             if (event.params?.turn?.id === guardTurnId) completeConfirmedTurn(event);
           }
@@ -901,7 +970,12 @@ export class CodexRunner {
         request("thread/resume", threadResumeParams({ threadId: resumeSessionId, workspace, model: safeModel, modelPolicy: policy, orchestrationPlan: plan, activeWorkTask, writableRoots, readOnly, usageGuardMode: this.#usageGuardMode }), (message) => {
           if (message.error) {
             if (!expiredSession(message)) { fail(rpcError(message)); return; }
+            if (routingClassification === "ambiguous") {
+              fail(new Error("The saved session expired and this request does not identify a bounded task. Restate the task; no new work was started."));
+              return;
+            }
             resetSavedSession = true;
+            boundedContext = boundedRuntimeContext(routedQuery, plan);
             safeProgress({ method: "bridge/sessionReset", params: { reason: "The saved session could not be resumed." } });
             startNewThread();
             return;
@@ -991,7 +1065,14 @@ export class CodexRunner {
           if (event.method === 'thread/tokenUsage/updated') usage = params.tokenUsage ?? usage;
         } else if (params.turnId && params.turnId !== guardTurnId) return;
         const guardEvent = usageGuard.observe(event);
-        if (guardEvent) safeProgress({ method: 'bridge/usageGuard', params: guardEvent });
+        if (guardEvent) {
+          const checkpointEvent = { method: 'bridge/usageGuard', params: {
+            ...guardEvent, threadId, turnId: guardTurnId, checkpointMutable
+          } };
+          safeProgress(checkpointEvent);
+          try { void Promise.resolve(onUsageCheckpoint({ ...checkpointEvent, workspace })).catch(() => {}); }
+          catch { /* Checkpoint persistence is best effort and cannot affect the active turn. */ }
+        }
         if (guardEvent?.action === 'stop') cancel();
       };
       const completeConfirmedTurn = (message) => {
@@ -1075,6 +1156,23 @@ export class CodexRunner {
             if (turnStartPending && (!message.params?.threadId || message.params.threadId === threadId)) {
               if (pendingCompletions.length >= 16) { void fail(new Error('Too many unconfirmed turn completions')); return; }
               pendingCompletions.push(message);
+            }
+            return;
+          }
+          if (isCompactionEvent(message)) {
+            if (!guardTurnId) {
+              if (turnStartPending && message.params?.threadId === threadId
+                  && typeof message.params?.turnId === 'string') {
+                if (pendingCompactionEvents.length >= 32) {
+                  void fail(new Error('Too many unconfirmed compaction events'));
+                  return;
+                }
+                pendingCompactionEvents.push(message);
+              }
+              return;
+            }
+            if (message.params?.threadId === threadId && message.params?.turnId === guardTurnId) {
+              recordCompaction(message);
             }
             return;
           }

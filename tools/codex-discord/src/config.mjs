@@ -1,5 +1,6 @@
 import path from "node:path";
 import { validateUsageGuardMode } from '../../../intelligence/agent-runtime/usage-guard.mjs';
+import { validateWorkloadScopeMode } from '../../../intelligence/agent-runtime/process-scope.mjs';
 
 const DISCORD_ID = /^\d{17,20}$/;
 const WORKSPACE_NAME = /^[a-z0-9][a-z0-9-]{0,31}$/;
@@ -123,6 +124,7 @@ export function loadConfig(env = process.env) {
     workspaces,
     maxRuntimeMs: runtimeSeconds(env) * 1000,
     usageGuardMode: validateUsageGuardMode(env.CODEX_USAGE_GUARD_MODE?.trim() || 'enforce'),
+    workloadScopeMode: validateWorkloadScopeMode(env.CODEX_WORKLOAD_SCOPE_MODE?.trim() || 'auto'),
     stateDir: path.resolve(env.CODEX_STATE_DIR || "data"),
     workspaceSync: sync
   });

@@ -9,6 +9,7 @@ import { buildContextPack } from '../intelligence/context-pack.mjs';
 import { buildOrchestrationPlan } from '../intelligence/orchestration-plan.mjs';
 import { loadKnowledge, resolveTask } from '../intelligence/workspace-knowledge.mjs';
 import { saveTaskEvidence, readTaskEvidence } from '../intelligence/task-evidence.mjs';
+import { boundedFollowupContext } from '../intelligence/agent-runtime/orchestration-context.mjs';
 
 const knowledge = loadKnowledge();
 const query = 'Reduce agent token duplication in GitHub workflows';
@@ -35,6 +36,77 @@ assert.equal(compactPlan.executionWaves, undefined);
 assert.deepEqual(toolOutput(plan, 'full').value, plan);
 assert.throws(() => toolOutput(plan, 'invalid'), /response_detail/);
 assert.ok(Buffer.byteLength(compact.text) < Buffer.byteLength(full.text) * .7);
+const followup = boundedFollowupContext(plan);
+const followupEvidence = JSON.parse(followup);
+assert.equal(followupEvidence.mode, 'followup');
+assert.equal(followupEvidence.schemaVersion, 3);
+assert.deepEqual(followupEvidence.affectedModules, plan.affectedModules);
+assert.match(followupEvidence.evidenceRef.digest, /^[a-f0-9]{64}$/);
+assert.equal(followupEvidence.checkpointRef.freshness, 'missing');
+assert.equal(followupEvidence.taskRef, null);
+assert.ok(!followup.includes(query));
+assert.equal(followupEvidence.routing, undefined);
+assert.equal(followupEvidence.validation, undefined);
+assert.equal(followupEvidence.codeResults, undefined);
+assert.ok(Buffer.byteLength(followup) < 700);
+assert.ok(Buffer.byteLength(followup) < Buffer.byteLength(pack.rendered) * .15);
+const adversarialFollowup = JSON.parse(boundedFollowupContext({
+  affectedModules: ['totem-core', 'totem-core', ' private prompt ', 'x'.repeat(81), null,
+    ...Array.from({ length: 40 }, (_, index) => `module-${index}`)]
+}));
+assert.equal(adversarialFollowup.affectedModules.length, 32);
+assert.deepEqual(adversarialFollowup.affectedModules.slice(0, 2), ['totem-core', 'module-0']);
+assert.ok(!JSON.stringify(adversarialFollowup).includes('private prompt'));
+const checkpointFollowup = JSON.parse(boundedFollowupContext(plan, { activeWorkTask: {
+  workId: 'context-runtime', taskId: 'C2', resumeCheckpoint: {
+    schemaVersion: 1, workId: 'context-runtime', taskId: 'C1', runtimeTaskId: 'runtime-1',
+    state: 'in-review', repository: 'TotemWorkspace', branch: 'feature/context', head: 'a'.repeat(40),
+    worktreeDigest: 'c'.repeat(64),
+    filesChanged: ['intelligence/example.mjs'], nextTask: 'C2',
+    summary: 'private prompt must never enter the reference envelope'
+  }
+}, repositoryState: { branch: 'feature/context', head: 'a'.repeat(40),
+  worktreeDigest: 'c'.repeat(64), filesChanged: ['intelligence/example.mjs'] } }));
+assert.deepEqual(checkpointFollowup.taskRef, { workId: 'context-runtime', taskId: 'C2' });
+assert.equal(checkpointFollowup.checkpointRef.id, 'context-runtime:C1');
+assert.equal(checkpointFollowup.checkpointRef.freshness, 'current');
+assert.match(checkpointFollowup.checkpointRef.digest, /^[a-f0-9]{64}$/);
+assert.ok(!JSON.stringify(checkpointFollowup).includes('private prompt'));
+const unsafePathCheckpoint = JSON.parse(boundedFollowupContext(plan, { resumeCheckpoint: {
+  id: 'thread:turn', sessionId: 'thread', state: 'stopped', branch: 'feature/context',
+  head: 'a'.repeat(40), worktreeDigest: 'd'.repeat(64),
+  filesChanged: [['', 'private', 'secret.txt'].join('/'), '../escape',
+    'password=private prompt', 'generated/', 'intelligence/example.mjs']
+}, repositoryState: { branch: 'feature/context', head: 'a'.repeat(40),
+  worktreeDigest: 'd'.repeat(64), filesChanged: ['generated/', 'intelligence/example.mjs'] } }));
+assert.deepEqual(unsafePathCheckpoint.checkpointRef.filesChanged, ['generated/', 'intelligence/example.mjs']);
+assert.ok(!JSON.stringify(unsafePathCheckpoint).includes('private prompt'));
+const changedContentCheckpoint = JSON.parse(boundedFollowupContext(plan, { resumeCheckpoint: {
+  id: 'thread:turn', sessionId: 'thread', state: 'stopped', branch: 'feature/context',
+  head: 'a'.repeat(40), worktreeDigest: 'c'.repeat(64), filesChanged: ['intelligence/example.mjs']
+}, repositoryState: { branch: 'feature/context', head: 'a'.repeat(40),
+  worktreeDigest: 'e'.repeat(64), filesChanged: ['intelligence/example.mjs'] } }));
+assert.equal(changedContentCheckpoint.checkpointRef.freshness, 'stale');
+assert.equal(changedContentCheckpoint.checkpointRef.filesChanged, undefined);
+const preferredSessionCheckpoint = JSON.parse(boundedFollowupContext(plan, { activeWorkTask: {
+  workId: 'context-runtime', taskId: 'C2', resumeCheckpoint: {
+    id: 'registry:turn', sessionId: 'registry', worktreeDigest: 'a'.repeat(64)
+  }
+}, resumeCheckpoint: { id: 'discord:turn', sessionId: 'discord', worktreeDigest: 'b'.repeat(64) } }));
+assert.equal(preferredSessionCheckpoint.checkpointRef.id, 'discord:turn');
+const branchCheckpoint = JSON.parse(boundedFollowupContext(plan, { activeWorkTask: {
+  workId: 'context-runtime', taskId: 'C2', resumeCheckpoint: {
+    schemaVersion: 1, workId: 'context-runtime', taskId: 'C1', branch: 'feature/other',
+    head: 'a'.repeat(40), filesChanged: ['intelligence/example.mjs']
+  }
+} }));
+assert.notEqual(branchCheckpoint.checkpointRef.digest, checkpointFollowup.checkpointRef.digest);
+const changedCheckpoint = JSON.parse(boundedFollowupContext(plan, { activeWorkTask: {
+  workId: 'context-runtime', taskId: 'C2', resumeCheckpoint: {
+    ...checkpointFollowup, schemaVersion: 1, workId: 'context-runtime', taskId: 'C1', head: 'b'.repeat(40)
+  }
+} }));
+assert.notEqual(changedCheckpoint.checkpointRef.digest, checkpointFollowup.checkpointRef.digest);
 
 const calls = [
  { jsonrpc:'2.0',id:1,method:'tools/list' },

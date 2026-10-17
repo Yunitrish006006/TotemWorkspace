@@ -62,6 +62,7 @@ try {
   run.onProgress({ method: 'item/started', params: { item: { type: 'commandExecution', command: 'node scripts/validate-workspace.mjs' } } });
   run.onProgress({ method: 'item/completed', params: { item: { type: 'commandExecution', command: 'node scripts/validate-workspace.mjs', exitCode: 0, aggregatedOutput: 'passed' } } });
   run.onProgress({ method: 'thread/tokenUsage/updated', params: { threadId: 'thread-1', tokenUsage: { last: { inputTokens: 100, cachedInputTokens: 30, outputTokens: 20 }, total: { inputTokens: 100, outputTokens: 20 } } } });
+  run.onProgress({ method: 'thread/compacted', params: { threadId: 'thread-1', turnId: 'turn-1', reason: 'private prompt' } });
   run.onProgress({ method: 'item/completed', params: { item: { type: 'agentMessage', text: 'Implemented and validated.' } } });
   run.onProgress({ method: 'item/completed', params: { item: { type: 'reasoning', text: 'private reasoning' } } });
   run.onProgress({ method: 'turn/completed', params: { turn: { id: 'turn-1', status: 'completed' } } });
@@ -72,6 +73,9 @@ try {
   assert.equal(adapter.status().lastTask.state, 'completed');
   assert.equal(adapter.status().lastTask.threadId, 'thread-1');
   assert.equal(adapter.status().lastTask.usage.totalTokens, 120);
+  assert.equal(adapter.status().lastTask.telemetry.compaction.status, 'observed');
+  assert.ok(adapter.status().lastTask.telemetry.boundedContext.bytes > 0);
+  assert.ok(!JSON.stringify(adapter.status().lastTask.telemetry).includes('private prompt'));
   assert.equal(adapter.status().lastTask.chosenModel, 'test-astra');
   assert.equal(settled.length, 1);
   for (const type of ['file_edit', 'thread_started', 'turn_started', 'tool_started', 'tool_completed', 'command_started', 'command_completed', 'agent_message', 'usage_updated', 'task_completed']) {
@@ -80,7 +84,14 @@ try {
   assert.ok(!JSON.stringify(events).includes('private reasoning'));
   assert.equal(events.filter(event => event.type === 'task_completed').length, 1);
   const next = await adapter.dispatch({ prompt, orchestrationPlan: plan, threadId: 'thread-1' });
-  assert.equal(calls.findLast(call => call.prompt)?.resumeSessionId, 'thread-1');
+  const resumed = calls.findLast(call => call.prompt);
+  assert.equal(resumed.resumeSessionId, 'thread-1');
+  const resumedContext = JSON.parse(resumed.boundedContext);
+  assert.equal(resumedContext.mode, 'followup');
+  assert.equal(resumedContext.schemaVersion, 3);
+  assert.match(resumedContext.evidenceRef.digest, /^[a-f0-9]{64}$/);
+  assert.ok(Object.hasOwn(resumedContext, 'checkpointRef'));
+  assert.ok(resumed.boundedContext.length < run.boundedContext.length * .15);
   assert.equal(adapter.steer('Use a narrower scope'), true);
   adapter.close('cancelled');
   assert.equal(adapter.status().lastTask.state, 'failed');
@@ -88,6 +99,35 @@ try {
   complete({ exitCode: 0 });
   await tick();
   assert.equal(adapter.status().lastTask.state, 'failed', 'Cancellation cannot become success');
+  const whitespaceThreadAdapter = createAgentAdapter(settings);
+  await whitespaceThreadAdapter.dispatch({ prompt, orchestrationPlan: plan, threadId: '   ' });
+  const whitespaceThreadRun = calls.findLast(call => call.prompt);
+  assert.equal(whitespaceThreadRun.resumeSessionId, null);
+  assert.notEqual(JSON.parse(whitespaceThreadRun.boundedContext).mode, 'followup');
+  whitespaceThreadAdapter.close('cancelled');
+  complete({ exitCode: 0 });
+  await tick();
+  const operationalAdapter = createAgentAdapter(settings);
+  await operationalAdapter.dispatch({ prompt: 'Show current token usage', threadId: 'thread-operational',
+    orchestrationPlan: plan });
+  const operationalRun = calls.findLast(call => call.prompt);
+  assert.deepEqual(operationalRun.orchestrationPlan.affectedModules, ['totem-workspace']);
+  assert.deepEqual(operationalRun.writableRoots, []);
+  assert.equal(operationalRun.readOnly, true);
+  assert.equal(operationalRun.workspace, path.resolve(root));
+  assert.equal(JSON.parse(operationalRun.boundedContext).mode, 'followup');
+  assert.equal(JSON.parse(operationalRun.boundedContext).taskRef, null);
+  operationalAdapter.close('cancelled');
+  complete({ exitCode: 0 });
+  await tick();
+  const resumedDevelopmentAdapter = createAgentAdapter(settings);
+  await resumedDevelopmentAdapter.dispatch({ prompt: 'Inspect TotemNexus teleport cost',
+    threadId: 'thread-development' });
+  const resumedDevelopmentRun = calls.findLast(call => call.prompt);
+  assert.ok(!resumedDevelopmentRun.boundedContext.includes('"mode":"followup"'));
+  resumedDevelopmentAdapter.close('cancelled');
+  complete({ exitCode: 0 });
+  await tick();
   const unavailable = createAgentAdapter({ ...settings, probeRuntime: async () => ({ models: [], capabilities: { appServerAvailable: false } }) });
   await assert.rejects(unavailable.dispatch({ prompt, orchestrationPlan: plan }), { code: 'MODEL_POLICY_BLOCKED' });
   assert.equal(unavailable.status().lastTask.state, 'failed');

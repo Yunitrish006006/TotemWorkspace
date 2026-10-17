@@ -5,11 +5,12 @@ import { after } from "node:test";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { CodexRunner, threadStartParams, turnStartParams } from '../src/codex-runner.mjs';
-import { CodexRunner as SharedRunner } from '../../../intelligence/agent-runtime/runtime.mjs';
+import { CodexRunner as SharedRunner, shouldInheritActiveTask, workspacePlan } from '../../../intelligence/agent-runtime/runtime.mjs';
 import { normalizeAppServerEvent } from '../../../intelligence/agent-runtime/activity-adapter.mjs';
 import { buildDeveloperInstructions } from '../../../intelligence/agent-runtime/runtime-policy.mjs';
 import { constrainedWriteRoots, executionWorkspace } from '../../../intelligence/agent-runtime/orchestration-context.mjs';
 import { acquireRuntimeWriteLease as acquireLease } from '../../../intelligence/agent-runtime/write-leases.mjs';
+import { createTurnTelemetry, normalizeTokenUsage } from '../../../intelligence/agent-runtime/telemetry.mjs';
 
 const acquireRuntimeWriteLease = (roots, options = {}) => acquireLease(roots, { lockDirectory: leaseDirectory, ...options });
 const leaseDirectory = fs.mkdtempSync(path.join(os.tmpdir(), "totem-runtime-test-locks-"));
@@ -52,6 +53,27 @@ test('planned constraints never generate agent lifecycle or fictional token/mode
   const usage = { total: { inputTokens: 40, outputTokens: 10, totalTokens: 50 } };
   assert.deepEqual(normalizeAppServerEvent({ method: 'thread/tokenUsage/updated', params: { threadId: 'actual', tokenUsage: usage } }),
     [{ type: 'usage.updated', thread_id: 'actual', turn_id: undefined, usage: usage.total, token_usage: usage }]);
+  assert.deepEqual(normalizeAppServerEvent({ method: 'thread/compacted', params: {
+    threadId: 'actual', turnId: 'turn', reason: 'private prompt'
+  } }), [{ type: 'context.compacted', thread_id: 'actual', turn_id: 'turn' }]);
+});
+
+test('turn telemetry preserves unknown counters and never retains content', () => {
+  assert.deepEqual(normalizeTokenUsage({ inputTokens: 12, cachedInputTokens: 4 }), {
+    inputTokens: 12, cachedInputTokens: 4, cacheWriteInputTokens: null,
+    outputTokens: null, reasoningOutputTokens: null, totalTokens: null
+  });
+  const telemetry = createTurnTelemetry({ tokenUsage: { inputTokens: 12, outputTokens: 3 },
+    boundedContext: '私密 prompt', compactionCount: 1 });
+  assert.equal(telemetry.boundedContext.bytes, Buffer.byteLength('私密 prompt'));
+  assert.equal(telemetry.boundedContext.tokenCountKind, 'estimated-from-utf8-bytes');
+  assert.deepEqual(telemetry.compaction, { status: 'observed', observedCount: 1, evidence: 'runtime-event' });
+  assert.ok(!JSON.stringify(telemetry).includes('私密 prompt'));
+  assert.deepEqual(createTurnTelemetry().compaction, { status: 'unknown', observedCount: null, evidence: null });
+  assert.deepEqual(normalizeTokenUsage({ inputTokens: null, outputTokens: '' }), {
+    inputTokens: null, cachedInputTokens: null, cacheWriteInputTokens: null,
+    outputTokens: null, reasoningOutputTokens: null, totalTokens: null
+  });
 });
 
 test('module roots come only from authoritative graph ownership with no broad fallback', () => {
@@ -66,6 +88,21 @@ test('writable execution cwd cannot implicitly broaden a module sandbox to its p
   assert.equal(executionWorkspace('/srv/workspace', ['/srv/workspace/TotemCore']), '/srv/workspace/TotemCore');
   assert.equal(executionWorkspace('/srv/workspace', [], true), '/srv/workspace');
   assert.throws(() => executionWorkspace('/srv/workspace', []), /authorized root/);
+});
+
+test('operational turns use workspace-owned read-only plans without changing the session cwd', () => {
+  const workspace = '/srv/workspace/TotemLumen';
+  const plan = workspacePlan({ prompt: 'Show current token usage', workspace,
+    routing: { classification: 'operational' } });
+  assert.deepEqual(plan.affectedModules, ['totem-workspace']);
+  assert.deepEqual(plan.writeScope, []);
+  assert.ok(plan.waves.every(wave => !wave.writeAllowed));
+  assert.equal(executionWorkspace(workspace, [], true), workspace);
+  assert.ok(!JSON.stringify(plan).includes('totem-lumen'));
+  assert.equal(shouldInheritActiveTask({ classification: 'operational' }), false);
+  assert.equal(shouldInheritActiveTask({ classification: 'development' }), false);
+  assert.equal(shouldInheritActiveTask({ classification: 'ambiguous' }), true);
+  assert.equal(shouldInheritActiveTask({ classification: 'continuation' }), true);
 });
 
 test('process-wide write ownership permits disjoint roots and rejects nested or overlapping tasks', () => {
@@ -89,4 +126,3 @@ test('runtime releases write ownership after model preflight failure', async () 
   release();
   assert.equal(runner.isRunning(task.key), false);
 });
-

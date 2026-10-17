@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { spawnSync } from "node:child_process";
+import crypto from "node:crypto";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const STATUS = new Set(["planned", "in-progress", "blocked", "in-review", "completed", "cancelled"]);
@@ -173,6 +174,7 @@ export function recordWorkCheckpoint(root = ROOT, checkpoint = {}) {
     repository: checkpoint.repository ?? null,
     branch: checkpoint.branch ?? null,
     head: checkpoint.head ?? null,
+    worktreeDigest: checkpoint.worktreeDigest ?? null,
     filesChanged: boundedStrings(checkpoint.filesChanged, 120),
     validation,
     remainingRisks: boundedStrings(checkpoint.remainingRisks, 40),
@@ -202,7 +204,40 @@ export function captureRepositoryCheckpoint(repositoryRoot) {
     .map((line) => line.slice(3).split(" -> ").at(-1)?.trim())
     .filter(Boolean)
     .slice(0, 120);
-  return Object.freeze({ branch, head, filesChanged: Object.freeze(filesChanged) });
+  const changed = spawnSync("git", ["ls-files", "-m", "-d", "-o", "--exclude-standard", "-z"], {
+    cwd: repositoryRoot, encoding: "utf8", timeout: 5_000, maxBuffer: 1_048_576,
+    stdio: ["ignore", "pipe", "ignore"]
+  });
+  const staged = spawnSync("git", ["diff", "--cached", "--raw", "-z", "HEAD"], {
+    cwd: repositoryRoot, encoding: null, timeout: 5_000, maxBuffer: 1_048_576,
+    stdio: ["ignore", "pipe", "ignore"]
+  });
+  const allFingerprintPaths = changed.status === 0
+    ? String(changed.stdout ?? "").split("\0").filter(Boolean).sort() : [];
+  const fingerprintPaths = allFingerprintPaths.slice(0, 120);
+  const fingerprint = crypto.createHash("sha256");
+  if (staged.status === 0) fingerprint.update(staged.stdout ?? Buffer.alloc(0));
+  let fingerprintBytes = 0;
+  let fingerprintValid = changed.status === 0 && staged.status === 0 && allFingerprintPaths.length <= 120;
+  for (const relative of fingerprintPaths) {
+    fingerprint.update(relative).update("\0");
+    const absolute = path.resolve(repositoryRoot, relative);
+    if (!absolute.startsWith(`${path.resolve(repositoryRoot)}${path.sep}`)) continue;
+    try {
+      const stat = fs.lstatSync(absolute);
+      if (stat.isSymbolicLink() || !stat.isFile() || stat.size > 4_194_304
+          || fingerprintBytes + stat.size > 16_777_216) {
+        fingerprintValid = false;
+        break;
+      }
+      fingerprint.update(String(stat.mode & 0o777)).update("\0");
+      fingerprint.update(fs.readFileSync(absolute));
+      fingerprintBytes += stat.size;
+    } catch { fingerprint.update("<missing>"); }
+    fingerprint.update("\0");
+  }
+  const worktreeDigest = fingerprintValid ? fingerprint.digest("hex") : null;
+  return Object.freeze({ branch, head, worktreeDigest, filesChanged: Object.freeze(filesChanged) });
 }
 
 function nextRunnableTask(work) {
@@ -244,6 +279,7 @@ export function persistRuntimeWorkSettlement(root = ROOT, {
     repository: task.repository,
     branch: repositoryState.branch ?? null,
     head: repositoryState.head ?? null,
+    worktreeDigest: repositoryState.worktreeDigest ?? null,
     filesChanged: repositoryState.filesChanged ?? [],
     validation,
     remainingRisks: successful ? remainingRisks : [
@@ -261,6 +297,7 @@ export function persistRuntimeWorkSettlement(root = ROOT, {
     currentTaskId: work.currentTaskId,
     branch: checkpoint.branch,
     head: checkpoint.head,
+    worktreeDigest: checkpoint.worktreeDigest,
     filesChanged: checkpoint.filesChanged,
     validation: checkpoint.validation,
     remainingRisks: checkpoint.remainingRisks,

@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applyUsagePresence, approvalComponents, commandDefinition, createProgressReporter, formatQuestionResult, formatUsageResult, imageUrlsForAttachments, isReplyToActiveStatus, modelAutocompleteChoices, reasoningAutocompleteChoices, safeStatusChunks, statusChunks, usagePresenceText } from "../src/bot.mjs";
+import { applyUsagePresence, approvalComponents, commandDefinition, createProgressReporter, formatQuestionResult, formatUsageResult, imageUrlsForAttachments, isReplyToActiveStatus, modelAutocompleteChoices, persistUsageCheckpoint, reasoningAutocompleteChoices, safeStatusChunks, statusChunks, usagePresenceText } from "../src/bot.mjs";
 
 test('final delivery formats tables and preserves confirmed attachments and mention suppression', async () => {
   const payloads = [];
@@ -37,6 +37,19 @@ test('usage summary distinguishes observed tools and requested effort from model
   assert.match(text, /整段對話累計 input\/output/);
 });
 
+test('privacy-safe telemetry distinguishes unknown counters, estimates and observed compaction', () => {
+  const text = formatQuestionResult('bounded task', { exitCode: 0, message: 'done', telemetry: {
+    tokens: { inputTokens: 120, cachedInputTokens: 80, cacheWriteInputTokens: null,
+      outputTokens: 4, reasoningOutputTokens: null },
+    boundedContext: { bytes: 640, estimatedTokens: 160, tokenCountKind: 'estimated-from-utf8-bytes' },
+    compaction: { status: 'observed', observedCount: 1, evidence: 'runtime-event' }
+  } });
+  assert.match(text, /input 120/);
+  assert.match(text, /cache-write \?/);
+  assert.match(text, /bounded context 640 bytes（估算 160 tokens）/);
+  assert.match(text, /compaction 已觀察 1 次/);
+});
+
 test('local context stops explain the limit and preserve-history recovery separately from account quota', async () => {
   const summary = { observedToolCalls: 0, firstContext: 190219, peakContext: 190219,
     stopReason: 'context-limit', maxContextTokens: 64000, stopped: true };
@@ -49,6 +62,30 @@ test('local context stops explain the limit and preserve-history recovery separa
   progress.update({ method: 'bridge/usageGuard', params: { action: 'stop', ...summary } });
   const retained = await progress.finish();
   assert.match(JSON.stringify({ edits, retained }), /本輪 context 已達本機 64000/);
+});
+
+test('usage checkpoint persistence receives only bounded runtime and repository metadata', async () => {
+  const writes = [];
+  const saved = await persistUsageCheckpoint({
+    sessions: { setCheckpoint: async (key, value) => { writes.push({ key, value }); return true; } },
+    key: 'user:channel:workspace', workspaceName: 'workspace', workspacePath: '/unused',
+    repositoryState: { branch: 'feature/test', head: 'a'.repeat(40), filesChanged: ['src/A.mjs'] },
+    event: { method: 'bridge/usageGuard', params: { action: 'checkpoint', threadId: 'thread-1',
+      turnId: 'turn-1', observedToolCalls: 40, peakContext: 48000, prompt: 'private prompt' } }
+  });
+  assert.equal(saved, true);
+  assert.equal(writes[0].value.id, 'thread-1:turn-1');
+  assert.deepEqual(writes[0].value.filesChanged, ['src/A.mjs']);
+  assert.equal(writes[0].value.usage.peakContext, 48000);
+  assert.ok(!Object.hasOwn(writes[0].value, 'prompt'));
+  assert.equal(await persistUsageCheckpoint({ sessions: { setCheckpoint: async () => true }, key: 'key',
+    workspaceName: 'workspace', workspacePath: '/unused', event: { method: 'bridge/usageGuard',
+      params: { action: 'stop', threadId: 'thread-1', turnId: 'turn-1' } },
+    repositoryState: { branch: null, head: null, filesChanged: [] } }), true);
+  assert.equal(await persistUsageCheckpoint({ sessions: { setCheckpoint: async () => true }, key: 'key',
+    workspaceName: 'workspace', workspacePath: '/unused', event: { method: 'bridge/usageGuard',
+      params: { action: 'checkpoint', checkpointMutable: false, threadId: 'thread-1', turnId: 'turn-2' } },
+    repositoryState: { branch: null, head: null, filesChanged: [] } }), false);
 });
 
 test("progress cards show sanitized CLI-style activity as Discord subtext", async () => {

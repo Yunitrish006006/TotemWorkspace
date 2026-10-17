@@ -29,6 +29,9 @@ export function adaptAppServerActivity(event) {
     case 'thread/tokenUsage/updated': return { type: 'usage.updated', thread_id: params.threadId,
       turn_id: params.turnId, usage: params.tokenUsage?.last ?? params.tokenUsage?.total,
       token_usage: params.tokenUsage };
+    case 'thread/compacted':
+    case 'thread/compaction/completed': return { type: 'context.compacted', thread_id: params.threadId,
+      turn_id: params.turnId };
     case 'item/agentMessage/delta': return { type: 'item.delta', item_id: params.itemId, delta: params.delta };
     case 'error': return { type: 'error', message: params.error?.message, error: params.error };
     default: return null;

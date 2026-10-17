@@ -274,6 +274,40 @@ test("an expired saved thread is replaced when its next turn cannot start", asyn
   assert.deepEqual(requestedImageUrls, ["https://cdn.discordapp.com/attachments/1/2/screenshot.png"]);
 });
 
+test("an ambiguous request is not replayed into a fresh thread after session expiry", async () => {
+  let freshStarts = 0;
+  const child = new FakeAppServer((request, respond) => {
+    if (request.method === "initialize") respond({ id: request.id, result: {} });
+    else if (request.method === "thread/resume") respond({ id: request.id, result: { thread: { id: "saved-thread" } } });
+    else if (request.method === "turn/start") respond({ id: request.id, error: { message: "Conversation expired" } });
+    else if (request.method === "thread/start") freshStarts++;
+  });
+  const runner = new CodexRunner({ leaseDirectory, spawnImpl: () => child,
+    probeRuntime: async () => ({ ...await fakeRuntime(),
+      threadRoutingState: { query: 'Continue TotemLumen renderer work', contextTokens: 20000 } }),
+    planImpl: () => ({ contextHints: {}, writeScope: [] }), maxRuntimeMs: 1_000 });
+  await assert.rejects(runner.execute({ key: 'ambiguous-expired', workspace: '/tmp',
+    resumeSessionId: 'saved-thread', prompt: '還有能改善的地方嗎' }), /Restate the task/);
+  assert.equal(freshStarts, 0);
+});
+
+test("an ambiguous request is rejected when thread resume itself reports expiry", async () => {
+  let freshStarts = 0;
+  const child = new FakeAppServer((request, respond) => {
+    if (request.method === "initialize") respond({ id: request.id, result: {} });
+    else if (request.method === "thread/resume") respond({ id: request.id,
+      error: { message: "Conversation expired" } });
+    else if (request.method === "thread/start") freshStarts++;
+  });
+  const runner = new CodexRunner({ leaseDirectory, spawnImpl: () => child,
+    probeRuntime: async () => ({ ...await fakeRuntime(),
+      threadRoutingState: { query: 'Continue TotemLumen renderer work', contextTokens: 20000 } }),
+    planImpl: () => ({ contextHints: {}, writeScope: [] }), maxRuntimeMs: 1_000 });
+  await assert.rejects(runner.execute({ key: 'ambiguous-resume-expired', workspace: '/tmp',
+    resumeSessionId: 'saved-thread', prompt: '還有能改善的地方嗎' }), /Restate the task/);
+  assert.equal(freshStarts, 0);
+});
+
 test('usage context limit interrupts without claiming completion or replaying', async () => {
   let interrupted = 0;
   const child = new FakeAppServer((request, respond, notify) => {
@@ -618,13 +652,14 @@ test("quota failure on resumed turn never replays the task in a fresh thread", a
   assert.equal(started, 0);
 });
 
-test('resumed managed routing retains task risk, images and context before choosing write scope', async () => {
-  let plannedQuery, selectedModel;
+test('resumed managed routing retains task risk, images, context and recovery checkpoint before choosing write scope', async () => {
+  let plannedQuery, selectedModel, turnPrompt;
   const child = new FakeAppServer((request, respond, notify) => {
     if (request.method === 'initialize') respond({ id: request.id, result: {} });
     if (request.method === 'thread/resume') respond({ id: request.id, result: { thread: { id: 'old' } } });
     if (request.method === 'turn/start') {
       selectedModel = request.params.model;
+      turnPrompt = request.params.input[0].text;
       respond({ id: request.id, result: { turn: { id: 't' } } });
       notify({ method: 'turn/completed', params: { turn: { status: 'completed', items: [] } } });
     }
@@ -634,9 +669,97 @@ test('resumed managed routing retains task risk, images and context before choos
       assert.equal(args.threadId, 'old');
       return { ...await fakeRuntime(), threadRoutingState: { query: 'Review security contracts', hasImages: true, contextTokens: 20000 } };
     }, planImpl: ({ prompt }) => { plannedQuery = prompt; return { contextHints: {}, writeScope: [] }; } });
-  await runner.execute({ key: 'resume-routing', workspace: '/tmp', resumeSessionId: 'old', prompt: 'continue' });
+  const result = await runner.execute({ key: 'resume-routing', workspace: '/tmp', resumeSessionId: 'old', prompt: 'continue',
+    resumeCheckpoint: { schemaVersion: 1, id: 'old:turn-1', sessionId: 'old', state: 'stopped',
+      branch: 'feature/recovery', head: 'a'.repeat(40), filesChanged: ['src/A.mjs'] } });
   assert.equal(plannedQuery, 'Review security contracts\ncontinue');
   assert.equal(selectedModel, 'gpt-6-astra');
+  assert.equal(result.checkpointMutable, true);
+  assert.match(turnPrompt, /\"id\":\"old:turn-1\"/);
+  assert.match(turnPrompt, /\"freshness\":\"stale\"/);
+  assert.doesNotMatch(turnPrompt, /\"branch\":\"feature\/recovery\"|\"filesChanged\":\[\"src\/A.mjs\"\]/);
+});
+
+test('an unrelated operational turn does not inherit a saved recovery checkpoint', async () => {
+  let turnPrompt;
+  const child = new FakeAppServer((request, respond, notify) => {
+    if (request.method === 'initialize') respond({ id: request.id, result: {} });
+    if (request.method === 'thread/resume') respond({ id: request.id, result: { thread: { id: 'old' } } });
+    if (request.method === 'turn/start') {
+      turnPrompt = request.params.input[0].text;
+      respond({ id: request.id, result: { turn: { id: 'status-turn' } } });
+      notify({ method: 'turn/completed', params: { turn: { status: 'completed', items: [] } } });
+    }
+  });
+  const runner = new CodexRunner({ leaseDirectory, spawnImpl: () => child,
+    probeRuntime: async () => ({ ...await fakeRuntime(),
+      threadRoutingState: { query: 'Continue TotemLumen renderer work', contextTokens: 20000 } }),
+    planImpl: () => ({ contextHints: {}, writeScope: [] }) });
+  const result = await runner.execute({ key: 'resume-operational', workspace: '/tmp', resumeSessionId: 'old',
+    prompt: 'Show current token usage', resumeCheckpoint: { schemaVersion: 1,
+      id: 'old:turn-1', sessionId: 'old', state: 'stopped', branch: 'feature/recovery',
+      head: 'a'.repeat(40), filesChanged: ['src/A.mjs'] } });
+  assert.doesNotMatch(turnPrompt, /old:turn-1|feature\/recovery|src\/A\.mjs/);
+  assert.match(turnPrompt, /\"checkpointRef\":\{\"id\":null/);
+  assert.equal(result.checkpointMutable, false);
+});
+
+test('compaction telemetry buffers the accepted turn and drops replayed or unscoped events', async () => {
+  const forwarded = [];
+  const child = new FakeAppServer((request, respond, notify) => {
+    if (request.method === 'initialize') respond({ id: request.id, result: {} });
+    if (request.method === 'thread/resume') respond({ id: request.id, result: { thread: { id: 'old' } } });
+    if (request.method === 'turn/start') {
+      notify({ method: 'thread/compacted', params: { threadId: 'old', turnId: 'replayed-turn' } });
+      notify({ method: 'item/started', params: { threadId: 'old', turnId: 'accepted-turn',
+        item: { type: 'contextCompaction' } } });
+      notify({ method: 'thread/compacted', params: { threadId: 'old' } });
+      respond({ id: request.id, result: { turn: { id: 'accepted-turn' } } });
+      notify({ method: 'item/completed', params: { threadId: 'old', turnId: 'accepted-turn',
+        item: { id: 'compact-1', type: 'contextCompaction' } } });
+      notify({ method: 'item/completed', params: { threadId: 'old', turnId: 'accepted-turn',
+        item: { id: 'compact-1', type: 'contextCompaction' } } });
+      notify({ method: 'thread/compacted', params: { threadId: 'old', turnId: 'accepted-turn' } });
+      notify({ method: 'thread/compacted', params: { threadId: 'old', turnId: 'accepted-turn' } });
+      notify({ method: 'turn/completed', params: { threadId: 'old',
+        turn: { id: 'accepted-turn', status: 'completed', items: [] } } });
+    }
+  });
+  const runner = new CodexRunner({ leaseDirectory, spawnImpl: () => child,
+    probeRuntime: async () => ({ ...await fakeRuntime(),
+      threadRoutingState: { query: 'Continue work', contextTokens: 20000 } }),
+    planImpl: () => ({ contextHints: {}, writeScope: [] }) });
+  const result = await runner.execute({ key: 'compaction-scope', workspace: '/tmp',
+    resumeSessionId: 'old', prompt: 'continue', onProgress: event => forwarded.push(event) });
+  assert.equal(result.telemetry.compaction.observedCount, 2);
+  assert.deepEqual(forwarded.filter(event => /compacted|compaction/.test(event.method)
+      || (event.method === 'item/completed' && event.params?.item?.type === 'contextCompaction'))
+    .map(event => event.params.turnId), ['accepted-turn', 'accepted-turn']);
+});
+
+test('usage checkpoints report the effective execution workspace outside progress telemetry', async () => {
+  const checkpoints = [];
+  const progress = [];
+  const child = new FakeAppServer((request, respond, notify) => {
+    if (request.method === 'initialize') respond({ id: request.id, result: {} });
+    if (request.method === 'thread/start') respond({ id: request.id, result: { thread: { id: 'checkpoint-thread' } } });
+    if (request.method === 'turn/start') {
+      respond({ id: request.id, result: { turn: { id: 'checkpoint-turn' } } });
+      for (let index = 0; index < 40; index++) notify({ method: 'item/started', params: {
+        threadId: 'checkpoint-thread', turnId: 'checkpoint-turn', item: { id: `tool-${index}`, type: 'commandExecution' }
+      } });
+      notify({ method: 'turn/completed', params: { threadId: 'checkpoint-thread',
+        turn: { id: 'checkpoint-turn', status: 'completed', items: [] } } });
+    }
+  });
+  const runner = new CodexRunner({ leaseDirectory, spawnImpl: () => child, probeRuntime: fakeRuntime,
+    planImpl: () => ({ contextHints: {}, writeScope: [] }), usageGuardMode: 'observe' });
+  await runner.execute({ key: 'checkpoint-workspace', workspace: '/tmp', prompt: 'Inspect',
+    onUsageCheckpoint: event => checkpoints.push(event), onProgress: event => progress.push(event) });
+  assert.equal(checkpoints[0].workspace, '/tmp');
+  assert.equal(checkpoints[0].params.action, 'checkpoint');
+  assert.ok(progress.some(event => event.method === 'bridge/usageGuard'));
+  assert.ok(progress.every(event => !Object.hasOwn(event, 'workspace')));
 });
 
 test('unknown continuation cannot invent a managed write scope', async () => {
@@ -821,7 +944,10 @@ for (const resumed of [false, true]) test(`host warning-only mode continues past
   assert.equal(policyChecked, true); assert.equal(interrupts, 0); assert.equal(result.exitCode, 0);
   assert.equal(result.usageSummary.mode, 'observe'); assert.equal(result.usageSummary.stopped, false);
   assert.equal(result.usageSummary.peakContext, 190219); assert.equal(result.usageSummary.observedToolCalls, 100);
-  assert.equal(progress.filter(event => event.method === 'bridge/usageGuard' && event.params.action === 'checkpoint').length, 1);
+  const checkpoints = progress.filter(event => event.method === 'bridge/usageGuard' && event.params.action === 'checkpoint');
+  assert.equal(checkpoints.length, 1);
+  assert.equal(checkpoints[0].params.threadId, 'terminal-thread');
+  assert.equal(checkpoints[0].params.turnId, 'terminal-turn');
 });
 
 test('warning-only task budgets still honor user cancellation', async () => {

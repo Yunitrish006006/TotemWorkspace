@@ -19,7 +19,11 @@ test("configuration requires explicit user, channel and workspace allowlists", (
   assert.deepEqual(config.workspaces.get("workspace"), { path: "/workspace", allowNonGit: true });
   assert.equal(config.maxRuntimeMs, 0);
   assert.equal(config.usageGuardMode, 'enforce');
+  assert.equal(config.workloadScopeMode, 'auto');
   assert.equal(loadConfig({ ...env, CODEX_USAGE_GUARD_MODE: 'observe' }).usageGuardMode, 'observe');
+  assert.equal(loadConfig({ ...env, CODEX_WORKLOAD_SCOPE_MODE: 'systemd' }).workloadScopeMode, 'systemd');
+  assert.equal(loadConfig({ ...env, CODEX_WORKLOAD_SCOPE_MODE: 'direct' }).workloadScopeMode, 'direct');
+  assert.throws(() => loadConfig({ ...env, CODEX_WORKLOAD_SCOPE_MODE: 'shell' }), /auto, systemd, or direct/);
   assert.throws(() => loadConfig({ ...env, CODEX_USAGE_GUARD_MODE: 'disabled' }), /must be enforce or observe/);
   assert.equal(loadConfig({ ...env, CODEX_MAX_RUNTIME_SECONDS: "0" }).maxRuntimeMs, 0);
   assert.equal(loadConfig({ ...env, CODEX_MAX_RUNTIME_SECONDS: "6000" }).maxRuntimeMs, 6_000_000);
