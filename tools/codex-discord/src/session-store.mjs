@@ -1,6 +1,57 @@
 import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import path from "node:path";
 
+const checkpointNumber = value => value != null && !(typeof value === "string" && !value.trim())
+  && Number.isFinite(Number(value)) && Number(value) >= 0 ? Math.floor(Number(value)) : null;
+
+function boundedId(value, limit = 200) {
+  return typeof value === "string" && /^[a-zA-Z0-9._:-]+$/.test(value) && value.length <= limit ? value : null;
+}
+
+function checkpointPath(value) {
+  if (typeof value !== "string" || value.length > 512 || path.isAbsolute(value)) return null;
+  const normalized = value.replaceAll("\\", "/");
+  return normalized.split("/").includes("..") ? null : normalized;
+}
+
+function sanitizeCheckpoint(value) {
+  const id = boundedId(value?.id);
+  if (!id) return null;
+  const usage = value?.usage ?? {};
+  const stopped = value?.state === "stopped" || usage.action === "stop";
+  const filesChanged = [...new Set((Array.isArray(value?.filesChanged) ? value.filesChanged : [])
+    .map(checkpointPath).filter(Boolean))].slice(0, 120);
+  return Object.freeze({
+    schemaVersion: 1,
+    id,
+    updatedAt: typeof value?.updatedAt === "string" && value.updatedAt.length <= 64
+      ? value.updatedAt : new Date().toISOString(),
+    sessionId: boundedId(value?.sessionId),
+    workspace: boundedId(value?.workspace, 120),
+    state: stopped ? "stopped" : "in-progress",
+    branch: typeof value?.branch === "string" ? value.branch.slice(0, 200) : null,
+    head: typeof value?.head === "string" && /^[a-f0-9]{7,64}$/i.test(value.head) ? value.head : null,
+    worktreeDigest: typeof value?.worktreeDigest === "string" && /^[a-f0-9]{64}$/i.test(value.worktreeDigest)
+      ? value.worktreeDigest : null,
+    filesChanged,
+    validation: Object.freeze([{ type: "usage-budget", status: stopped ? "stopped" : "checkpoint",
+      summary: stopped ? "Runtime stopped at the local usage budget." : "Runtime usage checkpoint recorded at local budget pressure." }]),
+    usage: Object.freeze({
+      observedToolCalls: checkpointNumber(usage.observedToolCalls),
+      firstContext: checkpointNumber(usage.firstContext),
+      peakContext: checkpointNumber(usage.peakContext),
+      threadInputTokens: checkpointNumber(usage.threadInputTokens),
+      threadCachedInputTokens: checkpointNumber(usage.threadCachedInputTokens),
+      threadOutputTokens: checkpointNumber(usage.threadOutputTokens)
+    }),
+    remainingRisks: Object.freeze(stopped ? ["Runtime turn stopped before completing the requested task."]
+      : ["Runtime turn remains active after this checkpoint."]),
+    nextTask: null,
+    summary: stopped ? "Runtime stop checkpoint saved at the local usage budget."
+      : "Runtime progress checkpoint saved at local budget pressure."
+  });
+}
+
 export function sessionKey({ userId, channelId, workspace }) {
   return `${userId}:${channelId}:${workspace}`;
 }
@@ -21,6 +72,7 @@ export class SessionStore {
   #activeModels = new Map();
   #activeReasoningEfforts = new Map();
   #progressLineCounts = new Map();
+  #saveChain = Promise.resolve();
 
   constructor(stateDir) {
     this.#file = path.join(stateDir, "sessions.json");
@@ -33,7 +85,10 @@ export class SessionStore {
       if (raw && typeof raw === "object" && raw.sessions && typeof raw.sessions === "object") {
         for (const [key, value] of Object.entries(raw.sessions)) {
           if (typeof value?.sessionId === "string" && typeof value?.workspace === "string") {
-            this.#sessions.set(key, value);
+            const checkpoint = sanitizeCheckpoint(value.checkpoint);
+            this.#sessions.set(key, { sessionId: value.sessionId, workspace: value.workspace,
+              ...(typeof value.updatedAt === "string" ? { updatedAt: value.updatedAt } : {}),
+              ...(checkpoint ? { checkpoint } : {}) });
           }
         }
       }
@@ -67,8 +122,40 @@ export class SessionStore {
   }
 
   async set(key, value) {
-    this.#sessions.set(key, Object.freeze({ ...value }));
+    const existing = this.#sessions.get(key);
+    const existingCheckpoint = existing?.sessionId === value.sessionId ? existing.checkpoint : null;
+    this.#sessions.set(key, Object.freeze({
+      sessionId: value.sessionId,
+      workspace: value.workspace,
+      ...(typeof value.updatedAt === "string" ? { updatedAt: value.updatedAt } : {}),
+      ...(existingCheckpoint ? { checkpoint: existingCheckpoint } : {})
+    }));
     await this.#save();
+  }
+
+  checkpoint(key) {
+    return this.#sessions.get(key)?.checkpoint ?? null;
+  }
+
+  async setCheckpoint(key, value) {
+    const session = this.#sessions.get(key);
+    if (!session) return false;
+    const checkpoint = sanitizeCheckpoint(value);
+    if (!checkpoint) throw new Error("Checkpoint requires a bounded runtime id");
+    if (session.checkpoint?.id === checkpoint.id
+        && (session.checkpoint.state === "stopped" || checkpoint.state !== "stopped")) return false;
+    this.#sessions.set(key, Object.freeze({ ...session, checkpoint }));
+    await this.#save();
+    return true;
+  }
+
+  async clearCheckpoint(key, sessionId = null) {
+    const session = this.#sessions.get(key);
+    if (!session?.checkpoint || (sessionId && session.sessionId !== sessionId)) return false;
+    const { checkpoint: _checkpoint, ...current } = session;
+    this.#sessions.set(key, Object.freeze(current));
+    await this.#save();
+    return true;
   }
 
   async delete(key) {
@@ -126,9 +213,13 @@ export class SessionStore {
       activeReasoningEfforts: Object.fromEntries(this.#activeReasoningEfforts),
       progressLineCounts: Object.fromEntries(this.#progressLineCounts)
     }, null, 2) + "\n";
-    const temp = `${this.#file}.${process.pid}.tmp`;
-    await writeFile(temp, payload, { mode: 0o600 });
-    await chmod(temp, 0o600);
-    await rename(temp, this.#file);
+    const write = this.#saveChain.then(async () => {
+      const temp = `${this.#file}.${process.pid}.tmp`;
+      await writeFile(temp, payload, { mode: 0o600 });
+      await chmod(temp, 0o600);
+      await rename(temp, this.#file);
+    });
+    this.#saveChain = write.catch(() => {});
+    return write;
   }
 }

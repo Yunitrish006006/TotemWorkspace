@@ -3,12 +3,15 @@ import { spawn, spawnSync } from "node:child_process";
 import { orchestrationPlanSummary } from "./orchestration-plan.mjs";
 import { probeCodexRuntime } from "./codex-runtime-probe.mjs";
 import { resolveModelPolicy } from "./model-policy.mjs";
-import { CodexRunner } from "./agent-runtime/runtime.mjs";
+import { CodexRunner, resolveActiveRuntimeTask, shouldInheritActiveTask } from "./agent-runtime/runtime.mjs";
 import { normalizeAppServerEvent } from "./agent-runtime/activity-adapter.mjs";
 import { buildOrchestrationPlan } from "./orchestration-plan.mjs";
 import { buildContextPack } from "./context-pack.mjs";
-import { constrainedWriteRoots, executionWorkspace } from "./agent-runtime/orchestration-context.mjs";
+import { boundedFollowupContext, constrainReadOnlyPlan, constrainedWriteRoots, executionWorkspace } from "./agent-runtime/orchestration-context.mjs";
 import { buildDeveloperInstructions } from "./agent-runtime/runtime-policy.mjs";
+import { createTurnTelemetry, normalizeTokenUsage } from "./agent-runtime/telemetry.mjs";
+import { classifyTurn } from "./agent-runtime/turn-routing.mjs";
+import { captureRepositoryCheckpoint } from "./work-registry.mjs";
 
 const ADAPTER_SCHEMA_VERSION = 1;
 const TASK_SCHEMA_VERSION = 1;
@@ -63,6 +66,7 @@ function publicTask(task) {
     error: task.error ?? null,
     finalMessage: task.finalMessage ?? null,
     usage: task.usage ?? null,
+    telemetry: task.telemetry ?? null,
     chosenModel: task.chosenModel ?? null,
     orchestration: task.orchestration ?? null
   });
@@ -114,19 +118,6 @@ function jsonDetail(value, limit = 6000) {
     text = String(value);
   }
   return boundedText(text, limit);
-}
-
-function normalizedUsage(raw = {}) {
-  const number = (value) => Number.isFinite(Number(value)) ? Math.max(0, Math.floor(Number(value))) : 0;
-  const usage = {
-    inputTokens: number(raw.input_tokens ?? raw.inputTokens),
-    cachedInputTokens: number(raw.cached_input_tokens ?? raw.cachedInputTokens),
-    cacheWriteInputTokens: number(raw.cache_write_input_tokens ?? raw.cacheWriteInputTokens),
-    outputTokens: number(raw.output_tokens ?? raw.outputTokens),
-    reasoningOutputTokens: number(raw.reasoning_output_tokens ?? raw.reasoningOutputTokens)
-  };
-  usage.totalTokens = usage.inputTokens + usage.outputTokens;
-  return Object.freeze(usage);
 }
 
 export function createAgentAdapter({
@@ -298,7 +289,9 @@ export function createAgentAdapter({
 
     if (event.type === "turn.completed" || event.type === "usage.updated") {
       if (!event.usage) return;
-      task.usage = normalizedUsage(event.usage ?? {});
+      task.usage = normalizeTokenUsage(event.usage ?? {});
+      task.telemetry = createTurnTelemetry({ tokenUsage: event.usage,
+        boundedContextBytes: task.boundedContextBytes, compactionCount: task.compactionCount });
       emit({
         type: "usage_updated",
         source: "codex-adapter",
@@ -308,6 +301,16 @@ export function createAgentAdapter({
         summary: `Tokens · in ${task.usage.inputTokens} · cached ${task.usage.cachedInputTokens} · out ${task.usage.outputTokens}`,
         usage: task.usage
       });
+      return;
+    }
+
+    if (event.type === "context.compacted") {
+      task.compactionCount++;
+      task.telemetry = createTurnTelemetry({ tokenUsage: task.usage,
+        boundedContextBytes: task.boundedContextBytes, compactionCount: task.compactionCount });
+      emit({ type: "context_compacted", source: "codex-adapter", taskId: task.id,
+        moduleId: task.moduleId, featureId: task.featureId,
+        summary: "Runtime reported context compaction", telemetry: task.telemetry });
       return;
     }
 
@@ -514,9 +517,28 @@ export function createAgentAdapter({
       error.code = "INVALID_PROMPT";
       throw error;
     }
-    const selectedPlan = request.orchestrationPlan ?? buildOrchestrationPlan({
-      query: prompt, moduleId: request.moduleId, featureId: request.featureId, knowledge
+    const resumeSessionId = typeof request.threadId === "string" && request.threadId.trim().length > 0
+      ? request.threadId.trim()
+      : null;
+    const routing = classifyTurn({ text: prompt, state: { resumed: Boolean(resumeSessionId) } });
+    let selectedPlan = routing === "operational" ? buildOrchestrationPlan({
+      query: prompt, moduleId: "totem-workspace", knowledge
+    }) : request.orchestrationPlan ?? buildOrchestrationPlan({
+      query: prompt, moduleId: routing === "operational" ? "totem-workspace" : request.moduleId,
+      featureId: request.featureId, knowledge
     });
+    if (routing === "ambiguous") selectedPlan = constrainReadOnlyPlan(selectedPlan);
+    const referencesActiveTask = shouldInheritActiveTask({ classification: routing });
+    const unresolvedActiveTask = referencesActiveTask ? resolveActiveRuntimeTask(null, knowledge) : null;
+    const activeRepositoryName = String(unresolvedActiveTask?.repository ?? "").split("/").at(-1);
+    const activeModule = knowledge.modules.find(module => module.repoName === activeRepositoryName);
+    const activeEvidenceWorkspace = activeRepositoryName === path.basename(knowledge.root)
+      ? path.resolve(knowledge.root)
+      : activeModule ? path.resolve(path.dirname(knowledge.root), activeModule.repoName) : null;
+    const activeWorkTask = activeEvidenceWorkspace ? unresolvedActiveTask : null;
+    const writableRoots = constrainedWriteRoots(selectedPlan, knowledge);
+    const readOnly = sandbox === "read-only" || !writableRoots.length;
+    const taskWorkspace = executionWorkspace(codexCwd, writableRoots, readOnly);
     const requestedModel = boundedText(request.model, 128);
 
     const task = {
@@ -532,6 +554,9 @@ export function createAgentAdapter({
       error: null,
       finalMessage: null,
       usage: null,
+      telemetry: null,
+      boundedContextBytes: 0,
+      compactionCount: 0,
       orchestration: orchestrationPlanSummary(selectedPlan),
       modelPolicy: null,
       settled: false
@@ -542,10 +567,17 @@ export function createAgentAdapter({
     let modelPolicy = null;
     let boundedContext;
     try {
-      boundedContext = buildContextPack(prompt, {
-        audience: "primary", moduleId: request.moduleId ?? null, knowledge,
-        includeCode: true, maxTokens: 4000, orchestrationPlan: selectedPlan
-      }).rendered;
+      boundedContext = resumeSessionId && routing !== "development"
+        ? boundedFollowupContext(selectedPlan, { activeWorkTask,
+          repositoryState: activeEvidenceWorkspace
+            ? captureRepositoryCheckpoint(activeEvidenceWorkspace) : null })
+        : buildContextPack(prompt, {
+          audience: "primary", moduleId: request.moduleId ?? null, knowledge,
+          includeCode: true, maxTokens: 4000, orchestrationPlan: selectedPlan
+        }).rendered;
+      task.boundedContextBytes = Buffer.byteLength(typeof boundedContext === "string"
+        ? boundedContext : JSON.stringify(boundedContext), "utf8");
+      task.telemetry = createTurnTelemetry({ boundedContextBytes: task.boundedContextBytes });
       const runtime = await refreshCapabilities();
       modelPolicy = resolveModelPolicy({
         plan: selectedPlan,
@@ -576,16 +608,15 @@ export function createAgentAdapter({
     }
 
     task.state = "running";
-    const writableRoots = constrainedWriteRoots(selectedPlan, knowledge);
-    task.cwd = executionWorkspace(codexCwd, writableRoots, sandbox === "read-only" || !writableRoots.length);
+    task.cwd = taskWorkspace;
     emit({ type: "task_started", source: "codex-adapter", taskId: task.id,
       moduleId: task.moduleId, featureId: task.featureId, summary: "Codex task started" });
     const execution = runner.execute({
       key: task.id, workspace: codexCwd, prompt,
       orchestrationPlan: selectedPlan, modelPolicy, boundedContext,
       model: resolvedModel, reasoningEffort: modelPolicy.coordinator.effort,
-      resumeSessionId: request.threadId ?? null,
-      readOnly: sandbox === "read-only",
+      resumeSessionId,
+      readOnly,
       autoApproveGradle: false,
       writableRoots,
       onSessionId: threadId => handleCodexEvent(task, { type: "thread.started", thread_id: threadId }),
@@ -602,7 +633,9 @@ export function createAgentAdapter({
       if (result.message && !task.finalMessage) handleCodexEvent(task, {
         type: "item.completed", item: { type: "agent_message", text: result.message }
       });
-      if (result.usage) task.usage = normalizedUsage(result.usage.last ?? result.usage.total ?? result.usage);
+      if (result.usage) task.usage = normalizeTokenUsage(result.usage);
+      task.telemetry = result.telemetry ?? createTurnTelemetry({ tokenUsage: result.usage,
+        boundedContextBytes: task.boundedContextBytes, compactionCount: task.compactionCount });
       void settle(task, result.exitCode === 0 && !result.timedOut ? "completed" : "failed",
         result.exitCode === 0 && !result.timedOut ? null : "Codex App Server task failed or was interrupted");
     }).catch(error => void settle(task, "failed", error instanceof Error ? error.message : String(error)));

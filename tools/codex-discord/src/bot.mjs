@@ -7,6 +7,7 @@ import { discordOutputAttachments, outputFileName, withoutLocalFileLinks } from 
 import { conversationKey, sessionKey, taskKey } from "./session-store.mjs";
 import { createWorkspaceSync } from "./workspace-sync.mjs";
 import { splitDiscordMessage } from "./discord-markdown.mjs";
+import { captureRepositoryCheckpoint } from "../../../intelligence/work-registry.mjs";
 
 const MAX_DISCORD_MESSAGE = 1_850;
 const PROGRESS_EDIT_INTERVAL_MS = 1_200;
@@ -454,6 +455,15 @@ export function formatQuestionResult(task, result, progressLines = []) {
     lines.push('', `用量：本輪工具 ${summary.observedToolCalls} 次｜本輪 context ${summary.firstContext ?? '?'}→${summary.peakContext}｜整段對話累計 input/output ${summary.threadInputTokens ?? '?'}/${summary.threadOutputTokens ?? '?'}｜回報模型 ${summary.reportedModel ?? '未知'}｜要求 effort ${summary.requestedEffort ?? '預設'}（非逐輪分佈）`);
     if (summary.stopReason === 'context-limit') lines.push(`本輪 context 已達本機 ${summary.maxContextTokens} tokens 上限，並非帳戶配額耗盡。請先保存工作摘要，再用 \`/codex reset\` 選擇工作區，於新對話提供摘要與明確需求；reset 只移除 DC 的對話對應，原始歷史仍保留。`);
   }
+  if (result.telemetry) {
+    const telemetry = result.telemetry;
+    const tokens = telemetry.tokens ?? {};
+    const value = number => Number.isFinite(number) ? number : '?';
+    const compacted = telemetry.compaction?.status === 'observed'
+      ? `已觀察 ${telemetry.compaction.observedCount} 次`
+      : '未知（runtime 未提供事件證據）';
+    lines.push('', `Telemetry：input ${value(tokens.inputTokens)}｜cached ${value(tokens.cachedInputTokens)}｜cache-write ${value(tokens.cacheWriteInputTokens)}｜output ${value(tokens.outputTokens)}｜reasoning ${value(tokens.reasoningOutputTokens)}｜bounded context ${value(telemetry.boundedContext?.bytes)} bytes（估算 ${value(telemetry.boundedContext?.estimatedTokens)} tokens）｜compaction ${compacted}`);
+  }
   return lines.join("\n");
 }
 
@@ -775,12 +785,35 @@ async function acknowledgeSteering(message) {
   }
 }
 
+export async function persistUsageCheckpoint({ sessions, key, workspaceName, workspacePath, event,
+  repositoryState = null }) {
+  if (event?.method !== 'bridge/usageGuard' || !['checkpoint', 'stop'].includes(event.params?.action)
+      || typeof sessions?.setCheckpoint !== 'function') return false;
+  const params = event.params;
+  if (params.checkpointMutable === false) return false;
+  const threadId = typeof params.threadId === 'string' ? params.threadId : null;
+  const turnId = typeof params.turnId === 'string' ? params.turnId : null;
+  if (!threadId || !turnId) return false;
+  const repository = repositoryState ?? captureRepositoryCheckpoint(workspacePath);
+  return sessions.setCheckpoint(key, {
+    id: `${threadId}:${turnId}`,
+    sessionId: threadId,
+    workspace: workspaceName,
+    branch: repository.branch,
+    head: repository.head,
+    worktreeDigest: repository.worktreeDigest,
+    filesChanged: repository.filesChanged,
+    usage: params
+  });
+}
+
 async function runTask({ config, runner, sessions, userId, channelId, workspaceName, task, model = null, reasoningEffort = null, imageUrls = [], onProgress = () => {}, onApproval = () => {}, onUserInput = null }) {
   const workspaceConfig = config.workspaces.get(workspaceName);
   if (!workspaceConfig) throw new Error("That workspace is not configured");
   const savedKey = sessionKey({ userId, channelId, workspace: workspaceName });
   const activeKey = taskKey({ userId, workspace: workspaceName });
   const saved = sessions.get(savedKey);
+  const checkpointWrites = [];
   const result = await runner.execute({
     key: activeKey,
     workspace: workspaceConfig.path,
@@ -790,15 +823,27 @@ async function runTask({ config, runner, sessions, userId, channelId, workspaceN
     imageUrls,
     skipGitRepoCheck: workspaceConfig.allowNonGit,
     resumeSessionId: saved?.sessionId ?? null,
+    resumeCheckpoint: saved?.checkpoint ?? null,
     onSessionId: async (sessionId) => {
       await sessions.set(savedKey, { sessionId, workspace: workspaceName, updatedAt: new Date().toISOString() });
     },
     onProgress,
+    onUsageCheckpoint: event => {
+      const checkpointWrite = persistUsageCheckpoint({ sessions, key: savedKey, workspaceName,
+        workspacePath: event.workspace, event }).catch(() => false);
+      checkpointWrites.push(checkpointWrite);
+      return checkpointWrite;
+    },
     onApproval,
     onUserInput
   });
+  await Promise.all(checkpointWrites);
   if (result.sessionId && result.sessionId !== saved?.sessionId) {
     await sessions.set(savedKey, { sessionId: result.sessionId, workspace: workspaceName, updatedAt: new Date().toISOString() });
+  }
+  if (result.exitCode === 0 && !result.timedOut && result.checkpointMutable === true
+      && typeof sessions.clearCheckpoint === 'function') {
+    await sessions.clearCheckpoint(savedKey, result.sessionId ?? saved?.sessionId ?? null);
   }
   return { key: activeKey, result };
 }
@@ -1073,7 +1118,7 @@ export async function startBot({ config, runner, sessions, models = [], clientFa
       // Interaction webhooks expire, while a normal bot message can carry a
       // long-running approval card and receive the final result safely.
       await interaction.deferReply();
-      status = await interaction.fetchReply();
+      status = await interaction.editReply({ content: "正在準備 Codex 任務…", allowedMentions: { parse: [] } });
       await sessions.setActiveWorkspace(conversation, workspaceName);
       const reasoningEffort = sessions.activeReasoningEffort(conversation);
       progress = createProgressReporter({

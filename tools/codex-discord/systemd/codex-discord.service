@@ -9,6 +9,7 @@ Type=simple
 WorkingDirectory=%h/workspace/TotemWorkspace/tools/codex-discord
 Environment=PATH=%h/.npm-global/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
 Environment=CODEX_STATE_DIR=%h/.local/state/codex-discord
+Environment=CODEX_WORKLOAD_SCOPE_MODE=auto
 EnvironmentFile=%h/workspace/TotemWorkspace/tools/codex-discord/.env
 StateDirectory=codex-discord
 ExecStartPre=/usr/bin/test -r %h/workspace/TotemWorkspace/tools/codex-discord/.env

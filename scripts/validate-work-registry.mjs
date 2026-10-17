@@ -3,8 +3,10 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { execFileSync } from "node:child_process";
 import {
   activeWorkItem,
+  captureRepositoryCheckpoint,
   loadWorkCheckpoint,
   loadWorkRegistry,
   persistRuntimeWorkSettlement,
@@ -120,3 +122,25 @@ assert.ok(viewerSource.includes("persistRuntimeWorkSettlement(knowledge.root"), 
 assert.ok(viewerSource.includes("captureRepositoryCheckpoint(repositoryRoot)"), "Bridge must capture branch, HEAD and changed files for the checkpoint");
 assert.ok(viewerSource.includes('pathname === "/api/work-progress"'), "Bridge must expose canonical work progress separately from runtime activity");
 assert.ok(viewerSource.includes("workProgressPayload(loadWorkRegistry(ROOT))"), "Work progress API must derive from the canonical registry");
+
+const fingerprintRoot = fs.mkdtempSync(path.join(os.tmpdir(), "totem-work-fingerprint-"));
+try {
+  const git = (...args) => execFileSync("git", args, { cwd: fingerprintRoot, stdio: "ignore" });
+  git("init");
+  git("config", "user.name", "Totem Test");
+  git("config", "user.email", "totem@example.invalid");
+  fs.writeFileSync(path.join(fingerprintRoot, "tracked.txt"), "base\n");
+  git("add", "tracked.txt");
+  git("commit", "-m", "base");
+  fs.writeFileSync(path.join(fingerprintRoot, "tracked.txt"), "changed\n");
+  const beforeMode = captureRepositoryCheckpoint(fingerprintRoot).worktreeDigest;
+  fs.chmodSync(path.join(fingerprintRoot, "tracked.txt"), 0o755);
+  const afterMode = captureRepositoryCheckpoint(fingerprintRoot).worktreeDigest;
+  assert.match(beforeMode, /^[a-f0-9]{64}$/);
+  assert.notEqual(afterMode, beforeMode, "file mode changes must invalidate the worktree fingerprint");
+  fs.symlinkSync("/proc/self/environ", path.join(fingerprintRoot, "outside-link"));
+  assert.equal(captureRepositoryCheckpoint(fingerprintRoot).worktreeDigest, null,
+    "checkpoint fingerprinting must never follow symlinks");
+} finally {
+  fs.rmSync(fingerprintRoot, { recursive: true, force: true });
+}

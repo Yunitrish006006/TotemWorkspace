@@ -8,6 +8,8 @@ MCP 預設 `response_detail: "compact"`，CLI 預設 compact；移除 context pa
 
 Context pack 預設 3,000 近似 tokens；先減少程式碼檢索片段，不截斷結構化安全／執行約束。必要約束超過預算時以 `constraintsExceedBudget` 明示；這是目標預算，不是假稱的硬上限。Runtime developer instructions 只攜帶必要約束和本次模型選擇，不嵌入完整 plan、rationale、catalog 或 quota 明細；完整證據仍可按需取得。
 
+明確的「繼續」才沿用前一任務；token、usage、進度、狀態與服務操作問題使用當前文字建立唯讀 `totem-workspace` plan。既有 session cwd 保持不變，但不把舊遊戲模組 query、write roots 或 AGENTS scope 帶入。Follow-up envelope 只帶 task/checkpoint/evidence SHA-256 引用與 freshness；引用缺失、過期或矛盾時才重新取得完整證據。
+
 ## 2. 限定檢索
 
 已知工作擁有者時，`resolve_task`、`orchestration_plan`、`context_pack` 傳入 `module_id`。CLI 的 resolve、orchestrate、context 可加 `--module`：
@@ -25,11 +27,11 @@ README 錯字與有界唯讀查詢不因全域模組描述而升級成全套變�
 
 - 合併同一批唯讀查詢；工具只輸出必要欄位，完整 log 留在檔案。等待同一個 CI run，不反覆讀取沒有變動的結果；失敗才取該步驟 log。
 - 主線保留整合決策；只在輸入、檔案、驗收條件可界定、工作可隔離且節省超過啟動成本時委派。必要獨立審查例外，但仍只帶有界上下文，不繼承整段對話。
-- 共用 runtime 在觀察到 40 次工具操作或 48K input context 時發出 checkpoint；80 次或 64K 時中斷並回報未完成，不自動重播。CLI 直跑由 AGENTS 工作規則約束，不宣稱有同樣的程式硬限制。
+- 共用 runtime 在觀察到 40 次工具操作或 48K input context 時發出 checkpoint；80 次或 64K 時中斷並回報未完成，不自動重播。Checkpoint 以 thread/turn 去重，重啟後可讀，只保存 branch/HEAD、repository-relative changed paths、數值用量與固定摘要／風險；不保存 prompt 或完整歷史。CLI 直跑由 AGENTS 工作規則約束，不宣稱有同樣的程式硬限制。
 - 護欄只計入本次 `turn/start` 回應確認的回合。`thread/resume` 重送的歷史用量與其他回合的通知不觸發本輪上限；新回合通知若早於啟動回應，先有界保留，再依回合 ID 檢查。實際本輪 context 仍受 64K 上限約束。這是本機任務預算，不代表帳戶配額耗盡。
 - 使用者明確要求 DC 作為持續工作的終端時，可由主機設定 `CODEX_USAGE_GUARD_MODE=observe` 與 `CODEX_MAX_RUNTIME_SECONDS=0`。此模式只提醒、不因 80 次工具／64K context 中斷；新建與續接對話的工作指示同步採用此設定。其他介面預設仍為 `enforce`；帳戶配額、模型容量、取消、沙箱、核准和驗證要求不變。
 - Input/output 比超過 100 且 input 至少 20K 時一次告警；不以比值單獨判定失敗。token totals 採 runtime 回報的 thread 累計值，不把逐次累計再相加。重複工具 ID 不重算。
-- `usageSummary` 區分觀察到的工具次數、未知的模型輪數、回報模型與要求 effort。Discord 顯示摘要；沒有 turn_context 證據就不輸出逐輪模型分佈。快取 token 不是零成本的證據，token 也不是帳單金額。
+- `usageSummary` 區分觀察到的工具次數、未知的模型輪數、回報模型與要求 effort。Discord 顯示摘要；沒有 turn_context 證據就不輸出逐輪模型分佈。Telemetry 只保留數值與狀態：input、cached input、cache-write input、output、reasoning output、精確 UTF-8 bounded-context bytes 及明示的估算 token。Runtime 沒回報的欄位維持 unknown；只有實際 compaction event 能標為 observed。不得保存 prompt、秘密或未送出輸入。快取 token 不是零成本的證據，token 也不是帳單金額。
 - 輕量模型在 catalog 宣告支援時使用 low／medium；不延續舊的 xhigh 偏好。實際跨模組契約、安全或證據衝突才升級。Spark 不在可用清單時不得硬編不存在的模型；本機已列出的 Luna 可作替代，但不能宣稱使用 Spark 獨立配額。
 - 不因省 token 降低 sandbox、寫入／外部動作核准或發布驗證。`approval_mode="approve"` 不等於已證明每次詢問；未重現前不改權限。設定欄位依 [官方 MCP 文件](https://developers.openai.com/codex/mcp) 核對。
 
@@ -37,7 +39,7 @@ README 錯字與有界唯讀查詢不因全域模組描述而升級成全套變�
 
 `node scripts/session-storage-report.mjs` 只讀檔案大小／時間，報告總量與超過 90 天的數量，不讀對話內容、不刪除檔案。保留最近 90 天的輪替僅為待核准政策；先備份並排除仍在使用的 session，再另行授權清理，不部署自動刪除 timer。
 
-目前 source 修改需重新啟動相關 MCP／Discord runtime 才生效；不得為此打斷進行中的任務。全域 Codex 預設模型僅影響後續選擇，不代表既有對話已切換模型。服務重啟、push 與任何模組上架都不包含在本次最佳化內。
+目前 source 修改需重新啟動相關 MCP／Discord runtime 才生效；不得為此打斷進行中的任務。Discord 可用 `CODEX_WORKLOAD_SCOPE_MODE=auto|systemd|direct` 控制 App Server 啟動邊界；`auto`/`systemd` 在 user systemd 可用時使用獨立 transient scope，不可用或同步啟動失敗時明確記錄並 direct-spawn。Scope 保留 stdio/cwd/env，取消仍走既有 signal/lifecycle；cgroup 分離不能宣稱 orphan cleanup。全域 Codex 預設模型僅影響後續選擇，不代表既有對話已切換模型。服務重啟、push 與任何模組上架都不包含在本次最佳化內。
 
 ## 3. 任務證據摘要
 

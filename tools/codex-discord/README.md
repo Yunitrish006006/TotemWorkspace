@@ -17,6 +17,12 @@ Server runtime. CLI and Discord use the same task routing, model/effort policy
 and bounded orchestration constraints. Discord keeps its own sessions and uses
 its buttons, modals and attachments for approvals, questions and images.
 
+Short explicit continuations reuse the prior task scope. Token, usage, status,
+progress and service-operation questions are routed as read-only
+`totem-workspace` work: they keep the selected session directory but do not
+inherit an earlier game-module query, add game-module write roots or reload a
+broader repository instruction scope.
+
 Optional TotemWorkspace conversation sync is display-only: Viewer receives
 fixed work-status events, never prompts, answers, commands or arbitrary text.
 Viewer availability cannot block Discord execution. The old conversation prompt
@@ -189,6 +195,10 @@ input context produce a checkpoint; 80 calls or 64K context stop the task.
 Historical usage replayed while resuming a thread cannot trigger this guard.
 The summary labels whole-thread token totals separately from current-turn
 context and tools. A local budget stop is distinct from account quota exhaustion.
+Telemetry stores numeric usage and bounded-context byte counts only. Missing
+runtime fields remain unknown, token estimates are labelled as estimates, and
+compaction remains unknown unless the App Server emits a compaction event. It
+does not retain prompts, secrets or unsent input.
 For terminal-like continuous tasks, the host owner can set
 `CODEX_USAGE_GUARD_MODE=observe` and `CODEX_MAX_RUNTIME_SECONDS=0` in the service
 environment and restart the idle Bot. Observe mode keeps usage checkpoints and
@@ -197,6 +207,11 @@ receives this policy on both new and resumed threads. `/codex status` shows the
 effective mode and time limit. Other surfaces keep their default enforced
 budgets. Account quotas, model context capacity, cancellation, sandbox and
 approval checks still apply. Discord messages cannot change this host setting.
+At the warning threshold the session store writes one restart-safe, bounded
+checkpoint per thread/turn. It contains only repository-relative changed paths,
+branch/HEAD, numeric usage and fixed summaries/risks; it never copies the prompt
+or full conversation. Follow-up context carries task/checkpoint/evidence hashes
+and expands evidence only when a reference is missing, stale or contradicted.
 In enforce mode, if the current turn itself exceeds the context limit, save a bounded handoff,
 use `/codex reset` for that workspace and send the handoff with the next task.
 Reset removes only Discord's session mapping; Codex history remains on disk.
@@ -246,6 +261,22 @@ somewhere else.
 `CODEX_MAX_RUNTIME_SECONDS=0` leaves Codex tasks running until they complete or
 the user cancels them. Set it to 30–7200 only when a finite safety deadline is
 desired.
+
+`CODEX_WORKLOAD_SCOPE_MODE` controls Codex App Server process ownership:
+
+- `auto` (default) uses a validated `systemd --user` transient scope when the
+  user manager and `systemd-run` are available, otherwise it records a fixed
+  warning and uses direct spawn.
+- `systemd` requests the same scoped path and still fails safely to direct spawn
+  when the host cannot provide it.
+- `direct` deliberately skips the probe and retains the legacy child process.
+
+Scoped launches preserve cwd, environment and stdio. Cancellation signals the
+whole scope and then the launcher; cgroup separation does not replace normal
+cancel/shutdown cleanup. Generated unit names are bounded and never derived from
+Discord input. Source or environment changes take effect only after an
+authorized restart of an idle service. Do not restart the service to apply them
+while a task is active.
 
 ### Optional TotemWorkspace sync
 
