@@ -1,5 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
+import os from "node:os";
+import path from "node:path";
 import { isAllowedInteraction, isAllowedMessage, loadConfig } from "../src/config.mjs";
 
 const env = {
@@ -20,6 +23,24 @@ test("configuration requires explicit user, channel and workspace allowlists", (
   assert.equal(config.maxRuntimeMs, 0);
   assert.equal(config.usageGuardMode, 'enforce');
   assert.equal(config.workloadScopeMode, 'auto');
+  assert.equal(config.historyEnabled, false);
+  assert.equal(config.goalsEnabled, false);
+  assert.equal(config.historyOwnerUserId, null);
+  assert.deepEqual(config.historyThreadGrants, []);
+  const historyConfig = loadConfig({ ...env,
+    CODEX_DISCORD_HISTORY_ENABLED: 'true',
+    CODEX_DISCORD_GOALS_ENABLED: 'true',
+    CODEX_HISTORY_OWNER_USER_ID: '323456789012345678',
+    CODEX_HISTORY_THREAD_GRANTS_JSON: '[{"threadId":"thread-unknown","userId":"323456789012345678"}]'
+  });
+  assert.equal(historyConfig.historyEnabled, true);
+  assert.equal(historyConfig.goalsEnabled, true);
+  assert.equal(historyConfig.historyOwnerUserId, '323456789012345678');
+  assert.deepEqual(historyConfig.historyThreadGrants, [{ threadId: 'thread-unknown', userId: '323456789012345678' }]);
+  assert.throws(() => loadConfig({ ...env, CODEX_DISCORD_HISTORY_ENABLED: 'yes' }), /must be true or false/);
+  assert.throws(() => loadConfig({ ...env, CODEX_HISTORY_OWNER_USER_ID: '999999999999999999' }), /in DISCORD_ALLOWED_USER_IDS/);
+  assert.throws(() => loadConfig({ ...env, CODEX_HISTORY_THREAD_GRANTS_JSON: '[{"threadId":"x","userId":"999999999999999999"}]' }), /invalid or duplicate/);
+  assert.throws(() => loadConfig({ ...env, CODEX_HISTORY_THREAD_GRANTS_JSON: '[{"threadId":"x","userId":"323456789012345678"},{"threadId":"x","userId":"323456789012345678"}]' }), /invalid or duplicate/);
   assert.equal(loadConfig({ ...env, CODEX_USAGE_GUARD_MODE: 'observe' }).usageGuardMode, 'observe');
   assert.equal(loadConfig({ ...env, CODEX_WORKLOAD_SCOPE_MODE: 'systemd' }).workloadScopeMode, 'systemd');
   assert.equal(loadConfig({ ...env, CODEX_WORKLOAD_SCOPE_MODE: 'direct' }).workloadScopeMode, 'direct');
@@ -65,4 +86,30 @@ test("access requires both the configured user and channel", () => {
   assert.equal(isAllowedInteraction({ ...allowed, channelId: "999999999999999999" }, config), false);
   assert.equal(isAllowedInteraction({ ...allowed, channelId: "999999999999999999", channel: { parentId: "423456789012345678" } }, config), true);
   assert.equal(isAllowedMessage({ author: { id: "323456789012345678" }, channelId: "423456789012345678", channel: { parentId: null } }, config), true);
+});
+
+test("workspace root adds direct child Git repositories to the allow-listed selector", async () => {
+  const root = await mkdtemp(path.join(os.tmpdir(), "codex-discord-workspaces-"));
+  try {
+    await mkdir(path.join(root, "TotemNewMod", ".git"), { recursive: true });
+    await mkdir(path.join(root, "TotemLinkedWorktree"), { recursive: true });
+    await writeFile(path.join(root, "TotemLinkedWorktree", ".git"), "gitdir: ../.git/worktrees/linked\n");
+    await mkdir(path.join(root, "not-a-repo"), { recursive: true });
+    await Promise.all(Array.from({ length: 26 }, (_, index) =>
+      mkdir(path.join(root, `Repo-${index}`, ".git"), { recursive: true })));
+    const config = loadConfig({ ...env, CODEX_WORKSPACE_ROOT: root });
+    assert.deepEqual(config.workspaces.get("totem-new-mod"), {
+      path: path.join(root, "TotemNewMod"), allowNonGit: false
+    });
+    assert.deepEqual(config.workspaces.get("totem-linked-worktree"), {
+      path: path.join(root, "TotemLinkedWorktree"), allowNonGit: false
+    });
+    assert.equal(config.workspaces.has("not-a-repo"), false);
+    assert.ok(config.workspaces.size > 25, "autocomplete can serve repositories beyond Discord's per-response choice limit");
+    assert.deepEqual(config.workspaces.get("nexus"), {
+      path: "/workspace/TotemNexus", allowNonGit: false
+    });
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
 });

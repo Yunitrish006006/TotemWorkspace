@@ -21,7 +21,7 @@ export function createUsageGuard({ maxToolCalls = 80, maxContextTokens = 64000, 
       threadInputTokens: input, threadCachedInputTokens: usage?.total?.cachedInputTokens ?? null,
       threadOutputTokens: output, inputOutputRatio: Number.isFinite(input) && output > 0 ? input / output : null,
       stopped, stopReason, maxToolCalls, maxContextTokens, mode,
-      scope: 'active-turn-tools-and-context-with-reported-thread-totals' };
+      scope: 'runner-execution-tools-and-context-with-reported-thread-totals' };
   };
   return {
     snapshot,

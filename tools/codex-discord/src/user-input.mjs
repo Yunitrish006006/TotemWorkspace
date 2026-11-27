@@ -48,13 +48,14 @@ export function ownsUserInput(request, interaction, allowed) {
 }
 
 // Each request owns a separate card: overlapping asynchronous questions stay reachable.
-export async function presentUserInput({ input, key, userId, channelId, status, register, forget }) {
+export async function presentUserInput({ input, key, userId, channelId, status, register, forget,
+  send = payload => status.reply(payload) }) {
   const content = userInputCard(input);
   let card, resolved = false;
   const progress = { resolveApproval: async () => { resolved = true; if (card) await card.edit({ components: [] }); } };
   const token = register({ approval: input, key, userId, channelId, progress });
   try {
-    card = await status.reply({ content, components: userInputComponents(token), allowedMentions: { parse: [] } });
+    card = await send({ content, components: userInputComponents(token), allowedMentions: { parse: [] } });
     if (resolved) await card.edit({ components: [] });
   } catch (error) {
     forget(token);

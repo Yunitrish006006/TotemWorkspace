@@ -368,3 +368,22 @@ export function workProgressPayload(registry = loadWorkRegistry()) {
     })
   });
 }
+
+export function workProgressLabel(registry = loadWorkRegistry(), { fallbackTitle = null } = {}) {
+  const active = activeWorkItem(registry);
+  const tasks = active?.tasks ?? [];
+  const currentIndex = tasks.findIndex((task) => task.id === active?.currentTaskId);
+  const currentTask = currentIndex >= 0 ? tasks[currentIndex] : null;
+  if (active?.status === "in-progress" && currentTask?.status === "in-progress") {
+    return `${currentTask.title}: ${currentIndex + 1}/${tasks.length}`;
+  }
+  const title = typeof fallbackTitle === "string" ? fallbackTitle.trim() : "";
+  return title ? `${title}: 1/1` : null;
+}
+
+export function formatWorkProgressText(text, registry = loadWorkRegistry(), options = {}) {
+  const normalizedText = typeof text === "string" ? text.trim() : "";
+  const label = workProgressLabel(registry, options);
+  if (!label) return normalizedText;
+  return normalizedText ? `${label}\n${normalizedText}` : label;
+}

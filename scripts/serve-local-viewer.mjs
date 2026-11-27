@@ -33,6 +33,7 @@ import { createAgentAdapter } from "../intelligence/agent-adapter.mjs";
 import {
   activeWorkItem,
   captureRepositoryCheckpoint,
+  formatWorkProgressText,
   loadWorkRegistry,
   persistRuntimeWorkSettlement,
   workProgressPayload
@@ -180,7 +181,7 @@ function hasLoopbackConversationAccess(req) {
   return !origin || isLoopbackOrigin(origin);
 }
 
-function safeConversationProgress(event) {
+function safeConversationProgress(event, registry = loadWorkRegistry(ROOT)) {
   const taskId = boundedText(event?.taskId, 160);
   if (!taskId) return null;
   const type = boundedText(event?.type, 64);
@@ -202,7 +203,11 @@ function safeConversationProgress(event) {
     task_failed: "Codex task failed"
   };
   const text = summaries[type];
-  return text ? { text, taskId, status } : null;
+  return text ? {
+    text: formatWorkProgressText(text, registry, { fallbackTitle: "Codex 工作" }),
+    taskId,
+    status
+  } : null;
 }
 
 function publicStatus(entry) {
@@ -914,7 +919,8 @@ async function handleApi(req, res, url, { agentAdapter, conversation, conversati
       return true;
     }
     const [kind, text, status] = CONVERSATION_MIRROR_EVENTS[args.event];
-    const result = conversation.append({ source: "discord", kind, text, status,
+    const progressText = formatWorkProgressText(text, loadWorkRegistry(ROOT), { fallbackTitle: "Discord 工作" });
+    const result = conversation.append({ source: "discord", kind, text: progressText, status,
       conversationId: `discord-runtime:${args.runId}` });
     // Display only: never call dispatch, steer, approve or cancel from a mirror payload.
     json(res, 202, { status: "recorded", entry: result.entry });

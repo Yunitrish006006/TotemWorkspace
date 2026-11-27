@@ -1,12 +1,13 @@
 import path from "node:path";
-import { open, realpath, stat } from "node:fs/promises";
+import { open, readFile, realpath, stat } from "node:fs/promises";
 
 const MAX_OUTPUT_FILES = 4;
 const MAX_OUTPUT_BYTES = 25 * 1024 * 1024;
-const LOCAL_FILE_LINK = /!?\[[^\]\n]*\]\(\s*<?(\/[^)\n>]+?\.(?:png|jpe?g|webp|gif|jar))>?\s*\)/gi;
+const MAX_SVG_BYTES = 5 * 1024 * 1024;
+const LOCAL_FILE_LINK = /!?\[[^\]\n]*\]\(\s*<?(\/[^)\n>]+?\.(?:png|jpe?g|webp|gif|svg|jar))>?\s*\)/gi;
 const OTHER_FILE_LINK = /!?\[[^\]\n]*\]\(\s*<?(\/[^)\n>]+?\.[a-z0-9]{1,16})>?\s*\)/gi;
-const INLINE_FILE = /`(\/[^`\n]+?\.(?:png|jpe?g|webp|gif|jar|zip|pdf|txt|csv|json|log))`/gi;
-const BARE_FILE = /(^|\s)(\/[^\s<>`"']+?\.(?:png|jpe?g|webp|gif|jar|zip|pdf|txt|csv|json|log))(?=$|[\s),;。])/gi;
+const INLINE_FILE = /`(\/[^`\n]+?\.(?:png|jpe?g|webp|gif|svg|jar|zip|pdf|txt|csv|json|log))`/gi;
+const BARE_FILE = /(^|\s)(\/[^\s<>`"']+?\.(?:png|jpe?g|webp|gif|svg|jar|zip|pdf|txt|csv|json|log))(?=$|[\s),;。])/gi;
 
 export function outputFileName(filePath) {
   return path.basename(String(filePath)).replace(/[\x00-\x1f\x7f`*_~|<>\[\]@]/g, "_").slice(0, 100);
@@ -67,13 +68,34 @@ async function detectedFileType(filePath) {
   }
 }
 
+async function isStaticSvg(filePath) {
+  const bytes = await readFile(filePath);
+  if (bytes.length > MAX_SVG_BYTES) return false;
+  let source;
+  try { source = new TextDecoder("utf-8", { fatal: true }).decode(bytes); }
+  catch { return false; }
+  source = source.replace(/^\uFEFF/, "").trim();
+  const root = /^(?:<\?xml\s+[^?]*\?>\s*)?(?:<!--[^]*?-->\s*)*<(?:svg:)?svg(?=[\s/>])/i;
+  const closedRoot = /<\/(?:svg:)?svg\s*>\s*(?:<!--[^]*?-->\s*)*$/i;
+  const selfClosedRoot = /<(?:svg:)?svg\b[^>]*\/\s*>\s*(?:<!--[^]*?-->\s*)*$/i;
+  if (!root.test(source) || (!closedRoot.test(source) && !selfClosedRoot.test(source))) return false;
+  if (/<!\s*(?:doctype|entity)\b|<\s*(?:[a-z0-9_.-]+:)?(?:script|foreignObject|iframe|object|embed)\b|\son[a-z0-9_-]*\s*=|javascript\s*:|@import\b|expression\s*\(/i.test(source)) return false;
+  for (const match of source.matchAll(/\b(?:href|xlink:href)\s*=\s*(["'])([^]*?)\1/gi)) {
+    if (!match[2].trim().startsWith("#") || match[2].includes("&")) return false;
+  }
+  for (const match of source.matchAll(/url\(\s*(["']?)([^]*?)\1\s*\)/gi)) {
+    if (!match[2].trim().startsWith("#")) return false;
+  }
+  return true;
+}
+
 function extensionMatches(filePath, detectedType) {
   const extension = path.extname(filePath).toLocaleLowerCase();
   return extension === detectedType || (detectedType === ".jpg" && extension === ".jpeg");
 }
 
 /**
- * Resolves explicit output image/JAR links into Discord.js attachments.
+ * Resolves explicit output image/SVG/JAR links into Discord.js attachments.
  * Generated-image events may use /tmp; paths merely mentioned in prose must
  * stay inside the selected allow-listed workspace.
  */
@@ -121,7 +143,8 @@ export async function discordOutputAttachments({ generatedPaths = [], message = 
         reject(candidate.filePath, "檔案為空、不是一般檔案或超過大小限制");
         continue;
       }
-      const detectedType = await detectedFileType(resolved);
+      const isSvg = path.extname(resolved).toLocaleLowerCase() === ".svg";
+      const detectedType = isSvg ? (await isStaticSvg(resolved) ? ".svg" : null) : await detectedFileType(resolved);
       if (!detectedType || !extensionMatches(resolved, detectedType)
           || (candidate.generated && detectedType === ".jar")) {
         reject(candidate.filePath, "格式檢查失敗或來源不允許");

@@ -32,6 +32,7 @@ for (const endpoint of [
   assert.ok(serverSource.includes(endpoint), `local bridge is missing ${endpoint}`);
 }
 assert.ok(serverSource.includes("safeConversationProgress"), "Discord progress must use a whitelist projection");
+assert.ok(serverSource.includes("formatWorkProgressText"), "conversation progress must include the canonical micro-task label");
 assert.ok(serverSource.includes('"https://yunitrish006006.github.io"'), "official TotemWorkspace Pages origin must be explicitly allowlisted");
 assert.ok(serverSource.includes('"agent-adapter-required"'), "prompt intake must remain adapter-gated");
 assert.ok(serverSource.includes("activity file paths must be repository-relative"), "activity ingestion must reject absolute local file paths");
@@ -143,6 +144,38 @@ try {
   assert.equal(healthPayload.status, "ok");
   assert.equal(healthPayload.mode, "local");
   assert.equal(healthPayload.agentAdapter.available, true);
+
+  const mirrored = await fetch(`${base}/api/conversation/mirror`, {
+    method: "POST",
+    headers: {
+      authorization: "Bearer test-conversation-sync-token",
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({ runId: "progress-format-fixture", event: "started" })
+  });
+  assert.equal(mirrored.status, 202);
+  const mirroredPayload = await mirrored.json();
+  assert.match(mirroredPayload.entry.text, /^Discord 工作: 1\/1\nDiscord 工作已開始/);
+  const dispatchCountAfterMirror = dispatchedPrompts.length;
+  const mirrorWithText = await fetch(`${base}/api/conversation/mirror`, {
+    method: "POST",
+    headers: {
+      authorization: "Bearer test-conversation-sync-token",
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({ runId: "progress-format-fixture", event: "started", text: "private prompt" })
+  });
+  assert.equal(mirrorWithText.status, 400);
+  const unknownMirror = await fetch(`${base}/api/conversation/mirror`, {
+    method: "POST",
+    headers: {
+      authorization: "Bearer test-conversation-sync-token",
+      "content-type": "application/json"
+    },
+    body: JSON.stringify({ runId: "progress-format-fixture", event: "dispatch" })
+  });
+  assert.equal(unknownMirror.status, 400);
+  assert.equal(dispatchedPrompts.length, dispatchCountAfterMirror, "display-only mirror must not dispatch work");
 
   const flutterHealth = await fetch(`${base}/api/health`, {
     headers: { Origin: "http://localhost:54321" },

@@ -52,6 +52,8 @@ An `independentReviewRequired` constraint requires actual independent review evi
 
 Correctness comes first, total model tokens second and latency last. Reuse bounded context and compact findings. Prefer lightweight execution when sufficient; escalate reasoning for ambiguous shared API/protocol design, conflicting evidence, high-risk persistence/networking or non-local failures. Model hints are preferences; only runtime evidence establishes actual lifecycle, selected models, usage and validation outcomes.
 
+Every user-visible progress update and final response must start with `<active micro-task title>: <current micro-task number>/<total micro-tasks>`. Use the authoritative active work task when available; for an unplanned one-off task use `<task title>: 1/1`. Keep the count monotonic and never invent completed work.
+
 ## Validation ownership and reuse
 
 Follow [docs/validation-ownership.md](docs/validation-ownership.md) for CI ownership, evidence reuse and release artifact verification. Read it once when planning validation; do not duplicate its checklist here or rerun successful checks without changed inputs or concrete new evidence.

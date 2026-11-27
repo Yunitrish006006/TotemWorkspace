@@ -1,25 +1,70 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { applyUsagePresence, approvalComponents, commandDefinition, createProgressReporter, formatQuestionResult, formatUsageResult, imageUrlsForAttachments, isReplyToActiveStatus, modelAutocompleteChoices, persistUsageCheckpoint, reasoningAutocompleteChoices, safeStatusChunks, statusChunks, usagePresenceText } from "../src/bot.mjs";
+import { applyUsagePresence, approvalComponents, commandDefinition, createProgressReporter, formatQuestionResult, formatUsageResult, imageUrlsForAttachments, isReplyToActiveStatus, modelAutocompleteChoices, persistUsageCheckpoint, reasoningAutocompleteChoices, resolveWorkspaceName, safeStatusChunks, statusChunks, usagePresenceText, workspaceAutocompleteChoices } from "../src/bot.mjs";
+import { formatGoalCommandError, GOAL_COMMAND_ACTIONS } from '../src/goal-command.mjs';
+
+test('Goal activity reporter keeps only a short cleaned objective and bounded native status fields', async () => {
+  const payloads = [];
+  const reporter = createProgressReporter({ workspaceName: 'workspace', task: 'ignored general prompt',
+    model: null, reasoningEffort: null, progressLines: 0, edit: async payload => payloads.push(payload) });
+  await reporter.updateGoalActivity({ objective: 'Open https://private.example/path using api_key=secret', status: 'active',
+    turnsSeen: 2, turnsCompleted: 1, turnInFlight: true, tokensUsed: 310, tokenBudget: 1200 }, []);
+  reporter.update({ method: 'item/started', params: { item: { type: 'commandExecution',
+    command: 'cat /tmp/private/secret.txt', aggregatedOutput: 'private command output' } } });
+  await reporter.finish();
+  const final = payloads.at(-1);
+  assert.match(final.content, /原生 Goal 活動/);
+  assert.match(final.content, /目標：敏感內容已隱藏/);
+  assert.match(final.content, /狀態：active/);
+  assert.match(final.content, /目前回合：第 2 輪執行中/);
+  assert.match(final.content, /用量：310 \/ 1200 tokens/);
+  assert.doesNotMatch(final.content, /private\.example|api_key|secret\.txt|private command output|ignored general prompt/);
+  assert.deepEqual(final.components, []);
+});
+
+test('Goal activity objective hides common opaque credential formats without labels', async () => {
+  const ghPrefix = ['gh', 'p_'].join('');
+  const openAiPrefix = ['sk', '-proj-'].join('');
+  const jwtPrefix = ['ey', 'J'].join('');
+  const cases = [
+    { objective: `Continue using ${ghPrefix}1234567890abcdefghijklmnopqrstuv123456`, marker: ghPrefix },
+    { objective: `Deploy with ${openAiPrefix}1234567890abcdefghijklmnopqrstuvwx`, marker: openAiPrefix },
+    { objective: `Use ${jwtPrefix}abcdefghijklmno.12345678901234567890.abcdefghijklmnop`, marker: jwtPrefix }
+  ];
+  for (const { objective, marker } of cases) {
+    const payloads = [];
+    const reporter = createProgressReporter({ workspaceName: 'workspace', task: 'ignored', model: null,
+      reasoningEffort: null, progressLines: 0, edit: async payload => payloads.push(payload) });
+    await reporter.updateGoalActivity({ objective, status: 'active', turnsSeen: 1,
+      turnInFlight: false, tokensUsed: 0, tokenBudget: 100 }, []);
+    await reporter.finish();
+    assert.match(payloads.at(-1).content, /目標：敏感內容已隱藏/);
+    assert.doesNotMatch(payloads.at(-1).content, new RegExp(marker));
+  }
+});
 
 test('final delivery formats tables and preserves confirmed attachments and mention suppression', async () => {
   const payloads = [];
-  const status = { edit: async payload => {
-    payloads.push(payload);
-    return { attachments: new Map([['1', { id: '1', name: 'result.jar', size: 5,
-      url: 'https://cdn.discordapp.com/attachments/test/result.jar' }]]) };
-  }, channel: { send: async payload => payloads.push(payload) } };
+  const status = { edit: async payload => payloads.push(payload),
+    channel: { send: async payload => {
+      payloads.push(payload);
+      if (!payload.files) return;
+      return { attachments: new Map([['1', { id: '1', name: 'result.jar', size: 5,
+        url: 'https://cdn.discordapp.com/attachments/test/result.jar' }]]) };
+    } } };
   await statusChunks(status, '| Profile | FPS |\n| --- | --- |\n| RGB | 300 |\n\n```js\n'
     + '    sample();\n'.repeat(400) + '```\n[result](/tmp/result.jar)',
     [{ attachment: '/tmp/result.jar', name: 'result.jar' }]);
-  assert.match(payloads[1].content, /附件已由 Discord 確認/);
-  assert.match(payloads[1].content, /- Profile：RGB\n  - FPS：300/);
+  const attachmentMessage = payloads.find(payload => payload.files);
+  assert.ok(attachmentMessage, 'attachments are sent as their own Discord message');
+  assert.match(attachmentMessage.content, /Codex 附件：result.jar/);
   assert.equal(payloads.filter(payload => payload.files).length, 1);
-  for (const payload of payloads.slice(1)) {
+  assert.ok(payloads.filter(payload => !payload.files).some(payload => /附件已另行傳送並由 Discord 確認/.test(payload.content)));
+  assert.ok(payloads.some(payload => /- Profile：RGB\n  - FPS：300/.test(payload.content)));
+  for (const payload of payloads) {
     assert.ok(payload.content.length <= 1850);
     assert.equal((payload.content.match(/```/g) ?? []).length % 2, 0);
     assert.deepEqual(payload.allowedMentions, { parse: [] });
-    assert.equal(payload.attachments, undefined);
     assert.ok(!payload.content.includes('/tmp/'));
   }
 });
@@ -234,6 +279,112 @@ test("the progress command accepts zero through eight gray activity lines", () =
   assert.equal(lines.max_value, 8);
 });
 
+test('continue is a root command with an optional workspace selector', () => {
+  const command = commandDefinition(['workspace']).toJSON();
+  const continuation = command.options.find(option => option.name === 'continue');
+  assert.equal(continuation.type, 1);
+  assert.equal(continuation.options[0].name, 'workspace');
+  assert.equal(continuation.options[0].required, false);
+});
+
+test('the sessions command exposes private list and preview actions', () => {
+  const command = commandDefinition(["workspace"]).toJSON();
+  const sessions = command.options.find(option => option.name === 'sessions');
+  assert.equal(sessions.type, 2);
+  assert.deepEqual(sessions.options.map(option => option.name), ['list', 'preview', 'current', 'handoff']);
+  assert.ok(sessions.options.every(subcommand => subcommand.options.find(option => option.name === 'workspace').required === false));
+  assert.ok(sessions.options[0].options.some(option => option.name === 'source'));
+  assert.ok(sessions.options[1].options.some(option => option.name === 'thread'));
+});
+
+test('workspace resolves from the session thread and asks only when bindings are ambiguous', () => {
+  const bindings = new Map([['owner:thread:totem-core', { sessionId: 'codex-thread' }]]);
+  let activeWorkspace = 'workspace';
+  const sessions = { get: key => bindings.get(key) ?? null,
+    activeWorkspace: key => key === 'owner:parent' ? 'totem-core' : activeWorkspace };
+  const base = { userId: 'owner', channelId: 'thread', sessions,
+    workspaceNames: ['workspace', 'totem-core'] };
+  assert.equal(resolveWorkspaceName(base), 'totem-core');
+  assert.equal(resolveWorkspaceName({ ...base, explicit: 'workspace' }), 'workspace');
+  bindings.set('owner:thread:workspace', { sessionId: 'other-thread' });
+  assert.equal(resolveWorkspaceName(base), 'workspace', 'an active workspace disambiguates multiple legacy bindings');
+  activeWorkspace = null;
+  assert.equal(resolveWorkspaceName(base), null);
+  bindings.delete('owner:thread:workspace');
+  activeWorkspace = 'workspace';
+  assert.equal(resolveWorkspaceName({ ...base, channelId: 'parent' }), 'totem-core');
+  activeWorkspace = null;
+  assert.equal(resolveWorkspaceName({ ...base, parentChannelId: 'parent' }), 'totem-core',
+    'an unbound thread inherits the parent channel workspace');
+
+  const command = commandDefinition(['workspace', 'totem-core']).toJSON();
+  const run = command.options.find(option => option.name === 'run');
+  assert.equal(run.options.find(option => option.name === 'workspace').required, false);
+  const use = command.options.find(option => option.name === 'use');
+  assert.equal(use.options.find(option => option.name === 'workspace').required, true);
+});
+
+test('Discord command schemas place required options before optional workspace options', () => {
+  const command = commandDefinition(['workspace', 'totem-core']).toJSON();
+  const checkOptions = (options, commandPath) => {
+    let optionalSeen = false;
+    for (const option of options ?? []) {
+      const path = `${commandPath}/${option.name}`;
+      if (option.type === 1 || option.type === 2) {
+        for (const child of option.options ?? []) {
+          if (option.type === 1) continue;
+          checkOptions(child.options, `${path}/${child.name}`);
+        }
+        if (option.type === 1) checkOptions(option.options, path);
+        continue;
+      }
+      if (!option.required) optionalSeen = true;
+      else assert.equal(optionalSeen, false, `${path} is required after an optional option`);
+    }
+  };
+  checkOptions(command.options, '/codex');
+});
+
+test('workspace selectors use bounded allowlist autocomplete and keep command registration below Discord size limits', () => {
+  const workspaces = ['workspace', 'totem-core', 'totem-workspace', 'codex-discord'];
+  assert.deepEqual(workspaceAutocompleteChoices(workspaces, 'totem'), [
+    { name: 'totem-core', value: 'totem-core' },
+    { name: 'totem-workspace', value: 'totem-workspace' }
+  ]);
+  assert.equal(workspaceAutocompleteChoices(Array.from({ length: 40 }, (_, index) => `repo-${index}`)).length, 25);
+  const command = commandDefinition(workspaces).toJSON();
+  const run = command.options.find(option => option.name === 'run');
+  const workspace = run.options.find(option => option.name === 'workspace');
+  assert.equal(workspace.autocomplete, true);
+  assert.equal(workspace.choices, undefined);
+  assert.ok(Buffer.byteLength(JSON.stringify(command), 'utf8') < 8_000);
+});
+
+test('the native Goal command schema exposes only the planned bounded actions', () => {
+  const command = commandDefinition(['workspace']).toJSON();
+  const goal = command.options.find(option => option.name === 'goal');
+  assert.equal(goal.type, 2);
+  assert.deepEqual(goal.options.map(option => option.name), ['start', 'status', 'pause', 'resume', 'budget', 'clear']);
+  assert.deepEqual(goal.options.map(option => option.name), GOAL_COMMAND_ACTIONS);
+  const start = goal.options.find(option => option.name === 'start');
+  const objective = start.options.find(option => option.name === 'objective');
+  const startBudget = start.options.find(option => option.name === 'token_budget');
+  assert.equal(objective.required, true);
+  assert.equal(objective.max_length, 4_000);
+  assert.equal(startBudget.required, false);
+  assert.equal(startBudget.min_value, 1);
+  const budget = goal.options.find(option => option.name === 'budget')
+    .options.find(option => option.name === 'token_budget');
+  assert.equal(budget.required, true);
+  assert.equal(budget.min_value, 1);
+});
+
+test('Goal runtime error mapping is bounded and does not leak unknown RPC details', () => {
+  assert.match(formatGoalCommandError({ code: 'GOAL_REVISION_CONFLICT' }), /狀態已改變/);
+  assert.match(formatGoalCommandError({ code: 'GOAL_STATE_INVALID', message: 'private RPC body' }), /無法確認/);
+  assert.doesNotMatch(formatGoalCommandError({ code: 'UNKNOWN', message: 'private RPC body' }), /private RPC body/);
+});
+
 test("progress cards show the configured command tail without retaining commands for the final reply", async () => {
   const edits = [];
   const progress = createProgressReporter({
@@ -364,13 +515,11 @@ test("image uploads accept only trusted Discord image attachments for image-capa
 
 test("output attachment failures preserve the final text and explain the missing permission", async () => {
   const edits = [];
+  const sends = [];
   const warnings = [];
   const status = {
-    edit: async (payload) => {
-      edits.push(payload);
-      if (payload.files?.length > 0) throw Object.assign(new Error("Missing Permissions"), { code: 50_013 });
-    },
-    channel: { send: async () => {} }
+    edit: async payload => edits.push(payload),
+    channel: { send: async payload => { sends.push(payload); throw Object.assign(new Error("Missing Permissions"), { code: 50_013 }); } }
   };
 
   const originalWarn = console.warn;
@@ -381,12 +530,13 @@ test("output attachment failures preserve the final text and explain the missing
     console.warn = originalWarn;
   }
 
-  assert.equal(edits.length, 2);
-  assert.equal(edits[1].files, undefined);
-  assert.match(edits[1].content, /Codex finished/);
-  assert.match(edits[1].content, /Attach Files/);
-  assert.match(edits[1].content, /附件交付未完成/);
-  assert.ok(!edits[1].content.includes("/tmp/"));
+  assert.equal(sends.length, 1, "failed attachment delivery is not blindly retried");
+  assert.equal(sends[0].files.length, 1);
+  assert.equal(edits.length, 1);
+  assert.match(edits[0].content, /Codex finished/);
+  assert.match(edits[0].content, /Attach Files/);
+  assert.match(edits[0].content, /附件交付未完成/);
+  assert.ok(!edits[0].content.includes("/tmp/"));
   assert.deepEqual(warnings, ["Discord attachment delivery unconfirmed for 1 file(s)."]);
 });
 
@@ -396,25 +546,25 @@ test("resolved HTTP requests without a complete attachment receipt cannot claim 
   const receipts = [undefined, { attachments: new Map() }, { attachments: new Map([["1", good]]) },
     { attachments: new Map([["1", { ...good, url: "file:///tmp/a.jar" }]]) }];
   for (const receipt of receipts) {
-    const edits = [];
-    const status = { edit: async payload => { edits.push(payload); return receipt; }, channel: { send: async () => {} } };
+    const edits = [], sends = [];
+    const status = { edit: async payload => edits.push(payload), channel: { send: async payload => { sends.push(payload); return receipt; } } };
     assert.equal(await statusChunks(status, "[jar](/tmp/a.jar) [image](/tmp/b.png)", files), false);
-    assert.equal(edits.filter(edit => edit.files).length, 1, "never blindly repeat an uncertain upload");
-    assert.match(edits[1].content, /Discord 回覆未包含全部預期附件/);
-    assert.ok(!edits[1].content.includes("/tmp/"));
-    assert.ok(!edits[1].content.includes("附件已由 Discord 確認"));
+    assert.equal(sends.filter(send => send.files).length, 1, "never blindly repeat an uncertain upload");
+    assert.match(edits.at(-1).content, /Discord 回覆未包含全部預期附件/);
+    assert.ok(!edits.at(-1).content.includes("/tmp/"));
+    assert.ok(!edits.at(-1).content.includes("附件已另行傳送並由 Discord 確認"));
   }
 });
 
 test("size rejection is explicit, long text stays sanitized and network errors do not leak", async () => {
   for (const error of [Object.assign(new Error("private /secret/token"), { status: 413 }), new Error("private /secret/token")]) {
     const edits = [], sends = [];
-    const status = { edit: async payload => { edits.push(payload); if (payload.files) throw error; },
-      channel: { send: async payload => sends.push(payload) } };
+    const status = { edit: async payload => edits.push(payload),
+      channel: { send: async payload => { sends.push(payload); if (payload.files) throw error; } } };
     assert.equal(await statusChunks(status, "detail ".repeat(400) + "[file](/tmp/result.jar)",
       [{ attachment: "/tmp/result.jar", name: "result.jar" }]), false);
-    assert.match(edits[1].content, error.status === 413 ? /大小限制/ : /結果不明/);
-    for (const payload of [edits[1], ...sends]) {
+    assert.match(edits.at(-1).content, error.status === 413 ? /大小限制/ : /結果不明/);
+    for (const payload of [...edits, ...sends]) {
       assert.ok(!payload.content.includes("/tmp/"));
       assert.ok(!payload.content.includes("/secret/"));
       assert.deepEqual(payload.allowedMentions, { parse: [] });

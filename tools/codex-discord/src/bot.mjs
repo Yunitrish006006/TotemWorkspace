@@ -8,6 +8,10 @@ import { conversationKey, sessionKey, taskKey } from "./session-store.mjs";
 import { createWorkspaceSync } from "./workspace-sync.mjs";
 import { splitDiscordMessage } from "./discord-markdown.mjs";
 import { captureRepositoryCheckpoint } from "../../../intelligence/work-registry.mjs";
+import { listTurns as listHistoryTurns, readThreadMetadata } from "../../../intelligence/agent-runtime/thread-history.mjs";
+import { historyListPayload, historyPreviewPayload, loadHistoryList, loadHistoryPreview, validateHistoryForkSource } from "./history-ui.mjs";
+import { formatGoalCommandError, GOAL_COMMAND_ACTIONS } from './goal-command.mjs';
+import { createGoalLifecycle } from '../../../intelligence/agent-runtime/goal-lifecycle.mjs';
 
 const MAX_DISCORD_MESSAGE = 1_850;
 const PROGRESS_EDIT_INTERVAL_MS = 1_200;
@@ -22,27 +26,30 @@ const DISCORD_REST_TIMEOUT_MS = 5 * 60 * 1_000;
 const LIVE_ONLY_ITEM_TYPES = new Set(["commandexecution", "filechange", "collabagenttoolcall", "collabtoolcall", "subagentactivity"]);
 
 export function commandDefinition(workspaceNames) {
-  const choices = workspaceNames.map((name) => ({ name, value: name }));
-  const workspaceOption = (option) => option
+  const workspaceOption = (option, required = false) => option
     .setName("workspace")
     .setDescription("Allowed local workspace")
-    .setRequired(true)
-    .addChoices(...choices);
+    .setRequired(required)
+    .setAutocomplete(true);
   return new SlashCommandBuilder()
     .setName("codex")
     .setDescription("Run the local Codex CLI in an allow-listed workspace")
     .addSubcommand((subcommand) => subcommand
       .setName("run")
       .setDescription("Start or resume your Codex session")
-      .addStringOption(workspaceOption)
       .addStringOption((option) => option
         .setName("task")
         .setDescription("Coding task for Codex")
         .setRequired(true))
+      .addStringOption(workspaceOption)
       .addAttachmentOption((option) => option
         .setName("image")
         .setDescription("Optional image for Codex to inspect")
         .setRequired(false)))
+    .addSubcommand((subcommand) => subcommand
+      .setName("continue")
+      .setDescription("Find a previous conversation and continue it in a new thread")
+      .addStringOption(workspaceOption))
     .addSubcommand((subcommand) => subcommand
       .setName("status")
       .setDescription("Show your current Codex session state")
@@ -58,7 +65,7 @@ export function commandDefinition(workspaceNames) {
     .addSubcommand((subcommand) => subcommand
       .setName("use")
       .setDescription("Use this workspace for normal messages in this channel")
-      .addStringOption(workspaceOption))
+      .addStringOption(option => workspaceOption(option, true)))
     .addSubcommand((subcommand) => subcommand
       .setName("model")
       .setDescription("Select the Codex model for normal messages in this channel")
@@ -86,7 +93,100 @@ export function commandDefinition(workspaceNames) {
         .setMaxValue(MAX_CLI_PROGRESS_LINES)))
     .addSubcommand((subcommand) => subcommand
       .setName("usage")
-      .setDescription("Show remaining Codex account usage"));
+      .setDescription("Show remaining Codex account usage"))
+    .addSubcommandGroup((group) => group
+      .setName("sessions")
+      .setDescription("Browse local Codex conversation history")
+      .addSubcommand((subcommand) => subcommand
+        .setName("list")
+        .setDescription("List readable local conversations privately")
+        .addStringOption(workspaceOption)
+        .addStringOption((option) => option.setName("query").setDescription("Filter conversation titles").setRequired(false))
+        .addStringOption((option) => option.setName("source").setDescription("Conversation source")
+          .setRequired(false).addChoices(
+            { name: "All readable sources", value: "all" },
+            { name: "Codex CLI", value: "cli" }, { name: "VS Code", value: "vscode" },
+            { name: "Codex App Server", value: "appServer" })))
+      .addSubcommand((subcommand) => subcommand
+        .setName("preview")
+        .setDescription("Open a private read-only conversation preview")
+        .addStringOption((option) => option.setName("thread").setDescription("Short-lived private choice token from the history list")
+          .setRequired(true))
+        .addStringOption(workspaceOption)
+        .addStringOption((option) => option.setName("query").setDescription("Repeat the list filter, if used")
+          .setRequired(false)))
+      .addSubcommand((subcommand) => subcommand
+        .setName("current")
+        .setDescription("Show the conversation currently bound in this channel")
+        .addStringOption(workspaceOption))
+      .addSubcommand((subcommand) => subcommand
+        .setName("handoff")
+        .setDescription("Confirm the selected source work has stopped before continuing here")
+        .addBooleanOption(option => option.setName("confirm")
+          .setDescription("Confirm source work has stopped and output should continue in this channel")
+          .setRequired(true))
+        .addStringOption(workspaceOption)))
+    .addSubcommandGroup((group) => group
+      .setName('goal')
+      .setDescription('Inspect and control a native Codex Goal')
+      .addSubcommand(subcommand => subcommand
+        .setName('start')
+        .setDescription('Create and run a native Goal in this workspace')
+        .addStringOption(option => option.setName('objective').setDescription('Bounded objective for the native Goal')
+          .setRequired(true).setMaxLength(4_000))
+        .addStringOption(workspaceOption)
+        .addIntegerOption(option => option.setName('token_budget').setDescription('Optional total token budget')
+          .setRequired(false).setMinValue(1)))
+      .addSubcommand(subcommand => subcommand
+        .setName('status')
+        .setDescription('Read native Goal status for this workspace')
+        .addStringOption(workspaceOption))
+      .addSubcommand(subcommand => subcommand
+        .setName('pause')
+        .setDescription('Pause the native Goal for this workspace')
+        .addStringOption(workspaceOption))
+      .addSubcommand(subcommand => subcommand
+        .setName('resume')
+        .setDescription('Resume a safely resumable native Goal')
+        .addStringOption(workspaceOption)
+        .addIntegerOption(option => option.setName('token_budget').setDescription('Required new budget when recovering a settled budget-limited Goal')
+          .setRequired(false).setMinValue(1)))
+      .addSubcommand(subcommand => subcommand
+        .setName('budget')
+        .setDescription('Set the budget on a paused native Goal')
+        .addIntegerOption(option => option.setName('token_budget').setDescription('New total token budget')
+          .setRequired(true).setMinValue(1))
+        .addStringOption(workspaceOption))
+      .addSubcommand(subcommand => subcommand
+        .setName('clear')
+        .setDescription('Clear a stopped native Goal')
+        .addStringOption(workspaceOption)));
+}
+
+/** Returns bounded workspace suggestions from the configured allowlist. */
+export function workspaceAutocompleteChoices(workspaceNames, query = "") {
+  const needle = String(query).trim().toLocaleLowerCase();
+  return Array.from(workspaceNames)
+    .filter((name) => !needle || name.toLocaleLowerCase().includes(needle))
+    .sort((left, right) => left.localeCompare(right))
+    .slice(0, MAX_AUTOCOMPLETE_CHOICES)
+    .map((name) => ({ name, value: name }));
+}
+
+export function resolveWorkspaceName({ explicit = null, userId, channelId, parentChannelId = null, sessions, workspaceNames }) {
+  if (typeof explicit === 'string' && explicit) return explicit;
+  const names = Array.from(workspaceNames ?? []);
+  const bound = typeof sessions?.get === 'function'
+    ? names.filter(workspace => sessions.get(sessionKey({ userId, channelId, workspace }))) : [];
+  if (bound.length === 1) return bound[0];
+  const active = sessions?.activeWorkspace?.(conversationKey({ userId, channelId }));
+  if (bound.length > 1) return bound.includes(active) ? active : null;
+  if (names.includes(active)) return active;
+  const parentActive = parentChannelId
+    ? sessions?.activeWorkspace?.(conversationKey({ userId, channelId: parentChannelId })) : null;
+  if (names.includes(parentActive)) return parentActive;
+  if (names.includes('workspace')) return 'workspace';
+  return names.length === 1 ? names[0] : null;
 }
 
 function modelChoiceName(model) {
@@ -212,10 +312,11 @@ function splitMessage(message) {
 export async function statusChunks(status, message, files = []) {
   let content = withoutLocalFileLinks(message);
   let delivered = true;
-  try {
-    if (files.length > 0) {
-      const receipt = await status.edit({ content: "附件上傳中，尚未確認交付。", components: [],
-        attachments: [], files, allowedMentions: { parse: [] } });
+  if (files.length > 0) {
+    try {
+      const names = files.map(file => outputFileName(file.name));
+      const receipt = await status.channel.send({ content: `Codex 附件：${names.join("、")}`,
+        files, allowedMentions: { parse: [] } });
       const attachments = Array.from(receipt?.attachments?.values?.() ?? []);
       const used = new Set();
       for (const file of files) {
@@ -225,26 +326,21 @@ export async function statusChunks(status, message, files = []) {
         if (!match) throw Object.assign(new Error("Attachment receipt incomplete"), { code: "ATTACHMENT_UNCONFIRMED" });
         used.add(match.id);
       }
-      content = `附件已由 Discord 確認：${files.map(file => outputFileName(file.name)).join("、")}\n\n${content}`;
+      content = `附件已另行傳送並由 Discord 確認：${names.join("、")}。\n\n${content}`;
+    } catch (error) {
+      const code = error?.code ?? error?.rawError?.code;
+      const reason = code === 50_013 ? "Bot 缺少 Attach Files 或頻道權限"
+        : code === 40_005 || error?.status === 413 ? "超過 Discord 附件大小限制"
+        : code === "ATTACHMENT_UNCONFIRMED" ? "Discord 回覆未包含全部預期附件"
+        : "上傳失敗或結果不明；請檢查網路、Attach Files 權限及容量限制";
+      console.warn(`Discord attachment delivery unconfirmed for ${files.length} file(s).`);
+      delivered = false;
+      content = `附件交付未完成：${files.map(file => outputFileName(file.name)).join("、")}。${reason}。\n以下僅為文字結果，不代表附件已送達；本機路徑不能下載。\n\n${content}`;
     }
-  } catch (error) {
-    if (error?.code === 10_008 || error?.rawError?.code === 10_008) {
-      console.warn("Discord status message no longer exists; skipping its final update.");
-      return false;
-    }
-    if (files.length === 0) throw error;
-    const code = error?.code ?? error?.rawError?.code;
-    const reason = code === 50_013 ? "Bot 缺少 Attach Files 或頻道權限"
-      : code === 40_005 || error?.status === 413 ? "超過 Discord 附件大小限制"
-      : code === "ATTACHMENT_UNCONFIRMED" ? "Discord 回覆未包含全部預期附件"
-      : "上傳失敗或結果不明；請檢查網路、Attach Files 權限及容量限制";
-    console.warn(`Discord attachment delivery unconfirmed for ${files.length} file(s).`);
-    delivered = false;
-    content = `附件交付未完成：${files.map(file => outputFileName(file.name)).join("、")}。${reason}。\n以下僅為文字結果，不代表附件已送達；本機路徑不能下載。\n\n${content}`;
   }
   const [first, ...rest] = splitMessage(content);
   try {
-    // Omit attachments here: preserve uploads acknowledged by the first edit.
+    // Attachments are sent as a separate channel message before finalizing this status.
     await status.edit({ content: first, components: [], allowedMentions: { parse: [] } });
   } catch (error) {
     if (error?.code === 10_008 || error?.rawError?.code === 10_008) {
@@ -291,6 +387,24 @@ function publicText(value, limit = 600) {
   if (typeof value !== "string") return "";
   const normalized = value.replace(/\s+/g, " ").replace(/@/g, "@\u200b").trim();
   return limit === null ? normalized : normalized.slice(0, limit);
+}
+
+function sessionThreadTitle(task, workspaceName) {
+  const firstLine = typeof task === 'string' ? task.split(/\r?\n/, 1)[0] : '';
+  return publicText(`[${workspaceName}] ${firstLine || `Codex ${workspaceName}`}`, 90);
+}
+
+async function annotateSessionThread(channel, workspaceName) {
+  if (!channel?.isThread?.() || typeof channel.setName !== 'function') return false;
+  const marker = `[${workspaceName}]`;
+  if (channel.name === marker || channel.name?.startsWith(`${marker} `)) return true;
+  const title = publicText(channel.name?.replace(/^\[[a-z0-9-]+\]\s*/i, '') || `Codex ${workspaceName}`, 70);
+  try {
+    await channel.setName(publicText(`${marker} ${title}`, 100), `Mark workspace ${workspaceName}`);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function commandLabel(command, limit = 240) {
@@ -414,6 +528,18 @@ export function approvalComponents(token, approval) {
 
 function questionText(task) {
   return publicText(task, 720) || "（未提供）";
+}
+
+function safeGoalObjective(value) {
+  if (typeof value !== 'string' || !value.trim()) return '（未提供）';
+  const normalized = publicText(value, 160);
+  const labeledSecret = /(?:api[_ -]?key|password|secret|credential|authorization|bearer|token)\s*[:=]/i.test(normalized);
+  const credentialFormat = /(?:gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|sk-[A-Za-z0-9_-]{16,}|xox[baprs]-[A-Za-z0-9-]{16,}|AKIA[0-9A-Z]{16}|AIza[A-Za-z0-9_-]{30,}|eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,})/i;
+  const pathOrUrl = /(?:https?:\/\/|www\.)|(?:\/home\/|\/Users\/|\/tmp\/|[A-Za-z]:\\)/i.test(normalized);
+  if (labeledSecret || credentialFormat.test(normalized) || pathOrUrl) {
+    return '敏感內容已隱藏';
+  }
+  return safeProgressText(normalized, 160) || '敏感內容已隱藏';
 }
 
 function splitProgressLine(text, limit = MAX_FINAL_PROGRESS_LINE) {
@@ -572,6 +698,8 @@ export function createProgressReporter({ workspaceName, task, model, reasoningEf
   let closed = false;
   let lastEditAt = 0;
   let pendingEdit = Promise.resolve();
+  let goalSummary = null;
+  let goalComponents = [];
   const cliProgress = [];
   const retainedProgress = [];
   const streamedProgress = new Map();
@@ -630,6 +758,19 @@ export function createProgressReporter({ workspaceName, task, model, reasoningEf
   };
 
   const content = () => {
+    if (goalSummary) {
+      const status = ['active', 'paused', 'blocked', 'usageLimited', 'budgetLimited', 'complete'].includes(goalSummary.status)
+        ? goalSummary.status : '狀態未確認';
+      const turnsSeen = Number.isSafeInteger(goalSummary.turnsSeen) && goalSummary.turnsSeen >= 0 ? goalSummary.turnsSeen : null;
+      const currentTurn = goalSummary.turnInFlight === true && turnsSeen !== null
+        ? `第 ${turnsSeen || 1} 輪執行中` : turnsSeen === null ? '尚未確認' : `已開始 ${turnsSeen} 輪；等待原生狀態`;
+      const used = Number.isSafeInteger(goalSummary.tokensUsed) && goalSummary.tokensUsed >= 0 ? goalSummary.tokensUsed : null;
+      const budget = Number.isSafeInteger(goalSummary.tokenBudget) && goalSummary.tokenBudget >= 0 ? goalSummary.tokenBudget : null;
+      const objective = safeGoalObjective(goalSummary.objective);
+      const lines = ['**原生 Goal 活動**', `目標：${objective}`, `狀態：${status}`,
+        `目前回合：${currentTurn}`, `用量：${used ?? '未知'} / ${budget ?? '未設定'} tokens`];
+      return lines.join('\n').slice(0, MAX_DISCORD_MESSAGE);
+    }
     const lines = [
       "**問題／需求**",
       questionText(task),
@@ -659,7 +800,8 @@ export function createProgressReporter({ workspaceName, task, model, reasoningEf
       timer = null;
     }
     lastEditAt = Date.now();
-    const payload = { content: content(), components: approval?.components ?? [], allowedMentions: { parse: [] } };
+    const payload = { content: content(), components: goalSummary ? goalComponents : approval?.components ?? goalComponents,
+      allowedMentions: { parse: [] } };
     pendingEdit = pendingEdit.catch(() => {}).then(() => edit(payload)).catch(() => {});
     await pendingEdit;
   };
@@ -735,6 +877,12 @@ export function createProgressReporter({ workspaceName, task, model, reasoningEf
 
   return {
     update,
+    async updateGoalActivity(summary, components = goalComponents) {
+      if (closed) return;
+      goalSummary = { ...goalSummary, ...summary };
+      goalComponents = Array.isArray(components) ? components : [];
+      await flush();
+    },
     async requestApproval(value, components) {
       approval = { value, components };
       activity = value.kind === "user-input" ? "正在等待你的回答…" : "正在等待你的授權…";
@@ -759,6 +907,7 @@ export function createProgressReporter({ workspaceName, task, model, reasoningEf
     },
     async finish() {
       finalizeStreamedProgress();
+      goalComponents = [];
       await flush();
       closed = true;
       return retainedProgress.map((entry) => entry.text);
@@ -807,13 +956,45 @@ export async function persistUsageCheckpoint({ sessions, key, workspaceName, wor
   });
 }
 
-async function runTask({ config, runner, sessions, userId, channelId, workspaceName, task, model = null, reasoningEffort = null, imageUrls = [], onProgress = () => {}, onApproval = () => {}, onUserInput = null }) {
+async function runTask({ config, runner, sessions, ownership = null, historyAccess = null,
+  historyClientFactory = null, historyContext = null, goalClientFactory = null, pendingGoalExpectation = null,
+  userId, channelId, workspaceName, task,
+  model = null, reasoningEffort = null, imageUrls = [], handoffConfirmed = false,
+  goalRun = null, onSessionBound = () => {}, onProgress = () => {}, onApproval = () => {}, onUserInput = null }) {
   const workspaceConfig = config.workspaces.get(workspaceName);
   if (!workspaceConfig) throw new Error("That workspace is not configured");
   const savedKey = sessionKey({ userId, channelId, workspace: workspaceName });
   const activeKey = taskKey({ userId, workspace: workspaceName });
   const saved = sessions.get(savedKey);
+  const observedRevision = sessions.bindingRevision?.(savedKey) ?? saved?.selectionRevision ?? 0;
+  const observedRunEpoch = sessions.runEpoch?.(activeKey) ?? 0;
+  const pendingFork = saved?.origin === 'native-selection' && saved.sessionId === null;
+  if (pendingFork && !handoffConfirmed) {
+    throw Object.assign(new Error('This conversation is pending a safe fork. Confirm the source work has stopped and that follow-up work will run in the selected workspace.'), { code: 'SESSION_HANDOFF_REQUIRED' });
+  }
+  // A fresh Bot process has no local Goal supervisor. Never let an ordinary
+  // task silently resume an unfinished Goal, whether it is bound directly or
+  // selected as a pending history fork. Only the explicit Goal-resume path may
+  // fork and reattach supervision to an inherited Goal.
+  const recoverySourceThreadId = pendingFork ? saved.sourceThreadId : saved?.sessionId;
+  if (!goalRun && recoverySourceThreadId && typeof goalClientFactory === 'function') {
+    const goalClient = await goalClientFactory({ cwd: workspaceConfig.path });
+    let goalState;
+    try { goalState = await createGoalLifecycle({ client: goalClient }).get(recoverySourceThreadId); }
+    finally { await goalClient.close(); }
+    const confirmedHistoryFork = pendingFork && handoffConfirmed;
+    const parkedPreparedFork = saved?.origin === 'native-fork' && saved.forkGoalPrepared === true
+      && ['paused', 'blocked'].includes(goalState.goal?.status);
+    if (goalState.goal && goalState.goal.status !== 'complete' && !confirmedHistoryFork && !parkedPreparedFork) {
+      throw Object.assign(new Error('此對話綁定了未完成的原生 Goal。若要繼續 Goal，請從 `/codex sessions list` 選取來源、確認交接後使用 `/codex goal resume`；若要改用一般對話，確認交接後直接送出一般訊息或 `/codex run`，Bot 會 fork 新 thread 並只暫停 fork 的 Goal。已準備的 paused/blocked fork 可以直接正常對話。'), {
+        code: 'GOAL_RECOVERY_REQUIRED'
+      });
+    }
+  }
+  const runLease = typeof sessions.beginRun === 'function'
+    ? await sessions.beginRun(savedKey, activeKey, observedRevision, observedRunEpoch, { allowPendingFork: pendingFork && handoffConfirmed }) : null;
   const checkpointWrites = [];
+  try {
   const result = await runner.execute({
     key: activeKey,
     workspace: workspaceConfig.path,
@@ -823,9 +1004,73 @@ async function runTask({ config, runner, sessions, userId, channelId, workspaceN
     imageUrls,
     skipGitRepoCheck: workspaceConfig.allowNonGit,
     resumeSessionId: saved?.sessionId ?? null,
+    resumePolicy: goalRun && saved?.sessionId ? 'exact' : saved?.origin === 'native-fork' ? 'exact' : 'fallback',
+    forkFrom: pendingFork ? { threadId: saved.sourceThreadId, lastTurnId: saved.sourceLastCompletedTurnId } : null,
+    prepareForkGoal: !goalRun && (pendingFork || (saved?.origin === 'native-fork' && saved.forkGoalPrepared !== true)),
+    goalRun,
+    onBeforeFork: async () => {
+      if (!pendingFork || !historyAccess || typeof historyClientFactory !== 'function' || !historyContext) {
+        throw new Error('History fork source cannot be revalidated');
+      }
+      const scope = await historyAccess.authorizeContext({ ...historyContext, workspaceName });
+      const client = await historyClientFactory({ cwd: scope.workspacePath });
+      try {
+        await validateHistoryForkSource({ client, access: historyAccess, context: historyContext,
+          workspaceName, sourceThreadId: saved.sourceThreadId, source: saved.source,
+          lastCompletedTurnId: saved.sourceLastCompletedTurnId,
+          sourceUpdatedAt: saved.sourceUpdatedAt });
+      } finally { await client.close(); }
+      if (goalRun) {
+        const goalClient = await goalClientFactory({ cwd: workspaceConfig.path });
+        try {
+          const sourceGoal = await createGoalLifecycle({ client: goalClient }).get(saved.sourceThreadId);
+          if (pendingGoalExpectation) {
+            if (!sourceGoal.goal || sourceGoal.revision !== pendingGoalExpectation.revision) {
+              throw Object.assign(new Error('Selected source Goal changed after confirmation'), { code: 'GOAL_REVISION_CONFLICT' });
+            }
+          } else if (sourceGoal.goal && sourceGoal.goal.status !== 'complete') {
+            throw Object.assign(new Error('Selected source now has an unfinished native Goal'), { code: 'GOAL_ALREADY_EXISTS' });
+          }
+        } finally { await goalClient.close(); }
+      }
+    },
     resumeCheckpoint: saved?.checkpoint ?? null,
     onSessionId: async (sessionId) => {
-      await sessions.set(savedKey, { sessionId, workspace: workspaceName, updatedAt: new Date().toISOString() });
+      if (ownership) await ownership.claim({ threadId: sessionId, ownerUserId: userId, provenance: 'discord-runtime' });
+      await sessions.set(savedKey, { sessionId, workspace: workspaceName,
+        ...(pendingFork || saved?.origin === 'native-fork' ? { origin: 'native-fork', sourceThreadId: saved.sourceThreadId,
+          sourceLastCompletedTurnId: saved.sourceLastCompletedTurnId,
+          sourceUpdatedAt: saved.sourceUpdatedAt, forkGoalPrepared: pendingFork ? false : saved.forkGoalPrepared === true } : {}),
+        updatedAt: new Date().toISOString() });
+      await onSessionBound(sessionId);
+    },
+    onForkPrepared: async sessionId => {
+      if (pendingFork || saved?.origin === 'native-fork') {
+        if (pendingFork && pendingGoalExpectation) {
+          const goalClient = await goalClientFactory({ cwd: workspaceConfig.path });
+          try {
+            const target = (await createGoalLifecycle({ client: goalClient }).get(sessionId)).goal;
+            const expected = pendingGoalExpectation.goal;
+            // A recovered active source is forked only after the explicit
+            // history handoff gate. The runtime pauses the fork before this
+            // callback so the new exact-thread supervisor can safely resume
+            // it; the source Goal itself remains untouched.
+            const expectedForkStatus = expected.status === 'active' ? 'paused' : expected.status;
+            const inherited = target && ['objective', 'tokenBudget', 'tokensUsed', 'timeUsedSeconds', 'createdAt']
+              .every(field => target[field] === expected[field]) && target.status === expectedForkStatus;
+            const safelyResumableFork = ['paused', 'blocked'].includes(target?.status)
+              || expected.status === 'budgetLimited' && target?.status === 'budgetLimited';
+            if (!inherited || !safelyResumableFork) {
+              throw Object.assign(new Error('Forked Goal does not match the confirmed source state'), { code: 'GOAL_READBACK_MISMATCH' });
+            }
+          } finally { await goalClient.close(); }
+        }
+        await sessions.set(savedKey, { sessionId, workspace: workspaceName, origin: 'native-fork',
+          sourceThreadId: saved.sourceThreadId,
+          sourceLastCompletedTurnId: saved.sourceLastCompletedTurnId,
+          ...(Number.isFinite(saved.sourceUpdatedAt) ? { sourceUpdatedAt: saved.sourceUpdatedAt } : {}),
+          forkGoalPrepared: true, updatedAt: new Date().toISOString() });
+      }
     },
     onProgress,
     onUsageCheckpoint: event => {
@@ -838,7 +1083,7 @@ async function runTask({ config, runner, sessions, userId, channelId, workspaceN
     onUserInput
   });
   await Promise.all(checkpointWrites);
-  if (result.sessionId && result.sessionId !== saved?.sessionId) {
+  if (result.sessionId && result.sessionId !== saved?.sessionId && !pendingFork) {
     await sessions.set(savedKey, { sessionId: result.sessionId, workspace: workspaceName, updatedAt: new Date().toISOString() });
   }
   if (result.exitCode === 0 && !result.timedOut && result.checkpointMutable === true
@@ -846,6 +1091,9 @@ async function runTask({ config, runner, sessions, userId, channelId, workspaceN
     await sessions.clearCheckpoint(savedKey, result.sessionId ?? saved?.sessionId ?? null);
   }
   return { key: activeKey, result };
+  } finally {
+    if (runLease && typeof sessions.endRun === 'function') await sessions.endRun(savedKey, runLease, activeKey);
+  }
 }
 
 export async function registerCommands(config) {
@@ -855,9 +1103,15 @@ export async function registerCommands(config) {
   });
 }
 
-export async function startBot({ config, runner, sessions, models = [], clientFactory = options => new Client(options) }) {
+export async function startBot({ config, runner, sessions, models = [], ownership = null,
+  historyAccess = null, historyClientFactory = null, goalClientFactory = null,
+  now = Date.now,
+  clientFactory = options => new Client(options) }) {
   const approvals = new Map();
   const activeTasks = new Map();
+  const goalCardStates = new Map();
+  const historyUiState = new Map();
+  const handoffGrants = new Map();
   const workspaceSync = createWorkspaceSync({ config });
   const catalogWorkspace = config.workspaces.values().next().value;
   let usagePresenceRefresh = Promise.resolve();
@@ -879,6 +1133,44 @@ export async function startBot({ config, runner, sessions, models = [], clientFa
     });
     return token;
   };
+  const createSessionThread = async ({ channel, starterMessage = null, userId, title }) => {
+    const parent = channel?.isThread?.() ? channel.parent : channel;
+    if (!parent || typeof parent.send !== 'function') return channel;
+    const starter = starterMessage && starterMessage.channelId === parent.id
+      ? starterMessage
+      : await parent.send({ content: `Codex session：${publicText(title || '新工作', 70)}`, allowedMentions: { parse: [] } });
+    if (typeof starter?.startThread !== 'function') return channel;
+    const thread = await starter.startThread({ name: publicText(title || 'Codex session', 90) || 'Codex session',
+      autoArchiveDuration: 1440, reason: 'Create a dedicated thread for a new Codex session' });
+    const sourceConversation = conversationKey({ userId, channelId: channel.id });
+    const targetConversation = conversationKey({ userId, channelId: thread.id });
+    const workspace = sessions.activeWorkspace(sourceConversation);
+    const model = sessions.activeModel(sourceConversation);
+    const effort = sessions.activeReasoningEffort(sourceConversation);
+    const lines = sessions.progressLineCount(sourceConversation);
+    if (workspace) await sessions.setActiveWorkspace(targetConversation, workspace);
+    if (model) await sessions.setActiveModel(targetConversation, model);
+    if (effort) await sessions.setActiveReasoningEffort(targetConversation, effort);
+    if (lines !== null && lines !== undefined && typeof sessions.setProgressLineCount === 'function')
+      await sessions.setProgressLineCount(targetConversation, lines);
+    return thread;
+  };
+  const pinGoalStatus = async status => {
+    if (typeof status?.pin !== 'function') return false;
+    try { await status.pin('Pin the active Codex Goal status for this session'); return true; }
+    catch (error) {
+      console.warn(`Could not pin the Goal status message: ${error.message}`);
+      return false;
+    }
+  };
+  const copyPendingSelection = async (binding, key) => {
+    if (binding?.origin !== 'native-selection' || binding.sessionId !== null
+        || typeof sessions.setPendingSelection !== 'function') return;
+    await sessions.setPendingSelection(key, { workspace: binding.workspace, source: binding.source,
+      sourceThreadId: binding.sourceThreadId, sourceLastCompletedTurnId: binding.sourceLastCompletedTurnId,
+      sourceUpdatedAt: binding.sourceUpdatedAt ?? null,
+      expectedRevision: sessions.bindingRevision?.(key) ?? 0 });
+  };
   const resolveApproval = async (key, requestId, runId) => {
     for (const [token, approval] of approvals) {
       if (approval.key === key && approval.runId === runId && approval.requestId === String(requestId)) {
@@ -898,11 +1190,629 @@ export async function startBot({ config, runner, sessions, models = [], clientFa
       retries: 1
     }
   });
+  const rememberHistoryState = (token, value) => {
+    const now = Date.now();
+    for (const [key, state] of historyUiState) if (state.expiresAt <= now) historyUiState.delete(key);
+    if (historyUiState.size >= 256) historyUiState.delete(historyUiState.keys().next().value);
+    historyUiState.set(token, { ...value, expiresAt: now + 5 * 60_000 });
+  };
+  const historyContext = interaction => ({ userId: interaction.user.id, guildId: interaction.guildId,
+    channelId: interaction.channelId, parentId: interaction.channel?.parentId ?? null });
+  const hasActiveGoalInConversation = interaction => [...activeTasks.values()].some(activeTask =>
+    activeTask.goal?.threadId && activeTask.userId === interaction.user.id
+      && activeTask.guildId === interaction.guildId && activeTask.channelId === interaction.channelId);
+  const historyUiMatches = (state, interaction) => state && state.expiresAt > Date.now()
+    && state.userId === interaction.user.id && state.guildId === interaction.guildId
+    && state.channelId === interaction.channelId;
+  const goalCardComponents = activeTask => {
+    const goal = activeTask.goal;
+    if (goal.cardToken) goalCardStates.delete(goal.cardToken);
+    goal.cardToken = null;
+    if (!goal.threadId || !activeTask.statusMessageId) return [];
+    const currentTime = now();
+    for (const [token, state] of goalCardStates) if (state.expiresAt <= currentTime) goalCardStates.delete(token);
+    while (goalCardStates.size >= 512) goalCardStates.delete(goalCardStates.keys().next().value);
+    const token = randomUUID();
+    goal.cardToken = token;
+    goalCardStates.set(token, { mapKey: activeTask.mapKey, key: activeTask.key, runId: activeTask.runId,
+      statusMessageId: activeTask.statusMessageId, userId: activeTask.userId, guildId: activeTask.guildId,
+      channelId: activeTask.channelId, threadId: goal.threadId, turnId: goal.turnId ?? null,
+      turnsSeen: goal.turnsSeen ?? 0, expiresAt: currentTime + 30 * 60_000, progress: activeTask.progress });
+    const buttons = [];
+    if (goal.status === 'active') buttons.push(new ButtonBuilder().setCustomId(`codex:goal:${token}:pause`)
+      .setLabel('暫停 Goal').setStyle(ButtonStyle.Danger));
+    buttons.push(new ButtonBuilder().setCustomId(`codex:goal:${token}:status`)
+      .setLabel('更新狀態').setStyle(ButtonStyle.Secondary));
+    return [new ActionRowBuilder().addComponents(...buttons)];
+  };
+  const updateGoalActivity = async (activeTask, summary) => {
+    Object.assign(activeTask.goal, summary);
+    await activeTask.progress.updateGoalActivity(activeTask.goal, goalCardComponents(activeTask));
+  };
+  const retireGoalCard = activeTask => {
+    if (activeTask?.goal?.cardToken) goalCardStates.delete(activeTask.goal.cardToken);
+    if (activeTask?.goal) activeTask.goal.cardToken = null;
+  };
+  const consumeHandoffGrant = (key, context, binding) => {
+    const grant = handoffGrants.get(key);
+    handoffGrants.delete(key);
+    return Boolean(grant && grant.expiresAt > Date.now()
+      && grant.userId === context.userId && grant.guildId === context.guildId
+      && grant.channelId === context.channelId
+      && grant.selectionRevision === binding?.selectionRevision
+      && grant.sourceThreadId === binding?.sourceThreadId
+      && grant.sourceUpdatedAt === binding?.sourceUpdatedAt
+      && grant.sourceLastCompletedTurnId === binding?.sourceLastCompletedTurnId);
+  };
+  const rememberHandoffGrant = (key, grant) => {
+    const now = Date.now();
+    for (const [entryKey, value] of handoffGrants) if (value.expiresAt <= now) handoffGrants.delete(entryKey);
+    if (handoffGrants.size >= 256) handoffGrants.delete(handoffGrants.keys().next().value);
+    handoffGrants.set(key, grant);
+  };
+  const validateAndRememberHistoryHandoff = async ({ key, context, workspaceName, binding }) => {
+    if (binding?.origin !== 'native-selection' || binding.sessionId !== null
+        || !Number.isSafeInteger(binding.selectionRevision)
+        || typeof binding.sourceThreadId !== 'string'
+        || typeof binding.sourceLastCompletedTurnId !== 'string') {
+      throw new Error('目前沒有可確認交接的待續接對話；請先重新選取歷史對話。');
+    }
+    if (activeWorkspaceTask(context.userId, workspaceName)) {
+      throw new Error('這個工作區仍有 Codex 工作執行中，請完成或取消後再確認交接。');
+    }
+    const workspace = config.workspaces.get(workspaceName);
+    if (!workspace || !historyAccess) throw new Error('來源歷史目前無法重新驗證。');
+    await withHistoryClient(workspace.path, client => validateHistoryForkSource({ client,
+      access: historyAccess, context, workspaceName,
+      sourceThreadId: binding.sourceThreadId, source: binding.source,
+      lastCompletedTurnId: binding.sourceLastCompletedTurnId,
+      sourceUpdatedAt: binding.sourceUpdatedAt }));
+    rememberHandoffGrant(key, { userId: context.userId, guildId: context.guildId,
+      channelId: context.channelId, selectionRevision: binding.selectionRevision,
+      sourceThreadId: binding.sourceThreadId,
+      sourceUpdatedAt: binding.sourceUpdatedAt,
+      sourceLastCompletedTurnId: binding.sourceLastCompletedTurnId,
+      expiresAt: Date.now() + 5 * 60_000 });
+  };
+  const autoPauseAndSelectActiveGoal = async ({ interaction, workspaceName, key, context, workspaceRunKey,
+    sourceThreadId = null, reply }) => {
+    if (!historyAccess || !config.historyEnabled || typeof historyClientFactory !== 'function') {
+      throw Object.assign(new Error('Automatic Goal handoff requires authorized history access'), { code: 'GOAL_RECOVERY_REQUIRED' });
+    }
+    const candidates = [...activeTasks.values()].filter(task => task.userId === context.userId
+      && task.guildId === context.guildId
+      && task.workspaceName === workspaceName && task.goal?.threadId && task.goal.status !== 'complete'
+      && (!sourceThreadId || task.goal.threadId === sourceThreadId));
+    if (candidates.length !== 1) {
+      throw Object.assign(new Error(candidates.length ? 'More than one controlled Goal could be handed off'
+        : 'No locally controlled Goal is available for automatic handoff'), { code: 'GOAL_RECOVERY_REQUIRED' });
+    }
+    const sourceTask = candidates[0];
+    if (typeof runner.pauseGoal !== 'function' || !runner.isRunning?.(sourceTask.key)) {
+      throw Object.assign(new Error('The old Goal has no live controller that can stop it safely'), { code: 'GOAL_SUPERVISOR_REQUIRED' });
+    }
+    await reply({ content: '正在暫停舊 Goal，確認回合停止後會自動 fork 並在這個 thread 恢復…' });
+    const accepted = await runner.pauseGoal(sourceTask.key, { threadId: sourceTask.goal.threadId,
+      turnId: sourceTask.goal.turnId ?? null, turnsSeen: sourceTask.goal.turnsSeen ?? 0 });
+    if (!accepted) throw Object.assign(new Error('The old Goal controller did not accept the pause request'), {
+      code: 'GOAL_SUPERVISOR_REQUIRED'
+    });
+    await sourceTask.settled;
+
+    const workspace = config.workspaces.get(workspaceName);
+    const goalClient = await goalClientFactory({ cwd: workspace.path });
+    let stoppedGoal;
+    try { stoppedGoal = (await createGoalLifecycle({ client: goalClient }).get(sourceTask.goal.threadId)).goal; }
+    finally { await goalClient.close(); }
+    if (!stoppedGoal || stoppedGoal.status !== 'paused' || stoppedGoal.objective !== sourceTask.goal.objective) {
+      throw Object.assign(new Error('The old Goal did not settle in a matching paused state'), { code: 'GOAL_READBACK_MISMATCH' });
+    }
+
+    const source = await withHistoryClient(workspace.path, async client => {
+      const scope = await historyAccess.authorizeContext({ ...context, workspaceName });
+      const metadata = await readThreadMetadata(client, { threadId: sourceTask.goal.threadId,
+        cwd: scope.workspacePath, sourceKinds: ['cli', 'vscode', 'appServer', 'unknown'] });
+      await historyAccess.assertThreadReadable({ ...context, workspaceName }, metadata);
+      if (metadata.runtimeStatus === 'active') {
+        throw Object.assign(new Error('The old Goal thread still reports an active runtime'), { code: 'HISTORY_SOURCE_ACTIVE' });
+      }
+      const turns = [];
+      let cursor = null;
+      for (let page = 0; page < 20; page++) {
+        const result = await listHistoryTurns(client, { threadId: metadata.id, cursor, limit: 5 });
+        turns.push(...result.turns);
+        if (!result.nextCursor) break;
+        cursor = result.nextCursor;
+        if (page === 19) throw Object.assign(new Error('Recent Goal history exceeds the safe handoff window'), {
+          code: 'HISTORY_SOURCE_UNCERTAIN'
+        });
+      }
+      if (turns.some(turn => ['inProgress', 'running', 'active', 'pending'].includes(turn.status))) {
+        throw Object.assign(new Error('The old Goal still has an unfinished source turn'), { code: 'HISTORY_SOURCE_ACTIVE' });
+      }
+      const latest = turns.filter(turn => turn.status === 'completed')
+        .sort((a, b) => (b.completedAt ?? b.startedAt ?? 0) - (a.completedAt ?? a.startedAt ?? 0))[0];
+      if (!latest) throw Object.assign(new Error('No completed source turn is available for a safe fork'), {
+        code: 'HISTORY_SOURCE_UNCERTAIN'
+      });
+      return { metadata, latest };
+    });
+    const binding = await sessions.setPendingSelection(key, { workspace: workspaceName,
+      source: source.metadata.source, sourceThreadId: source.metadata.id,
+      sourceLastCompletedTurnId: source.latest.id, sourceUpdatedAt: source.metadata.updatedAt,
+      expectedRevision: sessions.bindingRevision?.(key) ?? sessions.get(key)?.selectionRevision ?? 0,
+      expectedRunEpoch: sessions.runEpoch?.(workspaceRunKey) ?? null, workspaceRunKey });
+    await validateAndRememberHistoryHandoff({ key, context, workspaceName, binding });
+    return binding;
+  };
+  const activeWorkspaceTask = (userId, workspaceName) => {
+    const key = taskKey({ userId, workspace: workspaceName });
+    return runner.isRunning(key) || [...activeTasks.values()].some(task => task.key === key);
+  };
+  const withHistoryClient = async (workspacePath, callback) => {
+    if (!historyClientFactory) throw new Error('本機歷史讀取尚未設定。');
+    const client = await historyClientFactory({ cwd: workspacePath });
+    try { return await callback(client); }
+    finally { await client.close(); }
+  };
+  const executeGoalRun = async ({ interaction, workspaceName, objective, goalRun, status, handoffConfirmed = false,
+    pendingGoalExpectation = null }) => {
+    const workspace = config.workspaces.get(workspaceName);
+    const executionChannelId = status.channelId ?? status.channel?.id ?? interaction.channelId;
+    const bindingKey = sessionKey({ userId: interaction.user.id, channelId: executionChannelId, workspace: workspaceName });
+    const activeKey = taskKey({ userId: interaction.user.id, workspace: workspaceName });
+    const conversation = conversationKey({ userId: interaction.user.id, channelId: executionChannelId });
+    const model = sessions.activeModel(conversation);
+    const activeModel = activeCatalogModel(model, models);
+    const reasoningEffort = sessions.activeReasoningEffort(conversation);
+    const runId = randomUUID();
+    let resolveSettled;
+    const settled = new Promise(resolve => { resolveSettled = resolve; });
+    const activeTask = { key: activeKey, runId, mapKey: bindingKey, userId: interaction.user.id, settled,
+      guildId: interaction.guildId, channelId: executionChannelId, workspaceName,
+      statusMessageId: status.id, model: activeModel,
+      goal: { objective, status: 'preparing', threadId: sessions.get(bindingKey)?.sessionId ?? null,
+        turnId: null, turnsSeen: 0, turnsCompleted: 0, turnInFlight: false, tokenBudget: null, tokensUsed: null } };
+    const progress = createProgressReporter({ workspaceName, task: objective, model, reasoningEffort,
+      progressLines: 0, edit: payload => status.edit(payload) });
+    activeTask.progress = progress;
+    let taskStarted = false;
+    try {
+      claimActiveTask(activeTasks, activeTask, runner);
+      taskStarted = true;
+      await updateGoalActivity(activeTask, {});
+      workspaceSync.record(workspaceName, { runId, event: 'started' });
+      if (typeof sessions.setActiveWorkspace === 'function') await sessions.setActiveWorkspace(conversation, workspaceName);
+      const { result } = await runTask({
+        config, runner, sessions, ownership, historyAccess, historyClientFactory, goalClientFactory, pendingGoalExpectation,
+        historyContext: historyContext(interaction), handoffConfirmed,
+        userId: interaction.user.id, channelId: executionChannelId,
+        workspaceName, task: objective, model, reasoningEffort, goalRun,
+        onSessionBound: async threadId => {
+          activeTask.goal.threadId = threadId;
+          await updateGoalActivity(activeTask, {});
+        },
+        onProgress: async event => {
+          if (event?.method === 'serverRequest/resolved') await resolveApproval(activeKey, event.params?.requestId, runId);
+          if (event?.method === 'turn/started') {
+            const turnId = event.params?.turn?.id ?? event.params?.turnId;
+            if (typeof turnId === 'string' && turnId) {
+              await updateGoalActivity(activeTask, { turnId, turnInFlight: true,
+                turnsSeen: Math.max(activeTask.goal.turnsSeen ?? 0, (event.params?.turn?.index ?? 0) + 1) });
+            }
+          } else if (event?.method === 'bridge/goalStatus') {
+            const params = event.params ?? {};
+            const summary = {};
+            if (['active', 'paused', 'blocked', 'usageLimited', 'budgetLimited', 'complete'].includes(params.status)) summary.status = params.status;
+            if (Number.isSafeInteger(params.turnsSeen) && params.turnsSeen >= 0) summary.turnsSeen = Math.max(activeTask.goal.turnsSeen ?? 0, params.turnsSeen);
+            if (Number.isSafeInteger(params.turnsCompleted) && params.turnsCompleted >= 0) summary.turnsCompleted = Math.max(activeTask.goal.turnsCompleted ?? 0, params.turnsCompleted);
+            if (typeof params.turnInFlight === 'boolean') summary.turnInFlight = params.turnInFlight;
+            if (summary.turnInFlight === false) summary.turnId = null;
+            else if (typeof params.turnId === 'string' && params.turnId) summary.turnId = params.turnId;
+            if (Number.isSafeInteger(params.tokenBudget) && params.tokenBudget >= 0) summary.tokenBudget = params.tokenBudget;
+            if (Number.isSafeInteger(params.tokensUsed) && params.tokensUsed >= 0) summary.tokensUsed = params.tokensUsed;
+            await updateGoalActivity(activeTask, summary);
+          }
+          progress.update(event);
+        },
+        onUserInput: input => presentUserInput({ input, key: activeKey, userId: interaction.user.id,
+          channelId: executionChannelId, status, register: args => registerApproval({ ...args, runId }),
+          forget: token => approvals.delete(token),
+          send: payload => interaction.followUp({ ...payload, ephemeral: true, allowedMentions: { parse: [] } }) }),
+        onApproval: async approval => {
+          const token = registerApproval({ approval, runId, key: activeKey, userId: interaction.user.id,
+            channelId: executionChannelId, progress });
+          await progress.requestApproval(approval, []);
+          await interaction.followUp({ content: approvalDescription(approval), components: approvalComponents(token, approval),
+            ephemeral: true, allowedMentions: { parse: [] } });
+        }
+      });
+      const latestBinding = sessions.get(bindingKey);
+      let terminal = null;
+      if (latestBinding?.sessionId && typeof goalClientFactory === 'function') {
+        try {
+          const client = await goalClientFactory({ cwd: workspace.path });
+          try { terminal = (await createGoalLifecycle({ client }).get(latestBinding.sessionId)).goal; }
+          finally { await client.close(); }
+        } catch { terminal = null; }
+      }
+      await updateGoalActivity(activeTask, terminal ? { status: terminal.status,
+        tokenBudget: terminal.tokenBudget, tokensUsed: terminal.tokensUsed, turnInFlight: false, turnId: null }
+        : { status: '狀態未確認', turnInFlight: false, turnId: null });
+      retireGoalCard(activeTask);
+      await progress.updateGoalActivity(activeTask.goal, []);
+      await progress.finish();
+      workspaceSync.record(workspaceName, { runId, event: result.exitCode === 0 ? 'completed' : 'failed' });
+      return { result, terminal };
+    } catch (error) {
+      if (taskStarted) workspaceSync.record(workspaceName, { runId, event: 'failed' });
+      retireGoalCard(activeTask);
+      await progress.updateGoalActivity({ ...activeTask.goal, status: '狀態未確認' }, []);
+      await progress.finish();
+      throw error;
+    } finally {
+      retireGoalCard(activeTask);
+      if (activeTasks.get(bindingKey) === activeTask) activeTasks.delete(bindingKey);
+      try {
+        if (taskStarted) {
+          await clearRunApprovals(approvals, runId);
+          void refreshUsagePresence();
+        }
+      } finally { resolveSettled(); }
+    }
+  };
+  const renderHistoryPage = async ({ interaction, context, workspaceName, query, source, cursors = [], flow = 'history', update = false }) => {
+    if (!config.historyEnabled || !historyAccess) throw new Error('對話歷史功能目前未啟用。');
+    const workspace = config.workspaces.get(workspaceName);
+    if (!workspace) throw new Error('這個工作區未設定。');
+    const bindingKey = sessionKey({ userId: context.userId, channelId: context.channelId, workspace: workspaceName });
+    const workspaceRunKey = taskKey({ userId: context.userId, workspace: workspaceName });
+    const expectedRevision = sessions.bindingRevision?.(bindingKey)
+      ?? sessions.get(bindingKey)?.selectionRevision ?? 0;
+    const expectedRunEpoch = sessions.runEpoch?.(workspaceRunKey) ?? 0;
+    const result = await withHistoryClient(workspace.path, client => loadHistoryList({ client,
+      access: historyAccess, context, workspaceName, query, source, cursors }));
+    const goalStatuses = new Map(result.threads.map(thread => [thread.id, 'unknown']));
+    if (typeof goalClientFactory === 'function' && result.threads.length) {
+      let goalClient;
+      try {
+        goalClient = await goalClientFactory({ cwd: workspace.path });
+        const lifecycle = createGoalLifecycle({ client: goalClient });
+        await Promise.all(result.threads.map(async thread => {
+          try {
+            const state = await lifecycle.get(thread.id);
+            goalStatuses.set(thread.id, state.goal?.status ?? null);
+          } catch { /* Preserve an explicit unknown marker for failed read-only status probes. */ }
+        }));
+      } catch { /* History remains useful when Goal status is unavailable. */ }
+      finally {
+        if (goalClient) try { await goalClient.close(); } catch { /* A status client close failure must not hide history. */ }
+      }
+    }
+    const threadsWithGoalStatus = result.threads.map(thread => ({ ...thread, goalStatus: goalStatuses.get(thread.id) }));
+    for (const [index, token] of result.candidateTokens.entries()) rememberHistoryState(token, { kind: 'candidate', query,
+      flow, goalStatus: threadsWithGoalStatus[index]?.goalStatus ?? 'unknown', workspaceName, expectedRevision,
+      expectedRunEpoch, userId: context.userId, guildId: context.guildId, channelId: context.channelId });
+    if (result.nextToken) rememberHistoryState(result.nextToken, { kind: 'cursor', query, source, flow, workspaceName,
+      userId: context.userId, guildId: context.guildId, channelId: context.channelId });
+    const payload = historyListPayload({ workspaceName, threads: threadsWithGoalStatus,
+      candidateTokens: result.candidateTokens, nextToken: result.nextToken, flow });
+    if (update) await interaction.update({ ...payload, allowedMentions: { parse: [] } });
+    else if (interaction.deferred || interaction.replied) await interaction.editReply({ ...payload, allowedMentions: { parse: [] } });
+    else await interaction.reply({ ...payload, ephemeral: true, allowedMentions: { parse: [] } });
+  };
+  const renderHistoryPreview = async ({ interaction, context, state, token, update = false }) => {
+    if (!config.historyEnabled || !historyAccess) throw new Error('對話歷史功能目前未啟用。');
+    const workspace = config.workspaces.get(state.workspaceName);
+    if (!workspace) throw new Error('這個工作區未設定。');
+    const preview = await withHistoryClient(workspace.path, client => loadHistoryPreview({ client,
+      access: historyAccess, context, workspaceName: state.workspaceName, token, query: state.query,
+      turnCursor: state.turnCursor ?? null, turnId: state.turnId ?? null, itemCursor: state.itemCursor ?? null }));
+    let goalStatus = state.goalStatus ?? 'unknown';
+    if (typeof goalClientFactory === 'function') {
+      let client;
+      try {
+        client = await goalClientFactory({ cwd: workspace.path });
+        const current = await createGoalLifecycle({ client }).get(preview.metadata.id);
+        goalStatus = current.goal?.status ?? null;
+      } catch { goalStatus = 'unknown'; }
+      finally { if (client) try { await client.close(); } catch { /* Goal metadata is optional for preview. */ } }
+    }
+    const pageState = { kind: 'preview-page', candidateToken: token, query: state.query, flow: state.flow,
+      goalStatus,
+      workspaceName: state.workspaceName, userId: context.userId, guildId: context.guildId,
+      channelId: context.channelId, turnId: preview.turnId, turnCursor: preview.nextTurnCursor };
+    const nextItemToken = preview.nextItemCursor ? randomUUID() : null;
+    const nextTurnToken = preview.nextTurnCursor ? randomUUID() : null;
+    if (nextItemToken) rememberHistoryState(nextItemToken, { ...pageState, itemCursor: preview.nextItemCursor });
+    if (nextTurnToken) rememberHistoryState(nextTurnToken, { ...pageState, turnId: null, itemCursor: null });
+    const payload = historyPreviewPayload({ workspaceName: state.workspaceName, thread: preview.metadata,
+      turns: preview.turns, messages: preview.messages, more: preview.more, nextItemToken, nextTurnToken,
+      candidateToken: token, continueMode: state.flow === 'continue', goalStatus });
+    const [first, ...rest] = payload.contents;
+    if (update) await interaction.update({ content: first, components: payload.components, allowedMentions: { parse: [] } });
+    else if (interaction.deferred || interaction.replied) await interaction.editReply({ content: first,
+      components: payload.components, allowedMentions: { parse: [] } });
+    else await interaction.reply({ content: first, ephemeral: true, allowedMentions: { parse: [] } });
+    for (const content of rest) await interaction.followUp({ content, ephemeral: true, allowedMentions: { parse: [] } });
+  };
+  const selectHistoryBinding = async ({ interaction, context, token, state }) => {
+    if (!historyAccess || !config.historyEnabled || typeof sessions.setPendingSelection !== 'function') {
+      throw new Error('對話選取功能目前無法使用。');
+    }
+    const key = sessionKey({ userId: context.userId, channelId: context.channelId, workspace: state.workspaceName });
+    const workspaceRunKey = taskKey({ userId: context.userId, workspace: state.workspaceName });
+    if (activeWorkspaceTask(context.userId, state.workspaceName)) throw new Error('這個工作區仍有 Codex 工作執行中，請完成或取消後再選取。');
+    const workspace = config.workspaces.get(state.workspaceName);
+    if (!workspace) throw new Error('這個工作區未設定。');
+    const preview = await withHistoryClient(workspace.path, client => loadHistoryPreview({ client,
+      access: historyAccess, context, workspaceName: state.workspaceName, token, query: state.query }));
+    if (!preview.turnId) throw new Error('來源對話尚無已完成回合，無法安全保存續接錨點。');
+    if (activeWorkspaceTask(context.userId, state.workspaceName)) throw new Error('這個工作區已有工作開始，請完成或取消後再選取。');
+    const expectedRevision = Number.isSafeInteger(state.expectedRevision) ? state.expectedRevision
+      : sessions.bindingRevision?.(key) ?? sessions.get(key)?.selectionRevision ?? 0;
+    const expectedRunEpoch = Number.isSafeInteger(state.expectedRunEpoch) ? state.expectedRunEpoch
+      : sessions.runEpoch?.(workspaceRunKey) ?? 0;
+    let binding;
+    try {
+      binding = await sessions.setPendingSelection(key, { workspace: state.workspaceName,
+        source: preview.metadata.source, sourceThreadId: preview.metadata.id,
+        sourceLastCompletedTurnId: preview.turnId, sourceUpdatedAt: preview.metadata.updatedAt,
+        expectedRevision,
+        expectedRunEpoch, workspaceRunKey });
+    } catch (error) {
+      if (['SESSION_BINDING_CONFLICT', 'SESSION_BINDING_BUSY'].includes(error?.code)) throw error;
+      throw new Error('無法安全保存對話選取；沒有啟動工作，請稍後重試。');
+    }
+    const handoffToken = randomUUID();
+    rememberHistoryState(handoffToken, { kind: 'handoff-confirm', key, workspaceName: state.workspaceName,
+      userId: context.userId, guildId: context.guildId, channelId: context.channelId,
+      selectionRevision: binding.selectionRevision, sourceThreadId: binding.sourceThreadId,
+      source: binding.source, sourceLastCompletedTurnId: binding.sourceLastCompletedTurnId,
+      sourceUpdatedAt: binding.sourceUpdatedAt });
+    await interaction.update({ content: `已選取來源對話（${binding.source}），目前保存為「待 fork」。選取本身沒有啟動 Codex；fork 只複製對話，不隔離工作區檔案。來源工作停止後，按下確認按鈕，再送出要執行的工作。`,
+      components: [new ActionRowBuilder().addComponents(new ButtonBuilder()
+        .setCustomId(`codex:history:handoff:${handoffToken}`).setLabel('來源已停止，確認在此工作區續接')
+        .setStyle(ButtonStyle.Danger))], allowedMentions: { parse: [] } });
+  };
+  const continueFromHistory = async ({ interaction, context, token, state, mode }) => {
+    await interaction.deferReply({ ephemeral: true });
+    const workspaceName = state.workspaceName;
+    const workspace = config.workspaces.get(workspaceName);
+    if (!workspace || !historyAccess || !config.historyEnabled || typeof sessions.setPendingSelection !== 'function') {
+      throw new Error('對話延續功能目前無法使用。');
+    }
+    const preview = await withHistoryClient(workspace.path, client => loadHistoryPreview({ client,
+      access: historyAccess, context, workspaceName, token, query: state.query }));
+    if (!preview.turnId) throw new Error('來源沒有已完成回合，無法安全延續。');
+    let sourceGoal = null;
+    if (typeof goalClientFactory === 'function') {
+      const client = await goalClientFactory({ cwd: workspace.path });
+      try { sourceGoal = (await createGoalLifecycle({ client }).get(preview.metadata.id)).goal; }
+      finally { await client.close(); }
+    }
+    if (mode === 'goal' && (!sourceGoal || !['active', 'paused', 'blocked'].includes(sourceGoal.status))) {
+      throw Object.assign(new Error('這個來源沒有可直接接續的 active、paused 或 blocked Goal。'), {
+        code: 'GOAL_NOT_RESUMABLE'
+      });
+    }
+    const localGoalTask = [...activeTasks.values()].find(task => task.userId === context.userId
+      && task.guildId === context.guildId && task.workspaceName === workspaceName
+      && task.goal?.threadId === preview.metadata.id && task.goal.status !== 'complete');
+    if (activeWorkspaceTask(context.userId, workspaceName) && !localGoalTask) {
+      throw Object.assign(new Error('這個工作區仍有其他工作執行中，請完成或取消後再延續。'), {
+        code: 'SESSION_BINDING_BUSY'
+      });
+    }
+    if (sourceGoal?.status === 'active' && !localGoalTask) {
+      throw Object.assign(new Error('來源 Goal 仍為 active，且不受此 Bot 控制；請先在來源端停止，再重新預覽延續。'), {
+        code: 'GOAL_SUPERVISOR_REQUIRED'
+      });
+    }
+    if (localGoalTask && (typeof runner.pauseGoal !== 'function' || !runner.isRunning?.(localGoalTask.key))) {
+      throw Object.assign(new Error('來源 Goal 沒有可安全暫停的本機控制器；請先確認來源狀態後重試。'), {
+        code: 'GOAL_SUPERVISOR_REQUIRED'
+      });
+    }
+
+    const targetThread = await createSessionThread({ channel: interaction.channel, userId: context.userId,
+      title: sessionThreadTitle(preview.metadata.title, workspaceName) });
+    const targetChannelId = targetThread?.id ?? interaction.channelId;
+    const targetKey = sessionKey({ userId: context.userId, channelId: targetChannelId, workspace: workspaceName });
+    const workspaceRunKey = taskKey({ userId: context.userId, workspace: workspaceName });
+    const targetContext = { ...context, channelId: targetChannelId, parentId: targetThread?.parentId ?? context.parentId };
+    await sessions.setActiveWorkspace(conversationKey({ userId: context.userId, channelId: targetChannelId }), workspaceName);
+
+    let binding;
+    if (localGoalTask) {
+      binding = await autoPauseAndSelectActiveGoal({ interaction, workspaceName, key: targetKey,
+        context: targetContext, workspaceRunKey, sourceThreadId: preview.metadata.id,
+        reply: payload => interaction.editReply({ ...payload, allowedMentions: { parse: [] } }) });
+    } else {
+      binding = await sessions.setPendingSelection(targetKey, { workspace: workspaceName,
+        source: preview.metadata.source, sourceThreadId: preview.metadata.id,
+        sourceLastCompletedTurnId: preview.turnId, sourceUpdatedAt: preview.metadata.updatedAt,
+        expectedRevision: sessions.bindingRevision?.(targetKey) ?? 0,
+        expectedRunEpoch: sessions.runEpoch?.(workspaceRunKey) ?? 0, workspaceRunKey });
+      await validateAndRememberHistoryHandoff({ key: targetKey, context: targetContext, workspaceName, binding });
+    }
+
+    if (mode === 'chat') {
+      if (typeof targetThread?.send === 'function') await targetThread.send({
+        content: '已準備好延續來源對話。直接在這個 thread 傳送新工作，Bot 會 fork 並在此繼續。',
+        allowedMentions: { parse: [] }
+      });
+      await interaction.editReply({ content: `已準備一般對話：${targetThread?.toString?.() ?? '目前 thread'}。直接在新 thread 傳送工作即可。`,
+        allowedMentions: { parse: [] } });
+      return;
+    }
+
+    await interaction.editReply({ content: `正在新 thread 接續 Goal：${targetThread?.toString?.() ?? '目前 thread'}…`,
+      allowedMentions: { parse: [] } });
+    if (typeof dispatchInteraction !== 'function') throw new Error('Goal command dispatcher is unavailable');
+    const synthetic = Object.create(interaction);
+    Object.assign(synthetic, {
+      commandName: 'codex', channel: targetThread, channelId: targetChannelId,
+      deferred: true, replied: false,
+      isButton: () => false, isModalSubmit: () => false, isAutocomplete: () => false, isChatInputCommand: () => true,
+      options: { getSubcommandGroup: () => 'goal', getSubcommand: () => 'resume',
+        getString: name => name === 'workspace' ? workspaceName : null, getInteger: () => null },
+      deferReply: async () => {},
+      editReply: payload => interaction.editReply({ ...payload, allowedMentions: { parse: [] } }),
+      reply: payload => interaction.editReply({ ...payload, allowedMentions: { parse: [] } }),
+      followUp: payload => interaction.followUp({ ...payload, allowedMentions: { parse: [] } })
+    });
+    await dispatchInteraction(synthetic);
+  };
   client.once(Events.ClientReady, (readyClient) => {
     console.info(`CodexDiscord ready as ${readyClient.user.tag}`);
     void refreshUsagePresence();
   });
-  client.on(Events.InteractionCreate, async (interaction) => {
+  let dispatchInteraction = null;
+  const handleInteraction = async (interaction) => {
+    if (interaction.isButton?.() && interaction.customId.startsWith('codex:goal:')) {
+      const [, , token, action] = interaction.customId.split(':');
+      const control = goalCardStates.get(token);
+      const activeTask = control ? activeTasks.get(control.mapKey) : null;
+      const allowed = isAllowedInteraction(interaction, config)
+        && control?.userId === interaction.user.id && control?.guildId === interaction.guildId
+        && control?.channelId === interaction.channelId && control?.statusMessageId === interaction.message?.id
+        && control?.expiresAt > now();
+      const current = activeTask && activeTask.runId === control?.runId && activeTask.key === control?.key
+        && activeTask.goal?.cardToken === token && activeTask.goal.threadId === control?.threadId
+        && (activeTask.goal.turnId ?? null) === control?.turnId
+        && (activeTask.goal.turnsSeen ?? 0) === control?.turnsSeen;
+      if (!allowed || !current || !['status', 'pause'].includes(action)) {
+        await interaction.reply({ content: '這個 Goal 控制按鈕已過期，或不屬於目前執行者與回合。', ephemeral: true,
+          allowedMentions: { parse: [] } });
+        return;
+      }
+      await interaction.deferUpdate();
+      try {
+        const workspace = config.workspaces.get(activeTask.workspaceName);
+        if (!workspace || typeof goalClientFactory !== 'function') throw Object.assign(new Error('Goal status is unavailable'), { code: 'GOAL_API_NOT_READY' });
+        const client = await goalClientFactory({ cwd: workspace.path });
+        let state;
+        try {
+          const lifecycle = createGoalLifecycle({ client });
+          state = await lifecycle.get(control.threadId);
+          if (!state.goal) throw Object.assign(new Error('Native Goal is unavailable'), { code: 'GOAL_NOT_FOUND' });
+          const sameGoalCard = activeTasks.get(control.mapKey) === activeTask
+            && activeTask.runId === control.runId && activeTask.key === control.key
+            && activeTask.goal.cardToken === token && activeTask.goal.threadId === control.threadId
+            && (activeTask.goal.turnId ?? null) === control.turnId
+            && (activeTask.goal.turnsSeen ?? 0) === control.turnsSeen
+            && control.expiresAt > now();
+          if (!sameGoalCard) {
+            const expired = control.expiresAt <= now();
+            throw Object.assign(new Error(expired ? 'The Goal activity control expired during native status read'
+              : 'The active Goal turn changed during native status read'), {
+              code: expired ? 'GOAL_CONTROL_EXPIRED' : 'GOAL_TURN_CONFLICT'
+            });
+          }
+          if (action === 'pause') {
+            if (state.goal.status !== 'active' || typeof runner.pauseGoal !== 'function') {
+              throw Object.assign(new Error('This Goal is no longer active in its supervisor'), { code: 'GOAL_SUPERVISOR_REQUIRED' });
+            }
+            const accepted = await runner.pauseGoal(control.key, { threadId: control.threadId,
+              turnId: control.turnId, turnsSeen: control.turnsSeen });
+            if (!accepted) throw Object.assign(new Error('The active Goal supervisor did not accept pause'), { code: 'GOAL_SUPERVISOR_REQUIRED' });
+            state = await lifecycle.get(control.threadId);
+          }
+        } finally { await client.close(); }
+        const goal = state.goal;
+        await updateGoalActivity(activeTask, { status: goal.status,
+          tokenBudget: goal.tokenBudget, tokensUsed: goal.tokensUsed,
+          turnInFlight: activeTask.goal.turnInFlight,
+          ...(goal.status === 'paused' ? { turnInFlight: false, turnId: null } : {}) });
+        const usage = Number.isSafeInteger(goal.tokensUsed) ? goal.tokensUsed : '未知';
+        const budget = Number.isSafeInteger(goal.tokenBudget) ? goal.tokenBudget : '未設定';
+        const result = action === 'pause'
+          ? goal.status === 'paused' ? `Goal 暫停已由 native read-back 確認；用量 ${usage} / ${budget} tokens。`
+            : `已送出暫停要求，但 native 狀態為 ${goal.status}；尚未確認暫停。`
+          : `Goal 狀態已重新讀取：${goal.status}；用量 ${usage} / ${budget} tokens。`;
+        await interaction.followUp({ content: result, ephemeral: true, allowedMentions: { parse: [] } });
+      } catch (error) {
+        await interaction.followUp({ content: formatGoalCommandError(error), ephemeral: true, allowedMentions: { parse: [] } });
+      }
+      return;
+    }
+    if ((interaction.isStringSelectMenu?.() && ['codex:history:preview', 'codex:continue:select'].includes(interaction.customId))
+      || (interaction.isButton?.() && (interaction.customId.startsWith('codex:history:page:')
+        || interaction.customId.startsWith('codex:history:more:')
+        || interaction.customId.startsWith('codex:history:select:')
+        || interaction.customId.startsWith('codex:history:handoff:')
+        || interaction.customId.startsWith('codex:continue:chat:')
+        || interaction.customId.startsWith('codex:continue:goal:')))) {
+      if (!isAllowedInteraction(interaction, config)) {
+        await interaction.reply({ content: '無法使用這個歷史選單。', ephemeral: true, allowedMentions: { parse: [] } });
+        return;
+      }
+      const context = historyContext(interaction);
+      try {
+        if (interaction.isButton?.() && (interaction.customId.startsWith('codex:continue:chat:')
+            || interaction.customId.startsWith('codex:continue:goal:'))) {
+          const mode = interaction.customId.startsWith('codex:continue:goal:') ? 'goal' : 'chat';
+          const prefix = `codex:continue:${mode}:`;
+          const token = interaction.customId.slice(prefix.length);
+          const state = historyUiState.get(token);
+          if (!historyUiMatches(state, interaction) || state.kind !== 'candidate' || state.flow !== 'continue') {
+            throw new Error('延續候選已過期，請重新執行 `/codex continue`。');
+          }
+          await continueFromHistory({ interaction, context, token, state, mode });
+          historyUiState.delete(token);
+          return;
+        }
+        if (interaction.isStringSelectMenu?.()) {
+          const token = interaction.values?.[0];
+          const state = historyUiState.get(token);
+          if (!historyUiMatches(state, interaction) || state.kind !== 'candidate') throw new Error('歷史候選已過期，請重新列出對話。');
+          await renderHistoryPreview({ interaction, context, state, token, update: true });
+        } else if (interaction.customId.startsWith('codex:history:page:')) {
+          const token = interaction.customId.slice('codex:history:page:'.length);
+          const state = historyUiState.get(token);
+          historyUiState.delete(token);
+          if (!historyUiMatches(state, interaction) || state.kind !== 'cursor') throw new Error('歷史頁面已過期，請重新列出對話。');
+          const resolved = await historyAccess.resolveCursor({ ...context, workspaceName: state.workspaceName },
+            { token, query: state.query, source: state.source });
+          await renderHistoryPage({ interaction, context, workspaceName: resolved.workspaceName,
+            query: state.query, source: state.source, cursors: resolved.cursors, flow: state.flow ?? 'history', update: true });
+        } else if (interaction.customId.startsWith('codex:history:more:')) {
+          const token = interaction.customId.slice('codex:history:more:'.length);
+          const state = historyUiState.get(token);
+          historyUiState.delete(token);
+          if (!historyUiMatches(state, interaction) || state.kind !== 'preview-page') throw new Error('預覽頁面已過期，請重新開啟對話。');
+          await renderHistoryPreview({ interaction, context, state, token: state.candidateToken, update: true });
+        } else if (interaction.customId.startsWith('codex:history:select:')) {
+          const token = interaction.customId.slice('codex:history:select:'.length);
+          const state = historyUiState.get(token);
+          if (!historyUiMatches(state, interaction) || state.kind !== 'candidate') throw new Error('歷史候選已過期，請重新列出對話。');
+          await selectHistoryBinding({ interaction, context, token, state });
+        } else if (interaction.customId.startsWith('codex:history:handoff:')) {
+          const token = interaction.customId.slice('codex:history:handoff:'.length);
+          const state = historyUiState.get(token);
+          if (!historyUiMatches(state, interaction) || state.kind !== 'handoff-confirm') throw new Error('交接確認已過期，請重新開啟來源預覽。');
+          const binding = sessions.get(state.key);
+          if (binding?.origin !== 'native-selection' || binding.sessionId !== null
+              || binding.selectionRevision !== state.selectionRevision
+              || binding.sourceThreadId !== state.sourceThreadId
+              || binding.sourceLastCompletedTurnId !== state.sourceLastCompletedTurnId
+              || binding.sourceUpdatedAt !== state.sourceUpdatedAt) {
+            throw new Error('來源選取已變更，請重新預覽並選取。');
+          }
+          await validateAndRememberHistoryHandoff({ key: state.key, context,
+            workspaceName: state.workspaceName, binding });
+          historyUiState.delete(token);
+          await interaction.update({ content: '交接確認完成。來源在這次檢查中沒有顯示執行中的回合；狀態仍可能無法證明其他 App Server 已閒置。若要繼續原生 Goal，請執行 `/codex goal resume`；若要一般對話，請送出工作。Bot 會在 fork 前再次檢查來源與預覽錨點。',
+            components: [], allowedMentions: { parse: [] } });
+        }
+      } catch (error) {
+        const payload = { content: `歷史資料目前無法顯示：${error.message}`, components: [], allowedMentions: { parse: [] } };
+        if (interaction.deferred || interaction.replied) await interaction.editReply(payload);
+        else await interaction.reply({ ...payload, ephemeral: true });
+      }
+      return;
+    }
     if ((interaction.isButton() && interaction.customId.startsWith("codex:input:"))
         || (interaction.isModalSubmit() && interaction.customId.startsWith("codex:answers:"))) {
       const token = interaction.customId.split(":")[2];
@@ -934,6 +1844,10 @@ export async function startBot({ config, runner, sessions, models = [], clientFa
       const focused = interaction.options.getFocused(true);
       const action = interaction.options.getSubcommand(false);
       const conversation = conversationKey({ userId: interaction.user.id, channelId: interaction.channelId });
+      if (focused.name === "workspace") {
+        await interaction.respond(workspaceAutocompleteChoices(config.workspaces.keys(), focused.value));
+        return;
+      }
       if (action === "model" && focused.name === "name") {
         await interaction.respond(modelAutocompleteChoices(models, focused.value));
         return;
@@ -968,6 +1882,7 @@ export async function startBot({ config, runner, sessions, models = [], clientFa
         return;
       }
       await interaction.deferUpdate();
+      try { await interaction.message?.edit?.({ components: [] }); } catch { /* The native decision remains authoritative. */ }
       const autoApproveAll = choice === "allow-all";
       const accepted = belongsToActiveRun(approval, activeTasks) && (autoApproveAll
         ? runner.approveAll(approval.key, approval.requestId)
@@ -994,6 +1909,417 @@ export async function startBot({ config, runner, sessions, models = [], clientFa
       await interaction.reply({ content: "You are not allowed to run local Codex here.", ephemeral: true, allowedMentions: { parse: [] } });
       return;
     }
+    const commandGroup = interaction.options.getSubcommandGroup?.(false) ?? null;
+    const rootAction = interaction.options.getSubcommand(false);
+    if (!commandGroup && rootAction === 'continue') {
+      const context = historyContext(interaction);
+      const workspaceName = resolveWorkspaceName({ explicit: interaction.options.getString('workspace', false),
+        userId: context.userId, channelId: context.channelId, parentChannelId: interaction.channel?.parentId ?? null,
+        sessions, workspaceNames: config.workspaces.keys() });
+      if (!workspaceName) {
+        await interaction.reply({ content: '無法判定 workspace；請先用 `/codex use`，或在 `/codex continue` 指定 workspace。',
+          ephemeral: true, allowedMentions: { parse: [] } });
+        return;
+      }
+      try {
+        await interaction.deferReply({ ephemeral: true });
+        await renderHistoryPage({ interaction, context, workspaceName, query: '', source: 'all', flow: 'continue' });
+      } catch (error) {
+        const payload = { content: `無法列出可延續對話：${error.message}`, components: [], allowedMentions: { parse: [] } };
+        if (interaction.deferred || interaction.replied) await interaction.editReply(payload);
+        else await interaction.reply({ ...payload, ephemeral: true });
+      }
+      return;
+    }
+    if (commandGroup === 'goal') {
+      const action = interaction.options.getSubcommand();
+      if (!GOAL_COMMAND_ACTIONS.includes(action)) {
+        await interaction.reply({ content: formatGoalCommandError({ code: 'GOAL_ACTION_UNSUPPORTED' }), ephemeral: true,
+          allowedMentions: { parse: [] } });
+        return;
+      }
+      if (!config.goalsEnabled) {
+        await interaction.reply({ content: formatGoalCommandError({ code: 'GOAL_FEATURE_DISABLED' }), ephemeral: true,
+          allowedMentions: { parse: [] } });
+        return;
+      }
+      if (!['start', 'resume', 'budget', 'clear', 'status', 'pause'].includes(action) || typeof goalClientFactory !== 'function') {
+        await interaction.reply({ content: formatGoalCommandError({ code: 'GOAL_API_NOT_READY' }), ephemeral: true,
+          allowedMentions: { parse: [] } });
+        return;
+      }
+      await interaction.deferReply({ ephemeral: true });
+      const goalReply = payload => interaction.editReply({ ...payload, allowedMentions: { parse: [] } });
+      const workspaceName = resolveWorkspaceName({ explicit: interaction.options.getString('workspace', false),
+        userId: interaction.user.id, channelId: interaction.channelId, parentChannelId: interaction.channel?.parentId ?? null,
+        sessions, workspaceNames: config.workspaces.keys() });
+      if (!workspaceName) {
+        await goalReply({ content: '這個 thread 沒有唯一的 workspace 綁定；請在指令中指定 workspace，或先用 `/codex use` 選擇。' });
+        return;
+      }
+      const workspace = config.workspaces.get(workspaceName);
+      if (!workspace) {
+        await goalReply({ content: '這個工作區未設定。' });
+        return;
+      }
+      const bindingKey = sessionKey({ userId: interaction.user.id, channelId: interaction.channelId, workspace: workspaceName });
+      const workspaceTaskKey = taskKey({ userId: interaction.user.id, workspace: workspaceName });
+      let binding = sessions.get(bindingKey);
+      let pendingSelection = binding?.origin === 'native-selection' && binding.sessionId === null;
+      if (action === 'start' || action === 'resume') {
+        try {
+          const resumeBudget = action === 'resume' ? interaction.options.getInteger?.('token_budget', false) ?? undefined : undefined;
+          if (action === 'resume' && resumeBudget === undefined) {
+            let canReplaceBinding = !binding?.sessionId;
+            if (binding?.sessionId) {
+              const currentClient = await goalClientFactory({ cwd: workspace.path });
+              try {
+                const current = await createGoalLifecycle({ client: currentClient }).get(binding.sessionId);
+                canReplaceBinding = !current.goal || current.goal.status === 'complete';
+              } catch { canReplaceBinding = false; }
+              finally { await currentClient.close(); }
+            }
+            const controlledGoals = canReplaceBinding ? [...activeTasks.values()].filter(task => task.userId === interaction.user.id
+              && task.guildId === interaction.guildId
+              && task.workspaceName === workspaceName && task.goal?.threadId && task.goal.status !== 'complete') : [];
+            if (controlledGoals.length && controlledGoals.some(task => task.goal.threadId !== binding?.sessionId)) {
+              binding = await autoPauseAndSelectActiveGoal({ interaction, workspaceName, key: bindingKey,
+                context: historyContext(interaction), workspaceRunKey: workspaceTaskKey, reply: goalReply });
+              pendingSelection = true;
+            }
+          }
+          if (pendingSelection && resumeBudget !== undefined) {
+            throw Object.assign(new Error('Pending source Goals cannot be changed during handoff'), { code: 'GOAL_PENDING_SELECTION' });
+          }
+          const runningTask = activeTasks.get(bindingKey);
+          if (activeWorkspaceTask(interaction.user.id, workspaceName)) {
+            if (action === 'resume' && runningTask?.goal
+                && typeof runner.resumeBudgetLimitedGoal === 'function' && binding?.sessionId) {
+              if (resumeBudget !== undefined) throw Object.assign(new Error('Use /codex goal budget, then resume, while the existing supervisor is active'), {
+                code: 'GOAL_BUDGET_SUPERVISOR_REQUIRED'
+              });
+              const client = await goalClientFactory({ cwd: workspace.path });
+              let resumed;
+              try {
+                const lifecycle = createGoalLifecycle({ client });
+                const state = await lifecycle.get(binding.sessionId);
+                if (!state.goal || state.goal.status !== 'budgetLimited') {
+                  throw Object.assign(new Error('The active Goal supervisor is not waiting for a budget-limited Goal'), {
+                    code: 'GOAL_BUDGET_SUPERVISOR_REQUIRED'
+                  });
+                }
+                if (!Number.isSafeInteger(state.goal.tokenBudget) || state.goal.tokenBudget < 1) {
+                  throw Object.assign(new Error('Native Goal token budget is unavailable'), { code: 'GOAL_STATE_INVALID' });
+                }
+                if (!Number.isSafeInteger(state.goal.tokensUsed)) {
+                  throw Object.assign(new Error('Native Goal token usage is unavailable'), { code: 'GOAL_USAGE_UNKNOWN' });
+                }
+                if (state.goal.tokenBudget <= state.goal.tokensUsed) {
+                  throw Object.assign(new Error('Increase the budget explicitly before resuming'), {
+                    code: 'GOAL_BUDGET_CHANGE_REQUIRED'
+                  });
+                }
+                resumed = await runner.resumeBudgetLimitedGoal(workspaceTaskKey, state.revision);
+                if (!resumed) throw Object.assign(new Error('No live Goal supervisor owns this thread'), {
+                  code: 'GOAL_BUDGET_SUPERVISOR_REQUIRED'
+                });
+                const updated = await lifecycle.get(binding.sessionId);
+                if (!updated.goal || updated.goal.status !== 'active') {
+                  throw Object.assign(new Error('Native Goal resume was not confirmed active'), { code: 'GOAL_READBACK_MISMATCH' });
+                }
+              } finally { await client.close(); }
+              await goalReply({ content: 'Budget-limited 原生 Goal 已由現有 supervisor 明確恢復；執行仍由原 controller 與 workspace lease 持有。' });
+              return;
+            }
+            throw Object.assign(new Error('Workspace already has active Codex work'), { code: 'GOAL_ALREADY_ACTIVE' });
+          }
+          let handoffConfirmed = false;
+          let pendingGoalExpectation = null;
+          if (pendingSelection) {
+            const client = await goalClientFactory({ cwd: workspace.path });
+            let state;
+            try { state = await createGoalLifecycle({ client }).get(binding.sourceThreadId); }
+            finally { await client.close(); }
+            if (action === 'start' && state.goal && state.goal.status !== 'complete') {
+              throw Object.assign(new Error('Selected source already has an unfinished Goal'), { code: 'GOAL_ALREADY_EXISTS' });
+            }
+            if (action === 'resume') {
+              if (!state.goal) throw Object.assign(new Error('No native Goal exists for this thread'), { code: 'GOAL_NOT_FOUND' });
+              if (state.goal.status === 'active' && !pendingSelection) {
+                throw Object.assign(new Error('The bound Goal is active but has no recoverable supervisor; select its history and confirm handoff before resuming'), {
+                  code: 'GOAL_RECOVERY_REQUIRED'
+                });
+              }
+              if (state.goal.status === 'active' && resumeBudget !== undefined) {
+                throw Object.assign(new Error('Active Goal recovery does not change the inherited budget'), {
+                  code: 'GOAL_BUDGET_SUPERVISOR_REQUIRED'
+                });
+              }
+              if (state.goal.status === 'budgetLimited') {
+                if (resumeBudget === undefined) throw Object.assign(new Error('Supply token_budget to explicitly raise the budget and recover this Goal'), {
+                  code: 'GOAL_BUDGET_CHANGE_REQUIRED'
+                });
+                if (!Number.isSafeInteger(state.goal.tokenBudget) || !Number.isSafeInteger(state.goal.tokensUsed)
+                    || resumeBudget <= state.goal.tokenBudget || resumeBudget <= state.goal.tokensUsed) {
+                  throw Object.assign(new Error('New budget must exceed both the current budget and tokens used'), {
+                    code: 'GOAL_BUDGET_NOT_ABOVE_USAGE'
+                  });
+                }
+                pendingGoalExpectation = state;
+              } else if (resumeBudget !== undefined) {
+                throw Object.assign(new Error('token_budget is only valid when recovering a settled budget-limited Goal'), {
+                  code: 'GOAL_BUDGET_SUPERVISOR_REQUIRED'
+                });
+              } else if (!['paused', 'blocked'].includes(state.goal.status)
+                  && !(pendingSelection && state.goal.status === 'active')) {
+                throw Object.assign(new Error('Native Goal is not resumable'), { code: 'GOAL_NOT_RESUMABLE' });
+              }
+              pendingGoalExpectation = state;
+            }
+            handoffConfirmed = consumeHandoffGrant(bindingKey, { userId: interaction.user.id,
+              guildId: interaction.guildId, channelId: interaction.channelId }, binding);
+            if (!handoffConfirmed) {
+              throw Object.assign(new Error('Source work requires explicit handoff confirmation'), { code: 'GOAL_HANDOFF_REQUIRED' });
+            }
+          }
+          if (!pendingSelection && binding?.origin === 'native-fork' && binding.forkGoalPrepared !== true) {
+            throw Object.assign(new Error('Forked thread requires Goal preparation'), { code: 'GOAL_PENDING_FORK_REQUIRED' });
+          }
+          const threadId = pendingSelection ? binding.sourceThreadId : binding?.sessionId ?? null;
+          let expectedRevision;
+          let objective = action === 'start' ? interaction.options.getString('objective', true).trim() : null;
+          const tokenBudget = action === 'start' ? interaction.options.getInteger('token_budget', false) ?? undefined : undefined;
+          if (threadId) {
+            const client = await goalClientFactory({ cwd: workspace.path });
+            let state;
+            try { state = await createGoalLifecycle({ client }).get(threadId); }
+            finally { await client.close(); }
+            if (!pendingSelection) expectedRevision = state.revision;
+            if (action === 'start' && state.goal && state.goal.status !== 'complete') {
+              throw Object.assign(new Error('This execution thread already has an unfinished Goal'), { code: 'GOAL_ALREADY_EXISTS' });
+            }
+            if (action === 'resume') {
+              if (!state.goal) throw Object.assign(new Error('No native Goal exists for this thread'), { code: 'GOAL_NOT_FOUND' });
+              if (state.goal.status === 'active' && !pendingSelection) {
+                throw Object.assign(new Error('The bound Goal is active but has no recoverable supervisor; select its history and confirm handoff before resuming'), {
+                  code: 'GOAL_RECOVERY_REQUIRED'
+                });
+              }
+              if (state.goal.status === 'active' && resumeBudget !== undefined) {
+                throw Object.assign(new Error('Active Goal recovery does not change the inherited budget'), {
+                  code: 'GOAL_BUDGET_SUPERVISOR_REQUIRED'
+                });
+              }
+              if (state.goal.status === 'budgetLimited') {
+                if (resumeBudget === undefined) throw Object.assign(new Error('Supply token_budget to explicitly raise the budget and recover this Goal'), {
+                  code: 'GOAL_BUDGET_CHANGE_REQUIRED'
+                });
+                if (!Number.isSafeInteger(state.goal.tokenBudget) || !Number.isSafeInteger(state.goal.tokensUsed)
+                    || resumeBudget <= state.goal.tokenBudget || resumeBudget <= state.goal.tokensUsed) {
+                  throw Object.assign(new Error('New budget must exceed both the current budget and tokens used'), {
+                    code: 'GOAL_BUDGET_NOT_ABOVE_USAGE'
+                  });
+                }
+              } else if (resumeBudget !== undefined) {
+                throw Object.assign(new Error('token_budget is only valid when recovering a settled budget-limited Goal'), {
+                  code: 'GOAL_BUDGET_SUPERVISOR_REQUIRED'
+                });
+              } else if (!['paused', 'blocked'].includes(state.goal.status)
+                  && !(pendingSelection && state.goal.status === 'active')) {
+                throw Object.assign(new Error('Native Goal is not resumable'), { code: 'GOAL_NOT_RESUMABLE' });
+              }
+              if (!['paused', 'blocked'].includes(state.goal.status)
+                  && !(pendingSelection && state.goal.status === 'active')
+                  && !(state.goal.status === 'budgetLimited' && resumeBudget !== undefined)) {
+                throw Object.assign(new Error('Native Goal is not resumable'), { code: 'GOAL_NOT_RESUMABLE' });
+              }
+              objective = state.goal.objective;
+              if (pendingSelection) pendingGoalExpectation = state;
+            }
+          } else if (action === 'resume') {
+            throw Object.assign(new Error('No execution thread is bound to resume'), { code: 'GOAL_NOT_FOUND' });
+          }
+          let executionChannel = interaction.channel;
+          if (!interaction.channel?.isThread?.() && (!binding || pendingSelection)) {
+            executionChannel = await createSessionThread({ channel: interaction.channel, userId: interaction.user.id,
+              title: sessionThreadTitle(objective, workspaceName) });
+          }
+          await annotateSessionThread(executionChannel, workspaceName);
+          if (pendingSelection) {
+            const targetBindingKey = sessionKey({ userId: interaction.user.id,
+              channelId: executionChannel.id ?? interaction.channelId, workspace: workspaceName });
+            if (targetBindingKey !== bindingKey) await copyPendingSelection(binding, targetBindingKey);
+          }
+          const statusPayload = { content: `工作區：**${workspaceName}**\n${action === 'start' ? '正在準備原生 Goal…' : '正在恢復原生 Goal…'}`,
+            allowedMentions: { parse: [] } };
+          const status = typeof executionChannel.send === 'function'
+            ? await executionChannel.send(statusPayload) : await goalReply(statusPayload);
+          const pinned = await pinGoalStatus(status);
+          await goalReply({ content: `Goal 執行 thread：${executionChannel.toString()}${pinned ? '（狀態訊息已釘選）' : '（無法釘選狀態訊息；請檢查 Bot 的管理訊息權限）'}` });
+          await executeGoalRun({ interaction, workspaceName, objective,
+            goalRun: action === 'start'
+              ? { objective, ...(tokenBudget === undefined ? {} : { tokenBudget }), ...(expectedRevision ? { expectedRevision } : {}) }
+              : { resume: true, ...(expectedRevision ? { expectedRevision } : {}), objective,
+                ...(pendingSelection ? { forkRecovery: true } : {}),
+                ...(resumeBudget !== undefined ? { resumeBudgetLimited: true, tokenBudget: resumeBudget } : {}) },
+            status, handoffConfirmed, pendingGoalExpectation });
+          // executeGoalRun owns the ephemeral Goal activity card through the
+          // native terminal read-back; do not overwrite it with a generic turn
+          // completion message that could misstate Goal completion.
+        } catch (error) {
+          console.warn(`Native Goal ${action} failed (${typeof error?.code === 'string' ? error.code : error?.name ?? 'unknown'})`);
+          await goalReply({ content: formatGoalCommandError(error) });
+        }
+        return;
+      }
+      if (action === 'budget') {
+        try {
+          if (pendingSelection) throw Object.assign(new Error('Pending source Goals cannot be changed'), { code: 'GOAL_PENDING_SELECTION' });
+          const threadId = binding?.sessionId;
+          if (!threadId) throw Object.assign(new Error('No execution thread is bound'), { code: 'GOAL_NOT_FOUND' });
+          const runningTask = activeTasks.get(bindingKey);
+          if (activeWorkspaceTask(interaction.user.id, workspaceName) && !runningTask?.goal) {
+            throw Object.assign(new Error('Goal has an active local controller'), { code: 'GOAL_ALREADY_ACTIVE' });
+          }
+          const tokenBudget = interaction.options.getInteger('token_budget', true);
+          const client = await goalClientFactory({ cwd: workspace.path });
+          let updated;
+          try {
+            let lifecycle;
+            lifecycle = createGoalLifecycle({ client, ...(runningTask?.goal && typeof runner.setGoalBudget === 'function'
+              ? { supervisor: { setBudget: async operation => {
+              const accepted = await runner.setGoalBudget(workspaceTaskKey, operation.tokenBudget, operation.revision);
+              if (!accepted) throw Object.assign(new Error('No live Goal supervisor owns this thread'), {
+                code: 'GOAL_BUDGET_SUPERVISOR_REQUIRED'
+              });
+              return lifecycle.get(operation.threadId);
+            } } } : {}) });
+            const state = await lifecycle.get(threadId);
+            if (!state.goal) throw Object.assign(new Error('No native Goal exists'), { code: 'GOAL_NOT_FOUND' });
+            if (Number.isSafeInteger(state.goal.tokensUsed) && tokenBudget <= state.goal.tokensUsed) {
+              throw Object.assign(new Error('Budget must exceed the current token usage'), { code: 'GOAL_BUDGET_NOT_ABOVE_USAGE' });
+            }
+            updated = await lifecycle.setBudget(threadId, tokenBudget, state.revision);
+          } finally { await client.close(); }
+          const goal = updated.goal;
+          await goalReply({ content: `預算更新已讀回確認：狀態 ${goal.status}；總預算 ${goal.tokenBudget}；已用 ${goal.tokensUsed ?? '未知'} tokens。` });
+        } catch (error) {
+          await goalReply({ content: formatGoalCommandError(error) });
+        }
+        return;
+      }
+      if (action === 'clear') {
+        try {
+          if (pendingSelection) throw Object.assign(new Error('Pending source Goals cannot be cleared'), { code: 'GOAL_PENDING_SELECTION' });
+          const threadId = binding?.sessionId;
+          if (!threadId) throw Object.assign(new Error('No execution thread is bound'), { code: 'GOAL_NOT_FOUND' });
+          if (activeWorkspaceTask(interaction.user.id, workspaceName)) {
+            throw Object.assign(new Error('Goal has an active local controller'), { code: 'GOAL_ALREADY_ACTIVE' });
+          }
+          const client = await goalClientFactory({ cwd: workspace.path });
+          let current, cleared;
+          try {
+            const lifecycle = createGoalLifecycle({ client });
+            current = await lifecycle.get(threadId);
+            if (!current.goal) {
+              await goalReply({ content: '此執行 thread 沒有原生 Goal；沒有執行清除。' });
+              return;
+            }
+            cleared = await lifecycle.clear(threadId, current.revision);
+          } finally { await client.close(); }
+          if (cleared.goal) throw Object.assign(new Error('Native Goal clear was not confirmed'), { code: 'GOAL_READBACK_MISMATCH' });
+          await goalReply({ content: `原生 Goal 已清除並經 read-back 確認（原狀態：${current.goal.status}）；執行 thread 綁定保留。` });
+        } catch (error) {
+          await goalReply({ content: formatGoalCommandError(error) });
+        }
+        return;
+      }
+      const threadId = pendingSelection ? binding.sourceThreadId : binding?.sessionId;
+      if (!threadId) {
+        await goalReply({ content: '目前沒有可查詢的執行 thread。' });
+        return;
+      }
+      try {
+        const client = await goalClientFactory({ cwd: workspace.path });
+        let state;
+        try { state = await createGoalLifecycle({ client }).get(threadId); }
+        finally { await client.close(); }
+        const goal = state.goal;
+        if (action === 'status') {
+          const prefix = pendingSelection ? '這是所選來源 thread 的狀態；目前尚未建立執行 thread。' : '目前執行 thread 的 Goal 狀態：';
+          const detail = goal ? `狀態 ${goal.status}；預算 ${goal.tokenBudget ?? '未設定'}；已用 ${goal.tokensUsed ?? '未知'} tokens。`
+            : '此 thread 沒有原生 Goal。';
+          await goalReply({ content: `${prefix}\n${detail}` });
+          return;
+        }
+        if (pendingSelection) throw Object.assign(new Error('Pending selections cannot be mutated'), { code: 'GOAL_PENDING_SELECTION' });
+        if (!goal || goal.status !== 'active') {
+          await goalReply({ content: goal ? `Goal 目前為 ${goal.status}，不需執行暫停。` : '此 thread 沒有原生 Goal。' });
+          return;
+        }
+        const key = taskKey({ userId: interaction.user.id, workspace: workspaceName });
+        if (typeof runner.pauseGoal !== 'function' || !runner.isRunning?.(key) || !runner.pauseGoal(key)) {
+          throw Object.assign(new Error('Active Goal is not controlled by this bot runtime'), { code: 'GOAL_SUPERVISOR_REQUIRED' });
+        }
+        await goalReply({ content: '已要求目前執行中的 Goal 暫停；請稍後查詢狀態確認。' });
+      } catch (error) {
+        await goalReply({ content: formatGoalCommandError(error) });
+      }
+      return;
+    }
+    if (commandGroup === 'sessions') {
+      const sessionAction = interaction.options.getSubcommand();
+      const context = historyContext(interaction);
+      const workspaceName = resolveWorkspaceName({ explicit: interaction.options.getString('workspace', false),
+        userId: context.userId, channelId: context.channelId, parentChannelId: interaction.channel?.parentId ?? null,
+        sessions, workspaceNames: config.workspaces.keys() });
+      if (!workspaceName) {
+        await interaction.reply({ content: '這個 thread 沒有唯一的 workspace 綁定；請在指令中指定 workspace，或先用 `/codex use` 選擇。',
+          ephemeral: true, allowedMentions: { parse: [] } });
+        return;
+      }
+      const query = interaction.options.getString('query', false) ?? '';
+      const source = sessionAction === 'list' ? (interaction.options.getString('source', false) ?? 'all') : null;
+      try {
+        if (sessionAction === 'current') {
+          const key = sessionKey({ userId: context.userId, channelId: context.channelId, workspace: workspaceName });
+          const binding = sessions.get(key);
+          const content = binding?.origin === 'native-selection' && binding.sessionId === null
+            ? `目前對話綁定：待安全 fork。來源：${binding.source}；選取版本：${binding.selectionRevision}。尚未建立執行對話。`
+            : binding?.sessionId
+              ? `目前對話綁定：Codex Discord session 已就緒。版本：${binding.selectionRevision ?? 0}。`
+              : '目前沒有已選取或執行中的對話綁定。';
+          await interaction.reply({ content, ephemeral: true, allowedMentions: { parse: [] } });
+          return;
+        }
+        await interaction.deferReply({ ephemeral: true });
+        if (sessionAction === 'handoff') {
+          const key = sessionKey({ userId: context.userId, channelId: context.channelId, workspace: workspaceName });
+          if (!interaction.options.getBoolean('confirm', true)) {
+            await interaction.editReply({ content: '尚未確認來源工作已停止；沒有建立交接授權。',
+              allowedMentions: { parse: [] } });
+            return;
+          }
+          await validateAndRememberHistoryHandoff({ key, context, workspaceName, binding: sessions.get(key) });
+          await interaction.editReply({ content: '交接確認完成。來源在這次檢查中沒有顯示執行中的回合；狀態仍可能無法證明其他 App Server 已閒置。若要繼續原生 Goal，請執行 `/codex goal resume`；若要一般對話，請送出工作。Bot 會在 fork 前再次檢查來源與預覽錨點。',
+            allowedMentions: { parse: [] } });
+        } else if (sessionAction === 'list') {
+          await renderHistoryPage({ interaction, context, workspaceName, query, source });
+        } else {
+          const token = interaction.options.getString('thread', true);
+          const key = sessionKey({ userId: context.userId, channelId: context.channelId, workspace: workspaceName });
+          const state = historyUiState.get(token);
+          if (!historyUiMatches(state, interaction) || state.kind !== 'candidate' || state.workspaceName !== workspaceName) {
+            throw new Error('歷史候選已過期或不屬於目前對話，請重新列出對話。');
+          }
+          await renderHistoryPreview({ interaction, context, state, token });
+        }
+      } catch (error) {
+        await interaction.editReply({ content: `歷史資料目前無法顯示：${error.message}`,
+          components: [], allowedMentions: { parse: [] } });
+      }
+      return;
+    }
     const action = interaction.options.getSubcommand();
     const conversation = conversationKey({ userId: interaction.user.id, channelId: interaction.channelId });
     if (action === "model") {
@@ -1001,10 +2327,12 @@ export async function startBot({ config, runner, sessions, models = [], clientFa
         const model = selectedModel(interaction.options.getString("name", true), models);
         await sessions.setActiveModel(conversation, model);
         await sessions.setActiveReasoningEffort(conversation, null);
+        const activeGoalNotice = hasActiveGoalInConversation(interaction)
+          ? '\n\nThe active Goal keeps the model and reasoning depth captured when it started; this setting applies to future runs.' : '';
         await interaction.reply({
-          content: model
+          content: (model
             ? `Normal messages in this channel will now use **${model}**. Reasoning depth was reset to the model default.`
-            : "Normal messages in this channel will now use the local Codex default model and its default reasoning depth.",
+            : "Normal messages in this channel will now use the local Codex default model and its default reasoning depth.") + activeGoalNotice,
           ephemeral: true,
           allowedMentions: { parse: [] }
         });
@@ -1019,10 +2347,12 @@ export async function startBot({ config, runner, sessions, models = [], clientFa
         if (!model) throw new Error("Select an available Codex model before choosing a reasoning depth");
         const reasoningEffort = selectedReasoningEffort(interaction.options.getString("effort", true), model);
         await sessions.setActiveReasoningEffort(conversation, reasoningEffort);
+        const activeGoalNotice = hasActiveGoalInConversation(interaction)
+          ? '\n\nThe active Goal keeps the model and reasoning depth captured when it started; this setting applies to future runs.' : '';
         await interaction.reply({
-          content: reasoningEffort
+          content: (reasoningEffort
             ? `Reasoning depth for **${model.id}** is now **${reasoningEffort}**.`
-            : `Reasoning depth for **${model.id}** now uses the model default.`,
+            : `Reasoning depth for **${model.id}** now uses the model default.`) + activeGoalNotice,
           ephemeral: true,
           allowedMentions: { parse: [] }
         });
@@ -1056,7 +2386,14 @@ export async function startBot({ config, runner, sessions, models = [], clientFa
       }
       return;
     }
-    const workspaceName = interaction.options.getString("workspace", true);
+    const workspaceName = resolveWorkspaceName({ explicit: interaction.options.getString("workspace", false),
+      userId: interaction.user.id, channelId: interaction.channelId, parentChannelId: interaction.channel?.parentId ?? null,
+      sessions, workspaceNames: config.workspaces.keys() });
+    if (!workspaceName) {
+      await interaction.reply({ content: '這個 thread 沒有唯一的 workspace 綁定；請在指令中指定 workspace，或先用 `/codex use` 選擇。',
+        ephemeral: true, allowedMentions: { parse: [] } });
+      return;
+    }
     const workspaceConfig = config.workspaces.get(workspaceName);
     if (!workspaceConfig) {
       await interaction.reply({ content: "That workspace is not configured.", ephemeral: true, allowedMentions: { parse: [] } });
@@ -1074,7 +2411,9 @@ export async function startBot({ config, runner, sessions, models = [], clientFa
       if (action === "status") {
 
         const saved = sessions.get(savedKey);
-        const state = runner.isRunning(activeKey) ? "running" : saved ? "ready to resume" : "new";
+        const state = runner.isRunning(activeKey) ? "running"
+          : saved?.origin === 'native-selection' && saved.sessionId === null ? 'pending safe fork'
+            : saved ? "ready to resume" : "new";
         const model = sessions.activeModel(conversation) ?? "local default";
         const reasoningEffort = reasoningLabel(sessions.activeReasoningEffort(conversation));
         const progressLines = sessions.progressLineCount(conversation) ?? DEFAULT_CLI_PROGRESS_LINES;
@@ -1090,13 +2429,14 @@ export async function startBot({ config, runner, sessions, models = [], clientFa
         return;
       }
       if (action === "reset") {
-        if (runner.isRunning(activeKey)) throw new Error("Cancel the active task before resetting its session");
-        const deleted = await sessions.delete(savedKey);
+        if (activeWorkspaceTask(interaction.user.id, workspaceName)) throw new Error("Cancel the active task before resetting its session");
+        const deleted = await sessions.delete(savedKey, activeKey);
         await interaction.reply({ content: deleted ? "Saved Codex session mapping removed." : "No saved Codex session mapping exists.", ephemeral: true, allowedMentions: { parse: [] } });
         return;
       }
       if (action === "use") {
         await sessions.setActiveWorkspace(conversation, workspaceName);
+        await annotateSessionThread(interaction.channel, workspaceName);
         await interaction.reply({ content: `Normal messages in this channel will now use **${workspaceName}**.`, ephemeral: true, allowedMentions: { parse: [] } });
         return;
       }
@@ -1115,27 +2455,50 @@ export async function startBot({ config, runner, sessions, models = [], clientFa
         });
         return;
       }
+      const pendingBinding = sessions.get(savedKey);
+      const handoffConfirmed = pendingBinding?.origin === 'native-selection' && pendingBinding.sessionId === null
+        ? consumeHandoffGrant(savedKey, { userId: interaction.user.id, guildId: interaction.guildId,
+          channelId: interaction.channelId }, pendingBinding) : false;
+      if (pendingBinding?.origin === 'native-selection' && pendingBinding.sessionId === null && !handoffConfirmed) {
+        await interaction.reply({ content: '這個來源仍待交接確認。請回到對話預覽卡確認來源工作已停止，再送出工作。',
+          ephemeral: true, allowedMentions: { parse: [] } });
+        return;
+      }
       // Interaction webhooks expire, while a normal bot message can carry a
       // long-running approval card and receive the final result safely.
-      await interaction.deferReply();
-      status = await interaction.editReply({ content: "正在準備 Codex 任務…", allowedMentions: { parse: [] } });
+      let executionChannel = interaction.channel;
+      if (!interaction.channel?.isThread?.() && (!pendingBinding || (pendingBinding.origin === 'native-selection'
+          && pendingBinding.sessionId === null))) executionChannel = await createSessionThread({ channel: interaction.channel,
+        userId: interaction.user.id, title: sessionThreadTitle(task, workspaceName) });
+      await annotateSessionThread(executionChannel, workspaceName);
+      await interaction.deferReply({ ephemeral: true });
+      const statusPayload = { content: `工作區：**${workspaceName}**\n正在準備 Codex 任務…`, allowedMentions: { parse: [] } };
+      const statusIsThreadMessage = typeof executionChannel.send === 'function';
+      status = statusIsThreadMessage
+        ? await executionChannel.send(statusPayload) : await interaction.editReply(statusPayload);
+      if (statusIsThreadMessage) await interaction.editReply({ content: `Codex session thread：${executionChannel.toString()}`, allowedMentions: { parse: [] } });
+      const executionChannelId = executionChannel.id ?? interaction.channelId;
+      const executionConversation = conversationKey({ userId: interaction.user.id, channelId: executionChannelId });
+      const executionSavedKey = sessionKey({ userId: interaction.user.id, channelId: executionChannelId, workspace: workspaceName });
+      if (pendingBinding?.origin === 'native-selection' && pendingBinding.sessionId === null && executionSavedKey !== savedKey)
+        await copyPendingSelection(pendingBinding, executionSavedKey);
       await sessions.setActiveWorkspace(conversation, workspaceName);
-      const reasoningEffort = sessions.activeReasoningEffort(conversation);
+      const reasoningEffort = sessions.activeReasoningEffort(executionConversation) ?? sessions.activeReasoningEffort(conversation);
       progress = createProgressReporter({
         workspaceName,
         task,
         model,
         reasoningEffort,
-        progressLines: sessions.progressLineCount(conversation) ?? DEFAULT_CLI_PROGRESS_LINES,
+        progressLines: sessions.progressLineCount(executionConversation) ?? sessions.progressLineCount(conversation) ?? DEFAULT_CLI_PROGRESS_LINES,
         imageCount: imageUrls.length,
         edit: (payload) => status.edit(payload)
       });
       activeTask = {
         key: activeKey,
         runId: mirrorRunId,
-        mapKey: savedKey,
+        mapKey: executionSavedKey,
         userId: interaction.user.id,
-        channelId: interaction.channelId,
+        channelId: executionChannelId,
         workspaceName,
         statusMessageId: status.id,
         progress,
@@ -1145,7 +2508,11 @@ export async function startBot({ config, runner, sessions, models = [], clientFa
       taskStarted = true;
       workspaceSync.record(workspaceName, { runId: mirrorRunId, event: "started" });
       const { result } = await runTask({
-        config, runner, sessions, userId: interaction.user.id, channelId: interaction.channelId, workspaceName, task,
+        config, runner, sessions, ownership, historyAccess, historyClientFactory, goalClientFactory,
+        historyContext: { userId: interaction.user.id, guildId: interaction.guildId,
+          channelId: interaction.channelId, parentId: interaction.channel?.parentId ?? null },
+        handoffConfirmed,
+        userId: interaction.user.id, channelId: executionChannelId, workspaceName, task,
         model,
         reasoningEffort,
         imageUrls,
@@ -1154,23 +2521,23 @@ export async function startBot({ config, runner, sessions, models = [], clientFa
           if (event?.method === "serverRequest/resolved") await resolveApproval(activeKey, event.params?.requestId, mirrorRunId);
           progress.update(event);
         },
-        onUserInput: (input) => presentUserInput({ input, key: activeKey, userId: interaction.user.id, channelId: interaction.channelId,
+        onUserInput: (input) => presentUserInput({ input, key: activeKey, userId: interaction.user.id, channelId: executionChannelId,
           status, register: args => registerApproval({ ...args, runId: mirrorRunId }), forget: token => approvals.delete(token) }),
         onApproval: async (approval) => {
-          const token = registerApproval({ approval, runId: mirrorRunId, key: activeKey, userId: interaction.user.id, channelId: interaction.channelId, progress });
+          const token = registerApproval({ approval, runId: mirrorRunId, key: activeKey, userId: interaction.user.id, channelId: executionChannelId, progress });
           await progress.requestApproval(approval, approvalComponents(token, approval));
         }
       });
       const retainedProgress = await progress.finish();
       workspaceSync.record(workspaceName, { runId: mirrorRunId, event: result.exitCode === 0 ? "completed" : "failed" });
       const output = await completedTaskPayload(result, workspaceConfig.path);
-      await safeStatusChunks(status, `${output.warning}\n${formatQuestionResult(task, result, retainedProgress)}`, output.files);
+      await safeStatusChunks(status, `工作區：**${workspaceName}**\n${output.warning}\n${formatQuestionResult(task, result, retainedProgress)}`, output.files);
     } catch (error) {
       if (taskStarted) workspaceSync.record(workspaceName, { runId: mirrorRunId, event: "failed" });
       const message = `Codex request failed: ${error.message}`;
       if (status) {
         const retainedProgress = progress ? await progress.finish() : [];
-        await safeStatusChunks(status, formatQuestionResult(task, { exitCode: 1, message }, retainedProgress));
+        await safeStatusChunks(status, `工作區：**${workspaceName}**\n${formatQuestionResult(task, { exitCode: 1, message }, retainedProgress)}`);
       }
       else if (interaction.deferred || interaction.replied) await interaction.editReply({ content: message, allowedMentions: { parse: [] } });
       else await interaction.reply({ content: message, ephemeral: true, allowedMentions: { parse: [] } });
@@ -1181,11 +2548,19 @@ export async function startBot({ config, runner, sessions, models = [], clientFa
         void refreshUsagePresence();
       }
     }
-  });
+  };
+  dispatchInteraction = handleInteraction;
+  client.on(Events.InteractionCreate, handleInteraction);
   client.on(Events.MessageCreate, async (message) => {
     if (message.author.bot || !message.guildId || (!message.content.trim() && message.attachments.size === 0) || !isAllowedMessage(message, config)) return;
     const conversation = conversationKey({ userId: message.author.id, channelId: message.channelId });
-    const replyTask = [...activeTasks.values()].find((activeTask) => isReplyToActiveStatus(message, activeTask));
+    const explicitReplyTask = [...activeTasks.values()].find((activeTask) => isReplyToActiveStatus(message, activeTask));
+    const hasMessageReference = Boolean(message.reference?.messageId ?? message.reference?.message_id);
+    const matchingGoalTasks = hasMessageReference ? [] : [...activeTasks.values()].filter(activeTask =>
+      activeTask.goal?.threadId && activeTask.userId === message.author.id
+        && activeTask.guildId === message.guildId && activeTask.channelId === message.channelId);
+    const replyTask = explicitReplyTask
+      ?? (matchingGoalTasks.length === 1 ? matchingGoalTasks[0] : null);
     if (replyTask) {
       let imageUrls;
       try {
@@ -1211,12 +2586,24 @@ export async function startBot({ config, runner, sessions, models = [], clientFa
       }
       return;
     }
-    const workspaceName = sessions.activeWorkspace(conversation) ?? "workspace";
+    const workspaceName = resolveWorkspaceName({ userId: message.author.id, channelId: message.channelId,
+      parentChannelId: message.channel?.parentId ?? message.channel?.parent?.id ?? null,
+      sessions, workspaceNames: config.workspaces.keys() });
+    if (!workspaceName) {
+      await message.reply({ content: "這個討論串有多個工作區 session。請先用 `/codex use` 選定此串的工作區，再繼續。",
+        allowedMentions: { parse: [] } });
+      return;
+    }
     const workspaceConfig = config.workspaces.get(workspaceName);
     if (!workspaceConfig) {
       await message.reply({ content: "No active workspace is configured. Use `/codex use` once.", allowedMentions: { parse: [] } });
       return;
     }
+    if (message.channel?.isThread?.() && typeof sessions.setActiveWorkspace === 'function'
+        && !sessions.activeWorkspace(conversation)) {
+      await sessions.setActiveWorkspace(conversation, workspaceName);
+    }
+    await annotateSessionThread(message.channel, workspaceName);
     const task = message.content.trim() || "請檢視我上傳的圖片，說明你看到的內容並依此處理。";
 
     const model = sessions.activeModel(conversation);
@@ -1228,15 +2615,42 @@ export async function startBot({ config, runner, sessions, models = [], clientFa
       await message.reply({ content: `Codex image upload failed: ${error.message}`, allowedMentions: { parse: [] } });
       return;
     }
-    const savedKey = sessionKey({ userId: message.author.id, channelId: message.channelId, workspace: workspaceName });
+    const originalSavedKey = sessionKey({ userId: message.author.id, channelId: message.channelId, workspace: workspaceName });
+    const pendingBinding = sessions.get(originalSavedKey);
     const activeKey = taskKey({ userId: message.author.id, workspace: workspaceName });
     if (runner.isRunning(activeKey)) {
       await message.reply({ content: "Codex is already working on this workspace, possibly in another Discord thread. Reply to that task's status card to steer it, or use `/codex cancel` first.", allowedMentions: { parse: [] } });
       return;
     }
+    const handoffConfirmed = pendingBinding?.origin === 'native-selection' && pendingBinding.sessionId === null
+      ? consumeHandoffGrant(originalSavedKey, { userId: message.author.id, guildId: message.guildId,
+        channelId: message.channelId }, pendingBinding) : false;
+    if (pendingBinding?.origin === 'native-selection' && pendingBinding.sessionId === null && !handoffConfirmed) {
+      await message.reply({ content: '這個來源仍待交接確認。請回到對話預覽卡確認來源工作已停止，再重新送出工作。',
+        allowedMentions: { parse: [] } });
+      return;
+    }
+    let executionChannel = message.channel ?? {};
+    try {
+      if (!message.channel?.isThread?.() && (!pendingBinding || (pendingBinding.origin === 'native-selection'
+          && pendingBinding.sessionId === null)))
+        executionChannel = await createSessionThread({ channel: executionChannel,
+          starterMessage: message.channel?.isThread?.() ? null : message, userId: message.author.id,
+          title: sessionThreadTitle(task, workspaceName) });
+      await annotateSessionThread(executionChannel, workspaceName);
+    } catch (error) {
+      await message.reply({ content: `無法建立 Codex session thread：${error.message}`, allowedMentions: { parse: [] } });
+      return;
+    }
+    const executionChannelId = executionChannel.id ?? message.channelId;
+    const savedKey = sessionKey({ userId: message.author.id, channelId: executionChannelId, workspace: workspaceName });
+    if (pendingBinding?.origin === 'native-selection' && pendingBinding.sessionId === null && savedKey !== originalSavedKey)
+      await copyPendingSelection(pendingBinding, savedKey);
     const mirrorRunId = randomUUID();
     const modelLabel = model ?? "local default";
-    const status = await message.reply({ content: `Codex is working in **${workspaceName}** with **${modelLabel}** at **${reasoningLabel(reasoningEffort)}** reasoning depth${imageUrls.length ? ` and ${imageUrls.length} image(s)` : ""}…`, allowedMentions: { parse: [] } });
+    const statusPayload = { content: `Codex is working in **${workspaceName}** with **${modelLabel}** at **${reasoningLabel(reasoningEffort)}** reasoning depth${imageUrls.length ? ` and ${imageUrls.length} image(s)` : ""}…`, allowedMentions: { parse: [] } };
+    const status = typeof executionChannel.send === 'function'
+      ? await executionChannel.send(statusPayload) : await message.reply(statusPayload);
     const progress = createProgressReporter({
       workspaceName,
       task,
@@ -1251,7 +2665,7 @@ export async function startBot({ config, runner, sessions, models = [], clientFa
       runId: mirrorRunId,
       mapKey: savedKey,
       userId: message.author.id,
-      channelId: message.channelId,
+      channelId: executionChannelId,
       workspaceName,
       statusMessageId: status.id,
       progress,
@@ -1263,28 +2677,32 @@ export async function startBot({ config, runner, sessions, models = [], clientFa
       taskStarted = true;
       workspaceSync.record(workspaceName, { runId: mirrorRunId, event: "started" });
       const { result } = await runTask({
-        config, runner, sessions, userId: message.author.id, channelId: message.channelId, workspaceName, task, model, reasoningEffort, imageUrls,
+        config, runner, sessions, ownership, historyAccess, historyClientFactory, goalClientFactory,
+        historyContext: { userId: message.author.id, guildId: message.guildId,
+          channelId: message.channelId, parentId: message.channel?.parentId ?? null },
+        handoffConfirmed,
+        userId: message.author.id, channelId: executionChannelId, workspaceName, task, model, reasoningEffort, imageUrls,
         onProgress: async (event) => {
           workspaceSync.progress(workspaceName, mirrorRunId, event);
           if (event?.method === "serverRequest/resolved") await resolveApproval(activeKey, event.params?.requestId, mirrorRunId);
           progress.update(event);
         },
-        onUserInput: (input) => presentUserInput({ input, key: activeKey, userId: message.author.id, channelId: message.channelId,
+        onUserInput: (input) => presentUserInput({ input, key: activeKey, userId: message.author.id, channelId: executionChannelId,
           status, register: args => registerApproval({ ...args, runId: mirrorRunId }), forget: token => approvals.delete(token) }),
         onApproval: async (approval) => {
-          const token = registerApproval({ approval, runId: mirrorRunId, key: activeKey, userId: message.author.id, channelId: message.channelId, progress });
+          const token = registerApproval({ approval, runId: mirrorRunId, key: activeKey, userId: message.author.id, channelId: executionChannelId, progress });
           await progress.requestApproval(approval, approvalComponents(token, approval));
         }
       });
       const retainedProgress = await progress.finish();
       workspaceSync.record(workspaceName, { runId: mirrorRunId, event: result.exitCode === 0 ? "completed" : "failed" });
       const output = await completedTaskPayload(result, workspaceConfig.path);
-      await safeStatusChunks(status, `${output.warning}\n${formatQuestionResult(task, result, retainedProgress)}`, output.files);
+      await safeStatusChunks(status, `工作區：**${workspaceName}**\n${output.warning}\n${formatQuestionResult(task, result, retainedProgress)}`, output.files);
     } catch (error) {
       if (taskStarted) workspaceSync.record(workspaceName, { runId: mirrorRunId, event: "failed" });
       const retainedProgress = await progress.finish();
       await safeStatusChunks(status,
-        formatQuestionResult(task, { exitCode: 1, message: `Codex request failed: ${error.message}` }, retainedProgress));
+        `工作區：**${workspaceName}**\n${formatQuestionResult(task, { exitCode: 1, message: `Codex request failed: ${error.message}` }, retainedProgress)}`);
     } finally {
       if (activeTasks.get(savedKey) === activeTask) activeTasks.delete(savedKey);
       await clearRunApprovals(approvals, mirrorRunId);

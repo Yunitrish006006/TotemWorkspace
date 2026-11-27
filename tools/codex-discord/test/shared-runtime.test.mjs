@@ -23,6 +23,11 @@ test('Discord is a facade for the shared runtime and authoritative developer pol
   assert.equal(params.developerInstructions, buildDeveloperInstructions({ plan }));
   assert.match(params.developerInstructions, /minimum total model-token consumption/);
   assert.doesNotMatch(params.developerInstructions, /must.*spawn|Worker =|Reviewer =/);
+  const progressWorkTask = { title: 'Current task', currentTaskNumber: 2, totalTasks: 4 };
+  const progressParams = threadStartParams({ workspace: '/srv/workspace', orchestrationPlan: plan,
+    activeWorkTask: null, progressWorkTask });
+  assert.match(progressParams.developerInstructions, /Required user-visible progress prefix: Current task: 2\/4/);
+  assert.doesNotMatch(progressParams.developerInstructions, /Authoritative active micro-task/);
 });
 
 test('shared runtime supports read-only inspection and explicit constrained module write roots', () => {

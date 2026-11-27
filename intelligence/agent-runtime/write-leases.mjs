@@ -24,19 +24,21 @@ function workspaceLock(directory) {
   const file = path.join(lockDirectory, 'workspace.lock');
   const token = randomUUID();
   let descriptor;
-  try {
-    descriptor = fs.openSync(file, 'wx', 0o600);
-  } catch (error) {
-    if (error.code !== 'EEXIST') throw error;
-    let owner;
-    try { owner = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { /* Unknown locks fail closed. */ }
-    let exited = false;
-    if (Number.isSafeInteger(owner?.pid) && owner.pid > 0) {
-      try { process.kill(owner.pid, 0); } catch (probe) { exited = probe.code === 'ESRCH'; }
+  for (let attempt = 0; attempt < 4 && descriptor === undefined; attempt++) {
+    try {
+      descriptor = fs.openSync(file, 'wx', 0o600);
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      let owner;
+      try { owner = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { /* Unknown locks fail closed. */ }
+      if (!ownerExited(owner?.pid)) throw workspaceLockConflict(owner);
+      recoverExitedWorkspaceLock(file, owner);
     }
-    const conflict = new Error(`Workspace write lock .totem-index/runtime-write-leases/workspace.lock is held by ${Number.isSafeInteger(owner?.pid) ? `PID ${owner.pid}` : 'an unknown owner'}${exited ? ' (owner exited)' : ''}. Stop conflicting work or, only after confirming the owner exited, remove this local-state lock manually.`);
-    conflict.code = 'RUNTIME_WRITE_LOCKED';
-    throw conflict;
+  }
+  if (descriptor === undefined) {
+    let owner;
+    try { owner = JSON.parse(fs.readFileSync(file, 'utf8')); } catch { /* Contention remains fail closed. */ }
+    throw workspaceLockConflict(owner);
   }
   try {
     fs.writeFileSync(descriptor, JSON.stringify({ pid: process.pid, token, createdAt: new Date().toISOString() }));
@@ -45,6 +47,93 @@ function workspaceLock(directory) {
   }
   processLocks.set(lockDirectory, { file, token, references: 1 });
   return () => releaseWorkspaceLock(lockDirectory);
+}
+
+function ownerExited(pid) {
+  if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+  try { process.kill(pid, 0); return false; }
+  catch (error) { return error.code === 'ESRCH'; }
+}
+
+function workspaceLockConflict(owner) {
+  const conflict = new Error(`Workspace write lock .totem-index/runtime-write-leases/workspace.lock is held by ${Number.isSafeInteger(owner?.pid) ? `PID ${owner.pid}` : 'an unknown owner'}. Stop conflicting work or retry after the owner exits.`);
+  conflict.code = 'RUNTIME_WRITE_LOCKED';
+  return conflict;
+}
+
+/** Serialize stale-owner cleanup and re-read the exact owner before unlinking. */
+function recoverExitedWorkspaceLock(file, observedOwner) {
+  const recoveryFile = `${file}.recovery`;
+  const recoveryToken = randomUUID();
+  let descriptor;
+  for (let attempt = 0; attempt < 4 && descriptor === undefined; attempt++) {
+    try {
+      descriptor = fs.openSync(recoveryFile, 'wx', 0o600);
+    } catch (error) {
+      if (error.code !== 'EEXIST') throw error;
+      let recoveryOwner;
+      try { recoveryOwner = JSON.parse(fs.readFileSync(recoveryFile, 'utf8')); } catch { /* Fail closed. */ }
+      if (!ownerExited(recoveryOwner?.pid)) throw recoveryBusy(recoveryOwner);
+      reclaimExitedRecoveryFile(recoveryFile, recoveryOwner);
+    }
+  }
+  if (descriptor === undefined) {
+    let recoveryOwner;
+    try { recoveryOwner = JSON.parse(fs.readFileSync(recoveryFile, 'utf8')); } catch { /* Fail closed. */ }
+    throw recoveryBusy(recoveryOwner);
+  }
+  try {
+    fs.writeFileSync(descriptor, JSON.stringify({ pid: process.pid, token: recoveryToken,
+      createdAt: new Date().toISOString() }));
+    let currentOwner;
+    try { currentOwner = JSON.parse(fs.readFileSync(file, 'utf8')); }
+    catch (error) { if (error.code === 'ENOENT') return; throw error; }
+    if (currentOwner?.pid !== observedOwner?.pid || currentOwner?.token !== observedOwner?.token
+        || !ownerExited(currentOwner.pid)) return;
+    try { fs.unlinkSync(file); } catch (error) { if (error.code !== 'ENOENT') throw error; }
+  } finally {
+    fs.closeSync(descriptor);
+    let currentRecovery;
+    try { currentRecovery = JSON.parse(fs.readFileSync(recoveryFile, 'utf8')); }
+    catch (error) { if (error.code === 'ENOENT') return; throw error; }
+    if (currentRecovery.pid !== process.pid || currentRecovery.token !== recoveryToken) {
+      throw new Error('Workspace write-lock recovery ownership changed; refusing to remove another recovery lock');
+    }
+    fs.unlinkSync(recoveryFile);
+  }
+}
+
+function recoveryBusy(owner) {
+  const conflict = new Error(`Workspace write-lock recovery is already running${Number.isSafeInteger(owner?.pid) ? ` under PID ${owner.pid}` : ''}; retry shortly.`);
+  conflict.code = 'RUNTIME_WRITE_LOCK_RECOVERY_BUSY';
+  return conflict;
+}
+
+/** Atomically claim and recheck an exited recovery owner before removing its sidecar. */
+function reclaimExitedRecoveryFile(file, observedOwner) {
+  const quarantine = `${file}.stale-${randomUUID()}`;
+  try { fs.renameSync(file, quarantine); }
+  catch (error) { if (error.code === 'ENOENT') return; throw error; }
+  let claimedOwner;
+  try { claimedOwner = JSON.parse(fs.readFileSync(quarantine, 'utf8')); } catch { /* Restore malformed data and fail closed. */ }
+  if (ownerExited(claimedOwner?.pid)) {
+    fs.unlinkSync(quarantine);
+    return;
+  }
+  let restored = false;
+  try {
+    fs.linkSync(quarantine, file);
+    fs.unlinkSync(quarantine);
+    restored = true;
+  } catch (error) {
+    if (error.code !== 'EEXIST' && error.code !== 'ENOENT') throw error;
+  }
+  if (!restored) {
+    const conflict = recoveryBusy(claimedOwner ?? observedOwner);
+    conflict.message += '; the claimed sidecar changed during recovery and was preserved';
+    throw conflict;
+  }
+  throw recoveryBusy(claimedOwner ?? observedOwner);
 }
 
 function releaseWorkspaceLock(directory) {

@@ -50,9 +50,11 @@ and cancel endpoints return HTTP 410; execution and cancellation stay with DC.
    and enable **Message Content Intent**. Do not configure an Interaction
    Endpoint URL; this service receives interactions through the Gateway.
 2. Invite that Bot to the intended server with the `bot` and
-   `applications.commands` scopes. Grant only View Channels, Send Messages,
-   Send Messages in Threads, Attach Files, and Read Message History in the
-   private Codex channel.
+   `applications.commands` scopes. Grant View Channels, Send Messages,
+   Create Public Threads, Send Messages in Threads, Attach Files, Read Message
+   History, and Pin Messages in the private Codex channel (older servers may
+   expose pinning as Manage Messages). The Bot creates one thread for each new
+   Codex session; Goal sessions pin their status card.
 3. Copy `.env.example` to `.env`. Put the new Codex Bot token and Application
    ID in `DISCORD_BOT_TOKEN` and `DISCORD_APPLICATION_ID`, and put the existing
    Minecraft application ID in `DISCORD_BRIDGE_APPLICATION_ID`. Startup rejects
@@ -73,10 +75,17 @@ and cancel endpoints return HTTP 410; execution and cancellation stay with DC.
    ```
 
 The bot registers guild-local slash commands on startup, so command changes
-appear quickly in the selected server. When `CODEX_WORKSPACE_ROOT` is set,
-select `workspace` for tasks spanning several Totem modules; it is intentionally
-broader than individual module choices and is still restricted to the allowed
-Discord user and channel.
+appear quickly in the selected server. `CODEX_WORKSPACES_JSON` can define
+explicit aliases; when `CODEX_WORKSPACE_ROOT` is set, direct child directories
+with Git metadata (`.git` directory or worktree file) are added automatically
+using names derived from their folder names. Repositories already configured
+by path keep their explicit aliases. Additions are picked up the next time the
+Bot starts and refreshes its guild command registration. Each autocomplete
+response returns up to 25 matches. Select `workspace` for tasks spanning
+several Totem modules; it is intentionally broader than individual module
+choices and is still restricted to the allowed Discord user and channel.
+Workspace options use autocomplete: focus or type in the field to see matching
+names. The allowlist itself can contain more than 25 repositories.
 
 ## Commands
 
@@ -87,15 +96,32 @@ indentation retained; chunks stay within 1,850 UTF-16 code units without splitti
 surrogate pairs. This presentation step runs after local-link sanitization and
 does not bypass attachment receipt checks or enable mentions.
 
+For commands with a `workspace` option, the option is optional inside a thread
+with one saved session binding. Codex uses that session's workspace; otherwise
+it uses the channel's selected workspace or the `workspace` default. If a thread
+has multiple workspace bindings, specify one explicitly. `/codex use` always
+requires a workspace because it changes the channel setting.
+
 - `/codex run workspace:<name> task:<request>` starts or resumes that caller's
-  Codex session for the selected workspace.
+  Codex session for the selected workspace. A new session started in a channel
+  gets its own Discord thread. In an existing thread, messages and `/codex run`
+  continue that thread's bound workspace and Codex session without creating a
+  sibling thread. Thread names are prefixed with `[workspace]`; status messages
+  also show the workspace. New session threads include the first task line in
+  their title. Existing session threads remain available after a reset.
+- `/codex continue workspace:<optional>` privately lists readable conversations
+  from the selected workspace. Choose one to preview it, then start an ordinary
+  conversation or continue an eligible native Goal in a new thread. A Bot
+  controlled active Goal is paused before the fork; work controlled elsewhere
+  must be stopped at its source. The new thread inherits the selected workspace.
 - `/codex status workspace:<name>` reports whether that session is active.
 - `/codex cancel workspace:<name>` sends `SIGTERM` only to that caller's active
   local Codex process.
 - `/codex reset workspace:<name>` removes the saved session mapping; it does
   not delete repository files or Codex's global history.
 - `/codex use workspace:<name>` changes the workspace used by subsequent normal
-  messages in that channel. Without selection, normal messages use `workspace`.
+  messages in that channel or its threads. Without selection, normal messages
+  use `workspace`.
 - `/codex model name:<model>` changes the model for subsequent normal messages
   and `/codex run` requests in that channel. Discord shows an autocomplete
   picker populated from the models currently available to this host's Codex
@@ -116,6 +142,58 @@ does not bypass attachment receipt checks or enable mentions.
   response is visible only to the caller. The Bot's Discord activity also shows
   a compact remaining-usage summary; it refreshes at startup, after each Codex
   task finishes, and whenever `/codex usage` is queried.
+- `/codex sessions list workspace:<name> query:<optional> source:<optional>`
+  privately lists readable local Codex conversations. `source` can narrow the
+  list to Codex CLI, VS Code, or Codex App Server. Each entry shows whether it
+  has a native Goal and its status; unreadable Goal metadata is marked unknown.
+  Goal objectives are never shown in the list. Use the short-lived choice
+  token in `/codex sessions preview workspace:<name> thread:<choice>` to read
+  sent user/assistant messages privately. The preview card's **選取此對話**
+  button saves a pending binding; it does not start a model turn. Use
+  `/codex sessions current workspace:<name>` to inspect the binding, or
+  `/codex sessions handoff workspace:<name> confirm:true` only after confirming
+  that work in the source application has stopped and replies should appear in
+  the current allowed Discord channel. The Bot rechecks source metadata before
+  it forks. A fork continues from the selected completed turn in a new thread;
+  it does not attach to or edit the source thread. An independent App Server's
+  idle status cannot prove that another process has stopped writing.
+- `/codex goal start workspace:<name> objective:<text> token_budget:<optional>`
+  starts a native Codex Goal on the current execution thread.
+  `/codex goal status workspace:<name>` is read-only;
+  `/codex goal pause workspace:<name>` requests a pause;
+  `/codex goal resume workspace:<name>` explicitly resumes an eligible paused
+  or blocked Goal. For a settled `budgetLimited` Goal, pass
+  `token_budget:<new-total>` to raise the budget and resume that same Goal
+  under a fresh exact-thread runtime; the new total must exceed both the old
+  budget and tokens used. While the original supervisor is still live, use
+  `/codex goal budget` followed by `/codex goal resume` instead. The budget
+  command changes a paused Goal's total budget, or updates a live
+  `budgetLimited` Goal without resuming it; and
+  `/codex goal clear workspace:<name>`
+  clears a stopped Goal after read-back confirmation. A settled
+  `budgetLimited` Goal can be resumed with the explicit higher-budget option
+  above. Clearing the stopped Goal and starting a new one remains available
+  when you want a fresh Goal budget while keeping the conversation history.
+  If a Goal is still `active` after its Bot supervisor has disappeared, do not
+  resume the bound thread directly. Select that source from `/codex sessions
+  list`, confirm handoff only after the source has stopped, then run
+  `/codex goal resume`. The Bot revalidates the completed-turn anchor and
+  native Goal revision, forks a new execution thread, pauses the inherited
+  Goal there, and resumes it under the new supervisor. The source thread and
+  its Goal are left unchanged; an active source turn or stale history blocks
+  recovery. After handoff, either resume the Goal explicitly or send an
+  ordinary message / `/codex run` to use a normal session. The latter forks a
+  separate Discord thread and pauses only the inherited Goal on that fork;
+  the selected source remains unchanged. A prepared fork with its Goal paused
+  or blocked continues to accept ordinary conversation. A Bot restart never
+  resumes a Goal automatically. If the old Goal is still controlled by this
+  Bot, running `/codex goal resume` from a different thread first asks its
+  controller to pause, waits for it to settle, refreshes the completed-turn
+  anchor, and then forks and resumes the Goal in the new thread. If the old
+  controller is unavailable, use the explicit history selection and handoff
+  flow above.
+  Goal objective and activity summaries are kept out of public channel replies;
+  approval and user-input details use private interactions.
 - CodexDiscord uses `intelligence/agent-runtime/runtime.mjs`, the shared App
   Server lifecycle and prompt policy. TotemWorkspace supplies execution
   constraints; the primary chooses delegation, specialization and scheduling.
@@ -136,23 +214,27 @@ does not bypass attachment receipt checks or enable mentions.
   images, each 25 MiB, are accepted per ordinary message. Images are passed
   directly from Discord's CDN to Codex and are not saved on this host.
 - Images generated by Codex are uploaded directly to the final Discord reply.
-  Explicit local Markdown links to PNG, JPEG, WebP, GIF and JAR files in the
+  Explicit local Markdown links to PNG, JPEG, WebP, GIF, SVG and JAR files in the
   final response are also attached when their real files stay inside the
   selected allow-listed workspace. Up to four output files, with a combined
   maximum of 25 MiB, are sent; Discord may impose a lower limit. JARs must have
   a ZIP local-file header; this is not archive integrity or malware validation.
+  SVG files must be UTF-8, no larger than 5 MiB, and use the supported static,
+  self-contained subset; scripts, event handlers and external references are
+  rejected. Discord receives SVG as a file attachment and may not show an image
+  preview.
   No files are executed or extracted. Symlinks cannot escape the workspace;
   only authoritative built-in image-generation results may come from `/tmp`
   (never JARs). Other file types and bare prose paths are not auto-uploaded.
   For a sibling module's JAR, select that module or the explicitly configured
   parent workspace; do not broaden access merely to satisfy an output link.
-  Rejected image/JAR candidates produce an attachment warning rather than
+  Rejected image/SVG/JAR candidates produce an attachment warning rather than
   silently claiming delivery. Incoming attachments remain image-only.
   Final replies replace local attachment links/paths with filenames. Bare paths
   and unsupported local file links produce explicit non-delivery warnings;
   they do not grant permission to upload additional formats or arbitrary files.
-  Uploads first show a pending message. Delivery is acknowledged only when the
-  Discord edit response contains every expected filename with a distinct
+  Output files are sent in a separate Discord message. Delivery is acknowledged
+  only when that send response contains every expected filename with a distinct
   attachment ID, nonzero size and HTTPS Discord CDN URL. A resolved request
   with missing/partial receipts is not success. Terminal failures return false,
   show a prominent reason and never blindly repeat an uncertain upload.
@@ -298,6 +380,34 @@ user's unsubmitted composer, so Discord input is shown in the web transcript
 when the message is sent; browser drafts are mirrored in a throttled Bot-owned
 preview message.
 
+### Native Goal and local conversation history
+
+Both Discord surfaces are disabled by default. To enable them, set the
+host-owned values below in the Bot's mode-`0600` environment file:
+
+```dotenv
+CODEX_DISCORD_GOALS_ENABLED=true
+CODEX_DISCORD_HISTORY_ENABLED=true
+CODEX_HISTORY_OWNER_USER_ID=your-allow-listed-discord-user-id
+CODEX_HISTORY_THREAD_GRANTS_JSON=[]
+```
+
+The history owner must also appear in `DISCORD_ALLOWED_USER_IDS`. Per-thread
+grants are optional entries such as
+`[{"threadId":"exact-local-thread-id","userId":"allow-listed-user-id"}]`;
+they authorize only those exact threads and never grant access to the whole
+local history. Keep this host-owned configuration private. The history browser
+shows only conversations readable from this host's configured workspaces; it
+does not fetch cloud conversations or scan arbitrary session files. History
+lists and previews are ephemeral, and selection creates a pending safe-fork
+handoff. A source that is active, changes after preview, or cannot be safely
+revalidated stays read-only. Pausing, clearing, raising a budget, and resuming a
+native Goal are explicit actions; unavailable state remains unavailable rather
+than being guessed. Apply feature-flag changes only while the Bot is idle and
+through the host's authorized service procedure. The current test and evidence
+limits are tracked in
+[`docs/codex-discord-goals-history-acceptance.md`](../../docs/codex-discord-goals-history-acceptance.md).
+
 The same runtime is available without Discord through
 `node scripts/totem-runtime.mjs run "<task>"` from TotemWorkspace, or by invoking
 that script's absolute path from a sibling repository. Use `--cwd` to select an
@@ -313,9 +423,10 @@ workspace-wide advisory lock at `.totem-index/runtime-write-leases/workspace.loc
 The lock is created exclusively with mode 0600 and removed only when its ownership
 token matches. Different processes serialize writing tasks; one process may run
 independent module tasks within the plan's concurrency limits. Read-only tasks do
-not acquire this lock. Abrupt termination can leave a stale lock: the runtime
-fails closed and reports its location and owner PID. Remove it manually only
-after confirming the owning process exited and no task is still writing.
+not acquire this lock. If abrupt termination leaves a lock whose recorded PID no
+longer exists, the runtime serializes recovery, rechecks the exact lock token and
+PID, then reclaims it before starting a writer. Live, malformed, unknown, or
+concurrently recovering owners fail closed; do not remove those locks manually.
 The runtime waits for App Server process-close evidence before releasing write
 ownership. Shutdown escalates from SIGTERM to SIGKILL after two seconds; if close
 is still unconfirmed after four seconds, the task fails and retains the lock.

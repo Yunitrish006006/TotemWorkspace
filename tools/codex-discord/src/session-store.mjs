@@ -1,11 +1,28 @@
 import { chmod, mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { randomUUID } from 'node:crypto';
 import path from "node:path";
 
 const checkpointNumber = value => value != null && !(typeof value === "string" && !value.trim())
   && Number.isFinite(Number(value)) && Number(value) >= 0 ? Math.floor(Number(value)) : null;
+const THREAD_SOURCES = new Set(['cli', 'vscode', 'appServer', 'unknown']);
 
 function boundedId(value, limit = 200) {
   return typeof value === "string" && /^[a-zA-Z0-9._:-]+$/.test(value) && value.length <= limit ? value : null;
+}
+
+function threadId(value) {
+  return typeof value === 'string' && /^[a-zA-Z0-9_.:/-]{1,200}$/.test(value) ? value : null;
+}
+
+function validPendingBinding(value) {
+  return value?.schemaVersion === 2 && value.sessionId === null && value.origin === 'native-selection'
+    && typeof value.workspace === 'string' && /^[a-z0-9][a-z0-9-]{0,31}$/.test(value.workspace)
+    && THREAD_SOURCES.has(value.source)
+    && threadId(value.sourceThreadId) && threadId(value.sourceLastCompletedTurnId)
+    && (value.sourceUpdatedAt === undefined || Number.isFinite(value.sourceUpdatedAt))
+    && value.selectionMode === 'fork' && Number.isSafeInteger(value.selectionRevision)
+    && value.selectionRevision >= 1 && typeof value.updatedAt === 'string'
+    && Number.isFinite(Date.parse(value.updatedAt));
 }
 
 function checkpointPath(value) {
@@ -73,6 +90,10 @@ export class SessionStore {
   #activeReasoningEfforts = new Map();
   #progressLineCounts = new Map();
   #saveChain = Promise.resolve();
+  #bindingRevisions = new Map();
+  #bindingChains = new Map();
+  #activeRuns = new Map();
+  #runEpochs = new Map();
 
   constructor(stateDir) {
     this.#file = path.join(stateDir, "sessions.json");
@@ -82,13 +103,39 @@ export class SessionStore {
     await mkdir(path.dirname(this.#file), { recursive: true, mode: 0o700 });
     try {
       const raw = JSON.parse(await readFile(this.#file, "utf8"));
+      if (raw && typeof raw === "object" && raw.bindingRevisions && typeof raw.bindingRevisions === 'object') {
+        for (const [key, revision] of Object.entries(raw.bindingRevisions)) {
+          if (Number.isSafeInteger(revision) && revision >= 0) this.#bindingRevisions.set(key, revision);
+        }
+      }
       if (raw && typeof raw === "object" && raw.sessions && typeof raw.sessions === "object") {
         for (const [key, value] of Object.entries(raw.sessions)) {
-          if (typeof value?.sessionId === "string" && typeof value?.workspace === "string") {
+          if (validPendingBinding(value)) {
+            this.#sessions.set(key, Object.freeze({ ...value }));
+            this.#bindingRevisions.set(key, Math.max(this.#bindingRevisions.get(key) ?? 0, value.selectionRevision));
+          } else if (value?.sessionId === null) {
+            throw new Error('Pending history binding cannot be loaded safely');
+          } else if (value?.origin === 'native-fork'
+              && (!threadId(value.sourceThreadId) || !threadId(value.sourceLastCompletedTurnId)
+                || value.sessionId === value.sourceThreadId
+                || (value.forkGoalPrepared !== undefined && typeof value.forkGoalPrepared !== 'boolean'))) {
+            throw new Error('Fork session binding cannot be loaded safely');
+          } else if (typeof value?.sessionId === "string" && threadId(value.sessionId)
+              && typeof value?.workspace === "string") {
             const checkpoint = sanitizeCheckpoint(value.checkpoint);
-            this.#sessions.set(key, { sessionId: value.sessionId, workspace: value.workspace,
+            const selectionRevision = Number.isSafeInteger(value.selectionRevision) && value.selectionRevision >= 0
+              ? value.selectionRevision : 0;
+            const session = { schemaVersion: 2, sessionId: value.sessionId, workspace: value.workspace,
+              origin: value.origin === 'native-fork' ? 'native-fork' : 'discord', selectionRevision,
+              ...(value.origin === 'native-fork' && threadId(value.sourceThreadId)
+                && threadId(value.sourceLastCompletedTurnId) ? { sourceThreadId: value.sourceThreadId,
+                  sourceLastCompletedTurnId: value.sourceLastCompletedTurnId,
+                  ...(Number.isFinite(value.sourceUpdatedAt) ? { sourceUpdatedAt: value.sourceUpdatedAt } : {}),
+                  forkGoalPrepared: value.forkGoalPrepared === true } : {}),
               ...(typeof value.updatedAt === "string" ? { updatedAt: value.updatedAt } : {}),
-              ...(checkpoint ? { checkpoint } : {}) });
+              ...(checkpoint ? { checkpoint } : {}) };
+            this.#sessions.set(key, Object.freeze(session));
+            this.#bindingRevisions.set(key, Math.max(this.#bindingRevisions.get(key) ?? 0, selectionRevision));
           }
         }
       }
@@ -121,16 +168,108 @@ export class SessionStore {
     return this.#sessions.get(key) ?? null;
   }
 
+  bindingRevision(key) {
+    return this.#bindingRevisions.get(key) ?? 0;
+  }
+
+  runEpoch(workspaceRunKey) {
+    return this.#runEpochs.get(workspaceRunKey) ?? 0;
+  }
+
   async set(key, value) {
-    const existing = this.#sessions.get(key);
-    const existingCheckpoint = existing?.sessionId === value.sessionId ? existing.checkpoint : null;
-    this.#sessions.set(key, Object.freeze({
-      sessionId: value.sessionId,
-      workspace: value.workspace,
-      ...(typeof value.updatedAt === "string" ? { updatedAt: value.updatedAt } : {}),
-      ...(existingCheckpoint ? { checkpoint: existingCheckpoint } : {})
-    }));
-    await this.#save();
+    return this.#serializeBinding(key, async () => {
+      if (typeof value?.sessionId !== 'string' || !threadId(value.sessionId)
+          || typeof value.workspace !== 'string' || !/^[a-z0-9][a-z0-9-]{0,31}$/.test(value.workspace)
+          || (value.origin === 'native-fork' && (!threadId(value.sourceThreadId)
+            || !threadId(value.sourceLastCompletedTurnId) || value.sessionId === value.sourceThreadId
+            || (value.sourceUpdatedAt !== undefined && !Number.isFinite(value.sourceUpdatedAt))
+            || (value.forkGoalPrepared !== undefined && typeof value.forkGoalPrepared !== 'boolean')))) {
+        throw new TypeError('Session binding is invalid');
+      }
+      const existing = this.#sessions.get(key);
+      const priorRevision = this.bindingRevision(key);
+      const sameSession = existing?.sessionId === value.sessionId;
+      const next = Object.freeze({ schemaVersion: 2, sessionId: value.sessionId, workspace: value.workspace,
+        origin: value.origin === 'native-fork' ? 'native-fork'
+          : sameSession && existing.origin === 'native-selection' ? 'native-selection' : 'discord',
+        selectionRevision: sameSession ? priorRevision : priorRevision + 1,
+        ...(value.origin === 'native-fork' && threadId(value.sourceThreadId)
+          && threadId(value.sourceLastCompletedTurnId) ? { sourceThreadId: value.sourceThreadId,
+            sourceLastCompletedTurnId: value.sourceLastCompletedTurnId,
+            ...(Number.isFinite(value.sourceUpdatedAt) ? { sourceUpdatedAt: value.sourceUpdatedAt } : {}),
+            forkGoalPrepared: typeof value.forkGoalPrepared === 'boolean' ? value.forkGoalPrepared
+              : sameSession && existing?.origin === 'native-fork' ? existing.forkGoalPrepared === true : false } : {}),
+        ...(typeof value.updatedAt === 'string' ? { updatedAt: value.updatedAt } : {}),
+        ...(sameSession && existing.checkpoint ? { checkpoint: existing.checkpoint } : {}) });
+      const previous = existing;
+      this.#sessions.set(key, next);
+      this.#bindingRevisions.set(key, next.selectionRevision);
+      try { await this.#save(); }
+      catch (error) {
+        if (previous) this.#sessions.set(key, previous); else this.#sessions.delete(key);
+        this.#bindingRevisions.set(key, priorRevision);
+        throw error;
+      }
+    });
+  }
+
+  async setPendingSelection(key, { workspace, source, sourceThreadId, sourceLastCompletedTurnId, sourceUpdatedAt = null,
+    expectedRevision, expectedRunEpoch = null, workspaceRunKey = key } = {}) {
+    return this.#serializeKeys([key, workspaceRunKey], async () => {
+      if (this.#activeRuns.has(workspaceRunKey)) throw Object.assign(new Error('A Codex task is active for this binding'), { code: 'SESSION_BINDING_BUSY' });
+      if (expectedRunEpoch !== null && expectedRunEpoch !== this.runEpoch(workspaceRunKey)) {
+        throw Object.assign(new Error('A Codex task changed this workspace since the history list was loaded'), { code: 'SESSION_BINDING_CONFLICT' });
+      }
+      if (typeof workspace !== 'string' || !/^[a-z0-9][a-z0-9-]{0,31}$/.test(workspace)
+          || !THREAD_SOURCES.has(source) || !threadId(sourceThreadId) || !threadId(sourceLastCompletedTurnId)) {
+        throw new TypeError('Pending history selection is invalid');
+      }
+      const priorRevision = this.bindingRevision(key);
+      if (expectedRevision !== priorRevision) throw Object.assign(new Error('Session binding changed; reopen the history preview'), { code: 'SESSION_BINDING_CONFLICT' });
+      const previous = this.#sessions.get(key);
+      const next = Object.freeze({ schemaVersion: 2, sessionId: null, workspace,
+        origin: 'native-selection', source, sourceThreadId, sourceLastCompletedTurnId,
+        ...(Number.isFinite(sourceUpdatedAt) ? { sourceUpdatedAt } : {}),
+        selectionMode: 'fork', selectionRevision: priorRevision + 1, updatedAt: new Date().toISOString() });
+      this.#sessions.set(key, next);
+      this.#bindingRevisions.set(key, next.selectionRevision);
+      try { await this.#save(); }
+      catch (error) {
+        if (previous) this.#sessions.set(key, previous); else this.#sessions.delete(key);
+        this.#bindingRevisions.set(key, priorRevision);
+        throw error;
+      }
+      return next;
+    });
+  }
+
+  async beginRun(key, workspaceRunKey = key, expectedRevision = null, expectedRunEpoch = null, { allowPendingFork = false } = {}) {
+    return this.#serializeKeys([key, workspaceRunKey], async () => {
+      if (expectedRevision !== null && expectedRevision !== this.bindingRevision(key)) {
+        throw Object.assign(new Error('Session binding changed before the task could start'), { code: 'SESSION_BINDING_CONFLICT' });
+      }
+      if (expectedRunEpoch !== null && expectedRunEpoch !== this.runEpoch(workspaceRunKey)) {
+        throw Object.assign(new Error('Workspace run state changed before the task could start'), { code: 'SESSION_BINDING_CONFLICT' });
+      }
+      const current = this.#sessions.get(key);
+      if (current?.origin === 'native-selection' && current.sessionId === null && !allowPendingFork) {
+        throw Object.assign(new Error('This conversation is pending a safe fork and cannot run until history resume is implemented'), { code: 'SESSION_SELECTION_PENDING' });
+      }
+      if (this.#activeRuns.has(workspaceRunKey)) throw Object.assign(new Error('A task is already active for this workspace'), { code: 'SESSION_BINDING_BUSY' });
+      const lease = randomUUID();
+      this.#activeRuns.set(workspaceRunKey, lease);
+      this.#runEpochs.set(workspaceRunKey, this.runEpoch(workspaceRunKey) + 1);
+      return lease;
+    });
+  }
+
+  async endRun(key, lease, workspaceRunKey = key) {
+    return this.#serializeKeys([key, workspaceRunKey], async () => {
+      if (!lease || this.#activeRuns.get(workspaceRunKey) !== lease) return false;
+      this.#activeRuns.delete(workspaceRunKey);
+      this.#runEpochs.set(workspaceRunKey, this.runEpoch(workspaceRunKey) + 1);
+      return true;
+    });
   }
 
   checkpoint(key) {
@@ -138,30 +277,45 @@ export class SessionStore {
   }
 
   async setCheckpoint(key, value) {
-    const session = this.#sessions.get(key);
-    if (!session) return false;
-    const checkpoint = sanitizeCheckpoint(value);
-    if (!checkpoint) throw new Error("Checkpoint requires a bounded runtime id");
-    if (session.checkpoint?.id === checkpoint.id
-        && (session.checkpoint.state === "stopped" || checkpoint.state !== "stopped")) return false;
-    this.#sessions.set(key, Object.freeze({ ...session, checkpoint }));
-    await this.#save();
-    return true;
+    return this.#serializeBinding(key, async () => {
+      const session = this.#sessions.get(key);
+      if (!session?.sessionId) return false;
+      const checkpoint = sanitizeCheckpoint(value);
+      if (!checkpoint) throw new Error("Checkpoint requires a bounded runtime id");
+      if (session.checkpoint?.id === checkpoint.id
+          && (session.checkpoint.state === "stopped" || checkpoint.state !== "stopped")) return false;
+      this.#sessions.set(key, Object.freeze({ ...session, checkpoint }));
+      await this.#save();
+      return true;
+    });
   }
 
   async clearCheckpoint(key, sessionId = null) {
-    const session = this.#sessions.get(key);
-    if (!session?.checkpoint || (sessionId && session.sessionId !== sessionId)) return false;
-    const { checkpoint: _checkpoint, ...current } = session;
-    this.#sessions.set(key, Object.freeze(current));
-    await this.#save();
-    return true;
+    return this.#serializeBinding(key, async () => {
+      const session = this.#sessions.get(key);
+      if (!session?.checkpoint || (sessionId && session.sessionId !== sessionId)) return false;
+      const { checkpoint: _checkpoint, ...current } = session;
+      this.#sessions.set(key, Object.freeze(current));
+      await this.#save();
+      return true;
+    });
   }
 
-  async delete(key) {
-    const deleted = this.#sessions.delete(key);
-    if (deleted) await this.#save();
-    return deleted;
+  async delete(key, workspaceRunKey = key) {
+    return this.#serializeKeys([key, workspaceRunKey], async () => {
+      if (this.#activeRuns.has(workspaceRunKey)) throw Object.assign(new Error('Cancel the active task before resetting this session'), { code: 'SESSION_BINDING_BUSY' });
+      const previous = this.#sessions.get(key);
+      const priorRevision = this.bindingRevision(key);
+      this.#sessions.delete(key);
+      this.#bindingRevisions.set(key, priorRevision + 1);
+      try { await this.#save(); }
+      catch (error) {
+        if (previous) this.#sessions.set(key, previous);
+        this.#bindingRevisions.set(key, priorRevision);
+        throw error;
+      }
+      return Boolean(previous);
+    });
   }
 
   activeWorkspace(key) {
@@ -207,7 +361,9 @@ export class SessionStore {
 
   async #save() {
     const payload = JSON.stringify({
+      schemaVersion: 2,
       sessions: Object.fromEntries(this.#sessions),
+      bindingRevisions: Object.fromEntries(this.#bindingRevisions),
       activeWorkspaces: Object.fromEntries(this.#activeWorkspaces),
       activeModels: Object.fromEntries(this.#activeModels),
       activeReasoningEfforts: Object.fromEntries(this.#activeReasoningEfforts),
@@ -221,5 +377,20 @@ export class SessionStore {
     });
     this.#saveChain = write.catch(() => {});
     return write;
+  }
+
+  async #serializeBinding(key, operation) {
+    const previous = this.#bindingChains.get(key) ?? Promise.resolve();
+    const current = previous.catch(() => {}).then(operation);
+    this.#bindingChains.set(key, current);
+    try { return await current; }
+    finally { if (this.#bindingChains.get(key) === current) this.#bindingChains.delete(key); }
+  }
+
+  async #serializeKeys(keys, operation) {
+    const ordered = [...new Set(keys)].sort();
+    const acquire = index => index >= ordered.length ? operation()
+      : this.#serializeBinding(ordered[index], () => acquire(index + 1));
+    return acquire(0);
   }
 }

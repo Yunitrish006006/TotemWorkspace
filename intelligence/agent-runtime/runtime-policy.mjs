@@ -24,9 +24,29 @@ Tools establish facts and validate builds, tests, compatibility and release evid
 Preserve Observer ownership, production rendering paths, semantic snapshot protocols, input/packet suppression, privacy and framebuffer-free behavior. Never disclose credentials, tokens, secrets, private prompts or unsent input through telemetry.
 Edits are not releases. Commit/push only when authorized; publish only with explicit authorization and verify publication by Modrinth read-back. A successful build is not publication evidence.
 Record only real runtime lifecycle/model/usage/delegation evidence. Planned waves, parallelism and model hints are not spawned agents or measured token usage. Never automatically replay a failed turn after work began.
+Start every user-visible progress update and final response with \`<active micro-task title>: <current micro-task number>/<total micro-tasks>\`. Use the authoritative active work task when available; for an unplanned one-off task use \`<task title>: 1/1\`. Keep the count monotonic and never invent completed work.
 Keep final responses concise: result, affected components, actual validation and material remaining risks.`;
 
-export function buildDeveloperInstructions({ plan = null, modelPolicy = null, activeWorkTask = null, usageGuardMode = 'enforce' } = {}) {
+export function progressLabel({ progressWorkTask = null, fallbackTitle = 'Codex 工作' } = {}) {
+  const title = typeof progressWorkTask?.title === 'string' && progressWorkTask.title.trim()
+    ? progressWorkTask.title.trim() : fallbackTitle;
+  const current = Number.isSafeInteger(progressWorkTask?.currentTaskNumber)
+    ? progressWorkTask.currentTaskNumber : 1;
+  const total = Number.isSafeInteger(progressWorkTask?.totalTasks) && progressWorkTask.totalTasks >= current
+    ? progressWorkTask.totalTasks : current;
+  return `${title}: ${current}/${total}`;
+}
+
+export function ensureProgressPrefix(text, options = {}) {
+  const label = progressLabel(options);
+  const normalized = typeof text === 'string' ? text.trim() : '';
+  if (!normalized) return label;
+  if (normalized === label || normalized.startsWith(`${label}\n`) || normalized.startsWith(`${label}\r\n`)) return normalized;
+  return `${label}\n${normalized}`;
+}
+
+export function buildDeveloperInstructions({ plan = null, modelPolicy = null, activeWorkTask = null,
+  progressWorkTask = activeWorkTask, usageGuardMode = 'enforce' } = {}) {
   validateUsageGuardMode(usageGuardMode);
   const sections = [usageGuardMode === 'observe'
     ? CORE_DEVELOPER_INSTRUCTIONS.replace(ENFORCED_USAGE_POLICY, OBSERVED_USAGE_POLICY)
@@ -41,6 +61,7 @@ export function buildDeveloperInstructions({ plan = null, modelPolicy = null, ac
   }
   if (activeWorkTask) sections.push(`Authoritative active micro-task: ${JSON.stringify(activeWorkTask)}
 Execute only this micro-task. Treat doneCriteria as the completion gate and stopBoundary as a hard scope boundary. Do not continue into another task after completion; report the checkpoint and stop.`);
+  sections.push(`Required user-visible progress prefix: ${progressLabel({ progressWorkTask })}`);
   if (modelPolicy) sections.push(`Live model routing decision: ${JSON.stringify({ mode: modelPolicy.mode,
     coordinator: modelPolicy.coordinator, escalation: modelPolicy.escalation })}`);
   if (modelPolicy?.mode === 'spark-only') sections.push('General quota is exhausted. Only the confirmed separate Spark quota may be used, including delegated work. Do not bypass this quota restriction or accept unsupported image input; stop when that model/quota becomes unavailable.');

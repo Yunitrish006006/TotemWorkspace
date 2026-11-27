@@ -27,18 +27,21 @@ test("final JAR links become Discord files, with image support and deduplication
   }, workspace);
   assert.equal(payload.warning, "");
   assert.deepEqual(payload.files.map(file => file.name), ["test build.JAR", "screenshot.png"]);
-  const edits = [];
-  assert.equal(await statusChunks({ edit: async value => {
-    edits.push(value);
-    return { attachments: new Map(payload.files.map((file, i) => [String(i), {
-      id: String(i), name: file.name, size: 30, url: `https://cdn.discordapp.com/attachments/1/2/${i}`
-    }])) };
-  }, channel: { send: async () => {} } }, `Test build [JAR](<${jar}>)`, payload.files), true);
-  assert.deepEqual(edits[0].files, payload.files);
-  assert.deepEqual(edits[0].allowedMentions, { parse: [] });
-  assert.match(edits[1].content, /附件已由 Discord 確認/);
-  assert.ok(!edits[1].content.includes(workspace));
-  assert.equal(edits[1].attachments, undefined);
+  const edits = [], sends = [];
+  assert.equal(await statusChunks({ edit: async value => edits.push(value),
+    channel: { send: async value => {
+      sends.push(value);
+      return { attachments: new Map(payload.files.map((file, i) => [String(i), {
+        id: String(i), name: file.name, size: 30, url: `https://cdn.discordapp.com/attachments/1/2/${i}`
+      }])) };
+    } } }, `Test build [JAR](<${jar}>)`, payload.files), true);
+  assert.equal(sends.length, 1);
+  assert.deepEqual(sends[0].files, payload.files);
+  assert.match(sends[0].content, /Codex 附件：test build\.JAR、screenshot\.png/);
+  assert.deepEqual(sends[0].allowedMentions, { parse: [] });
+  assert.match(edits[0].content, /附件已另行傳送並由 Discord 確認/);
+  assert.ok(!edits[0].content.includes(workspace));
+  assert.equal(edits[0].attachments, undefined);
 }));
 
 test("JAR output rejects outside paths, escaping symlinks, false formats and missing files with a warning", async () => fixture(async ({ root, workspace }) => {
@@ -79,11 +82,33 @@ test("bare paths, remote links and arbitrary file types are not auto-uploaded", 
   assert.match(result.issues[1].reason, /僅有本機路徑/);
 }));
 
+test("static self-contained SVG output is attached while active or external SVG content is rejected", async () => fixture(async ({ workspace }) => {
+  const valid = path.join(workspace, "diagram.svg");
+  const invalid = [
+    ["script.svg", '<svg xmlns="http://www.w3.org/2000/svg"><script>alert(1)</script></svg>'],
+    ["event.svg", '<svg xmlns="http://www.w3.org/2000/svg" onload="alert(1)"></svg>'],
+    ["remote.svg", '<svg xmlns="http://www.w3.org/2000/svg"><image href="https://example.com/a.png"/></svg>'],
+    ["doctype.svg", '<!DOCTYPE svg [<!ENTITY x "bad">]><svg>&x;</svg>'],
+    ["fake.svg", "not an SVG"]
+  ];
+  await writeFile(valid, '<?xml version="1.0" encoding="UTF-8"?>\n'
+    + '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10">'
+    + '<rect width="10" height="10" fill="#f00"/></svg>');
+  for (const [name, source] of invalid) await writeFile(path.join(workspace, name), source);
+
+  const result = await discordOutputAttachments({ workspace, message: [valid, ...invalid.map(([name]) => path.join(workspace, name))]
+    .map(file => `[file](<${file}>)`).join("\n") });
+  assert.deepEqual(result.files, [{ attachment: valid, name: "diagram.svg" }]);
+  assert.equal(result.skipped, invalid.length);
+  assert.ok(result.issues.every(issue => issue.reason === "格式檢查失敗或來源不允許"));
+}));
+
 test("unusable local attachment links and paths are replaced, not external download links", () => {
-  const text = withoutLocalFileLinks("[jar](</workspace/a b.jar>) ![image](/tmp/test.png) `/tmp/file.zip`\n/tmp/other.pdf\n[web](https://example.com/download.jar)");
+  const text = withoutLocalFileLinks("[jar](</workspace/a b.jar>) ![image](/tmp/test.png) `/tmp/file.zip`\n/tmp/other.pdf\n/tmp/vector.svg\n[web](https://example.com/download.jar)");
   assert.ok(!text.includes("/workspace/"));
   assert.ok(!text.includes("/tmp/"));
   assert.match(text, /a b.jar/);
+  assert.match(text, /vector.svg/);
   assert.match(text, /https:\/\/example.com\/download.jar/);
 });
 

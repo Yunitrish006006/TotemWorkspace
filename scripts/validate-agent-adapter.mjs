@@ -6,7 +6,7 @@ import path from 'node:path';
 import { createAgentAdapter } from '../intelligence/agent-adapter.mjs';
 import { loadKnowledge } from '../intelligence/workspace-knowledge.mjs';
 import { buildOrchestrationPlan } from '../intelligence/orchestration-plan.mjs';
-import { buildDeveloperInstructions, CORE_DEVELOPER_INSTRUCTIONS } from '../intelligence/agent-runtime/runtime-policy.mjs';
+import { buildDeveloperInstructions, CORE_DEVELOPER_INSTRUCTIONS, ensureProgressPrefix } from '../intelligence/agent-runtime/runtime-policy.mjs';
 import { resolveActiveRuntimeTask } from '../intelligence/agent-runtime/runtime.mjs';
 import { activeWorkItem, loadWorkRegistry } from '../intelligence/work-registry.mjs';
 
@@ -143,6 +143,9 @@ try {
   assert.match(CORE_DEVELOPER_INSTRUCTIONS, /does not prescribe your internal agent topology/);
   assert.match(CORE_DEVELOPER_INSTRUCTIONS, /minimum total model-token/);
   assert.match(CORE_DEVELOPER_INSTRUCTIONS, /Micro-task boundaries are execution gates/);
+  assert.match(CORE_DEVELOPER_INSTRUCTIONS, /Start every user-visible progress update and final response/);
+  assert.equal(ensureProgressPrefix('Done', { progressWorkTask: { title: 'Task', currentTaskNumber: 2, totalTasks: 3 } }), 'Task: 2/3\nDone');
+  assert.equal(ensureProgressPrefix('Task: 2/3\nDone', { progressWorkTask: { title: 'Task', currentTaskNumber: 2, totalTasks: 3 } }), 'Task: 2/3\nDone');
   const registry = loadWorkRegistry(knowledge.root);
   const activeWork = activeWorkItem(registry);
   const currentRuntimeTask = resolveActiveRuntimeTask(knowledge.root, knowledge);
@@ -162,9 +165,12 @@ try {
   const fixtureKnowledge = { ...knowledge, root: workspaceRoot };
   const activeRuntimeTask = resolveActiveRuntimeTask(workspaceRoot, fixtureKnowledge);
   assert.equal(activeRuntimeTask?.taskId, fixtureWork.currentTaskId);
+  assert.equal(activeRuntimeTask?.currentTaskNumber, 1);
+  assert.equal(activeRuntimeTask?.totalTasks, fixtureWork.tasks.length);
   assert.equal(activeRuntimeTask?.repository, fixtureWork.tasks[0].repository);
   const taskInstructions = buildDeveloperInstructions({ plan, activeWorkTask: activeRuntimeTask });
   assert.match(taskInstructions, /Authoritative active micro-task/);
+  assert.match(taskInstructions, /Required user-visible progress prefix: Micro-task planning contract: 1\/6/);
   assert.ok(taskInstructions.includes(activeRuntimeTask.stopBoundary));
   assert.match(taskInstructions, /Do not continue into another task/);
   assert.equal(resolveActiveRuntimeTask(path.join(root, 'UnrelatedRepo'), fixtureKnowledge), null);

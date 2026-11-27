@@ -7,12 +7,14 @@ import { execFileSync } from "node:child_process";
 import {
   activeWorkItem,
   captureRepositoryCheckpoint,
+  formatWorkProgressText,
   loadWorkCheckpoint,
   loadWorkRegistry,
   persistRuntimeWorkSettlement,
   resumeCheckpointForTask,
   validateWorkRegistry,
   workProgressPayload,
+  workProgressLabel,
   workRegistrySummary
 } from "../intelligence/work-registry.mjs";
 
@@ -48,6 +50,8 @@ assert.equal(progress.active.completedTasks, active.tasks.filter((task) => task.
 assert.equal(progress.active.totalTasks, active.tasks.length);
 assert.ok(progress.active.completionPercent >= 0 && progress.active.completionPercent <= 100);
 assert.equal(progress.active.milestones.length, active.milestones.length);
+assert.equal(workProgressLabel(registry), null, "completed work must not be presented as the current task");
+assert.equal(workProgressLabel(registry, { fallbackTitle: "Codex work" }), "Codex work: 1/1");
 
 console.log(`Totem work registry validation passed: ${active.id}, current task ${active.currentTaskId}, ${summary.active.completedTasks}/${summary.active.totalTasks} completed.`);
 
@@ -79,6 +83,13 @@ try {
     }]
   }, null, 2));
 
+  const fixtureRegistry = loadWorkRegistry(tempRoot);
+  assert.equal(workProgressLabel(fixtureRegistry), "First: 1/2");
+  assert.equal(formatWorkProgressText("Running validation", fixtureRegistry), "First: 1/2\nRunning validation");
+  const staleFixture = structuredClone(fixtureRegistry);
+  staleFixture.workItems[0].tasks[0].status = "completed";
+  assert.equal(workProgressLabel(staleFixture, { fallbackTitle: "Codex work" }), "Codex work: 1/1");
+
   const settled = persistRuntimeWorkSettlement(tempRoot, {
     runtimeTaskId: "runtime-1",
     state: "completed",
@@ -91,6 +102,7 @@ try {
   assert.equal(loadWorkRegistry(tempRoot).workItems[0].tasks.find((task) => task.id === "T1").status, "in-review");
   assert.equal(loadWorkRegistry(tempRoot).workItems[0].tasks.find((task) => task.id === "T2").status, "in-progress");
   assert.equal(loadWorkRegistry(tempRoot).workItems[0].currentTaskId, "T2");
+  assert.equal(workProgressLabel(loadWorkRegistry(tempRoot)), "Second: 2/2");
   assert.equal(loadWorkCheckpoint(tempRoot).head, "a".repeat(40));
   assert.equal(resumeCheckpointForTask(tempRoot, "fixture", "T2")?.taskId, "T1");
 
