@@ -36,15 +36,15 @@ function evaluateLiteral(source, label) {
 
 const expectedModules = [
   ["totem-alchemy", "TotemAlchemy", "0.1.41", "main", "0056a0096dcdb06f03f870edbc9f6b56259a466d", "TotemAlchemy", ">=0.7.15 <0.8.0"],
-  ["totem-automata", "TotemAutomata", "0.1.21", "master", "8c9b90bbffb64f4058ffc7978bad1798e8944779", "TotemAutomata", ">=0.7.14 <0.8.0"],
-  ["totem-core", "TotemCore", "0.7.19", "master", "21217505fa1d1100a00336d657f07fdd3505868b", "TotemCore", null],
-  ["totem-discord-bridge", "TotemDiscordBridge", "0.1.8", "master", "6ef67ed58ebe3a6b9ee9a4d328c668ab93c17453", "TotemDiscordBridge", ">=0.7.0 <0.8.0"],
+  ["totem-automata", "TotemAutomata", "0.1.21", "main", "8c9b90bbffb64f4058ffc7978bad1798e8944779", "TotemAutomata", ">=0.7.14 <0.8.0"],
+  ["totem-core", "TotemCore", "0.7.19", "main", "21217505fa1d1100a00336d657f07fdd3505868b", "TotemCore", null],
+  ["totem-discord-bridge", "TotemDiscordBridge", "0.1.8", "main", "6ef67ed58ebe3a6b9ee9a4d328c668ab93c17453", "TotemDiscordBridge", ">=0.7.0 <0.8.0"],
   ["totem-enchanting", "TotemEnchanting", "0.1.9", "main", "17719ec20eed31938107aa069986c32e5ce5b053", "TotemEnchanting", ">=0.7.0 <0.8.0"],
-  ["totem-excavation", "TotemExcavation", "0.1.10", "master", "646f82e5961255dc1b28aee1f800463b55f70002", "TotemExcavation", ">=0.7.13 <0.8.0"],
+  ["totem-excavation", "TotemExcavation", "0.1.10", "main", "646f82e5961255dc1b28aee1f800463b55f70002", "TotemExcavation", ">=0.7.13 <0.8.0"],
   ["totem-locksmith", "TotemLocksmith", "0.1.8", "main", "d73112169e73e717f02ef4a068e5cbd2782eb5e7", "TotemLocksmith", ">=0.7.15 <0.8.0"],
-  ["totem-nexus", "TotemNexus", "0.3.12", "master", "41ba0b2e11b0a5745f8b7ffb9c6d71e45d9288f7", "TotemNexus", ">=0.7.16 <0.8.0"],
+  ["totem-nexus", "TotemNexus", "0.3.12", "main", "41ba0b2e11b0a5745f8b7ffb9c6d71e45d9288f7", "TotemNexus", ">=0.7.16 <0.8.0"],
   ["totem-observer", "TotemObserver", "0.1.0", "main", "51e1507564de9a58016977b16798ec1dd143a41d", "TotemObserver", ">=0.7.18 <0.8.0"],
-  ["totem-remnant", "TotemRemnant", "0.2.18", "master", "c828f42cee767b98a69d2bebd532b63f322c3b0e", "TotemRemnant", ">=0.7.15 <0.8.0"],
+  ["totem-remnant", "TotemRemnant", "0.2.18", "main", "c828f42cee767b98a69d2bebd532b63f322c3b0e", "TotemRemnant", ">=0.7.15 <0.8.0"],
   ["totem-vanilla-tweaks", "TotemVanillaTweaks", "0.1.28", "main", "0360c3f513fe1247f1c4fd96c7d3af7e22365803", "TotemVanillaTweaks", ">=0.7.18 <0.8.0"],
   ["totem-villagers", "TotemVillagers", "0.1.34", "main", "9798ee3578affc2624edfcfb2343ec7aa95405df", "TotemVillagers", ">=0.7.12 <0.8.0"]
 ].map(([id, name, version, branch, commit, repositoryName, coreDependency]) => ({

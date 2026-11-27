@@ -5,15 +5,15 @@
 | 模組 | 版本 | 預設分支 | Commit | Repository | 定位 |
 | --- | --- | --- | --- | --- | --- |
 | TotemAlchemy | 0.1.41 | `main` | `0056a00` | [GitHub](https://github.com/Yunitrish006006/TotemAlchemy) | 生存煉金、材料自動登錄、研究手冊與資料包配方 |
-| TotemAutomata | 0.1.21 | `master` | `8c9b90b` | [GitHub](https://github.com/Yunitrish006006/TotemAutomata) | 銅魁儡分類、採集、安全容器路由與世界內工作視覺化 |
-| TotemCore | 0.7.19 | `master` | `2121750` | [GitHub](https://github.com/Yunitrish006006/TotemCore) | 共用 API、事件、手冊、好友、Observer provider 與世界輪廓契約 |
-| TotemDiscordBridge | 0.1.8 | `master` | `6ef67ed` | [GitHub](https://github.com/Yunitrish006006/TotemDiscordBridge) | Minecraft 至 Discord 的安全事件 relay |
+| TotemAutomata | 0.1.21 | `main` | `8c9b90b` | [GitHub](https://github.com/Yunitrish006006/TotemAutomata) | 銅魁儡分類、採集、安全容器路由與世界內工作視覺化 |
+| TotemCore | 0.7.19 | `main` | `2121750` | [GitHub](https://github.com/Yunitrish006006/TotemCore) | 共用 API、事件、手冊、好友、Observer provider 與世界輪廓契約 |
+| TotemDiscordBridge | 0.1.8 | `main` | `6ef67ed` | [GitHub](https://github.com/Yunitrish006006/TotemDiscordBridge) | Minecraft 至 Discord 的安全事件 relay |
 | TotemEnchanting | 0.1.9 | `main` | `17719ec` | [GitHub](https://github.com/Yunitrish006006/TotemEnchanting) | 雕紋書櫃附魔力與附魔品質擴充 |
-| TotemExcavation | 0.1.10 | `master` | `646f82e` | [GitHub](https://github.com/Yunitrish006006/TotemExcavation) | 七階槌、配方取得、深度遮擋選區與伺服器授權範圍挖掘 |
+| TotemExcavation | 0.1.10 | `main` | `646f82e` | [GitHub](https://github.com/Yunitrish006006/TotemExcavation) | 七階槌、配方取得、深度遮擋選區與伺服器授權範圍挖掘 |
 | TotemLocksmith | 0.1.8 | `main` | `d731121` | [GitHub](https://github.com/Yunitrish006006/TotemLocksmith) | 固定容器及漏斗儲存網路鎖具與配方取得 |
-| TotemNexus | 0.3.12 | `master` | `41ba0b2` | [GitHub](https://github.com/Yunitrish006006/TotemNexus) | Space Unit 探索、材料能力、傳送陣診斷與安全傳送 |
+| TotemNexus | 0.3.12 | `main` | `41ba0b2` | [GitHub](https://github.com/Yunitrish006006/TotemNexus) | Space Unit 探索、材料能力、傳送陣診斷與安全傳送 |
 | TotemObserver | 0.1.0 | `main` | `51e1507` | [GitHub](https://github.com/Yunitrish006006/TotemObserver) | Spectator Observer View session、camera、語意 relay、vanilla adapters 與 E2E |
-| TotemRemnant | 0.2.18 | `master` | `c828f42` | [GitHub](https://github.com/Yunitrish006006/TotemRemnant) | 分級背包、擴充、回聲碎片結晶與死亡背包回收 |
+| TotemRemnant | 0.2.18 | `main` | `c828f42` | [GitHub](https://github.com/Yunitrish006006/TotemRemnant) | 分級背包、擴充、回聲碎片結晶與死亡背包回收 |
 | TotemVanillaTweaks | 0.1.28 | `main` | `0360c3f` | [GitHub](https://github.com/Yunitrish006006/TotemVanillaTweaks) | 原版向 gameplay tweaks；Observer runtime 已移至 TotemObserver |
 | TotemVillagers | 0.1.34 | `main` | `9798ee3` | [GitHub](https://github.com/Yunitrish006006/TotemVillagers) | 由實際工作與庫存支撐的村民經濟及配方取得 |
 

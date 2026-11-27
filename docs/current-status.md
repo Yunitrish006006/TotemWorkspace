@@ -7,14 +7,14 @@
 | 模組 | 版本 | 預設分支 | 完整 commit SHA |
 | --- | --- | --- | --- |
 | TotemAlchemy | 0.1.41 | `main` | `0056a0096dcdb06f03f870edbc9f6b56259a466d` |
-| TotemAutomata | 0.1.21 | `master` | `8c9b90bbffb64f4058ffc7978bad1798e8944779` |
-| TotemCore | 0.7.16 | `master` | `b0b57bc98a98140a1c12a660a33952ea61167278` |
-| TotemDiscordBridge | 0.1.8 | `master` | `6ef67ed58ebe3a6b9ee9a4d328c668ab93c17453` |
+| TotemAutomata | 0.1.21 | `main` | `8c9b90bbffb64f4058ffc7978bad1798e8944779` |
+| TotemCore | 0.7.16 | `main` | `b0b57bc98a98140a1c12a660a33952ea61167278` |
+| TotemDiscordBridge | 0.1.8 | `main` | `6ef67ed58ebe3a6b9ee9a4d328c668ab93c17453` |
 | TotemEnchanting | 0.1.9 | `main` | `17719ec20eed31938107aa069986c32e5ce5b053` |
-| TotemExcavation | 0.1.10 | `master` | `646f82e5961255dc1b28aee1f800463b55f70002` |
+| TotemExcavation | 0.1.10 | `main` | `646f82e5961255dc1b28aee1f800463b55f70002` |
 | TotemLocksmith | 0.1.8 | `main` | `d73112169e73e717f02ef4a068e5cbd2782eb5e7` |
-| TotemNexus | 0.3.12 | `master` | `41ba0b2e11b0a5745f8b7ffb9c6d71e45d9288f7` |
-| TotemRemnant | 0.2.18 | `master` | `c828f42cee767b98a69d2bebd532b63f322c3b0e` |
+| TotemNexus | 0.3.12 | `main` | `41ba0b2e11b0a5745f8b7ffb9c6d71e45d9288f7` |
+| TotemRemnant | 0.2.18 | `main` | `c828f42cee767b98a69d2bebd532b63f322c3b0e` |
 | TotemVanillaTweaks | 0.1.21 | `main` | `5d2d352453ef6abd9f59ddac8b203d7d5c5d87af` |
 | TotemVillagers | 0.1.34 | `main` | `9798ee3578affc2624edfcfb2343ec7aa95405df` |
 
